@@ -1,0 +1,31 @@
+# Documentation
+docs/
+
+# AI Agents
+.agents/
+AGENTS.md
+CLAUDE.md
+DECISIONS.md
+TODO.md
+
+# Python environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+build/
+dist/
+*.egg-info/
+
+# Neo4j / Local Data (if applicable)
+data/
+logs/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
