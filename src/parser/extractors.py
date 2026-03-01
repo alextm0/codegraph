@@ -220,7 +220,7 @@ def _parse_import_from(node: Node, source: bytes) -> list[ImportEntity]:
 
     module_path = ".".join(module_parts) if module_parts else ""
 
-    if module_path and is_stdlib_module(module_path):
+    if module_path and not is_relative and is_stdlib_module(module_path):
         return []
 
     results.append(
@@ -254,16 +254,15 @@ def _parse_import(node: Node, source: bytes) -> list[ImportEntity]:
             for ch in child.children:
                 if ch.type in ("dotted_name", "identifier"):
                     module_path = node_text(ch, source)
-                    if is_stdlib_module(module_path):
-                        continue
-                    results.append(
-                        ImportEntity(
-                            module_path=module_path,
-                            imported_names=(),
-                            is_relative=False,
-                            line_number=node.start_point[0] + 1,
+                    if not is_stdlib_module(module_path):
+                        results.append(
+                            ImportEntity(
+                                module_path=module_path,
+                                imported_names=(),
+                                is_relative=False,
+                                line_number=node.start_point[0] + 1,
+                            )
                         )
-                    )
                     break
     return results
 
