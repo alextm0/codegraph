@@ -8,6 +8,7 @@ AGENTS.md
 CLAUDE.md
 DECISIONS.md
 TODO.md
+memory/
 
 # Python environment
 __pycache__/

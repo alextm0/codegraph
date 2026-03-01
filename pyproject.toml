@@ -19,6 +19,11 @@ dev = [
     "pytest>=8.0",
 ]
 
+[tool.pytest.ini_options]
+# Don't recurse into fixture repos — they ship their own test suites
+# that require dependencies we don't install.
+norecursedirs = ["tests/fixtures"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
