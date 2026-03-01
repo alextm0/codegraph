@@ -3,6 +3,7 @@ docs/
 
 # AI Agents
 .agents/
+.claude/
 AGENTS.md
 CLAUDE.md
 DECISIONS.md
