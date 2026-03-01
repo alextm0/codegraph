@@ -23,12 +23,24 @@ PY_LANGUAGE = Language(tspython.language())
 
 
 def create_parser() -> Parser:
-    """Create and return a tree-sitter Parser configured for Python."""
+    """
+    Create a Parser configured to parse Python source using the module's Python language binding.
+    
+    Returns:
+        parser (Parser): A tree-sitter Parser instance configured with the Python Language.
+    """
     return Parser(PY_LANGUAGE)
 
 
 def parse_file(source: bytes, file_path: str, parser: Parser) -> FileEntities:
-    """Parse a single Python source file and return all extracted entities."""
+    """
+    Extract code entities from a Python source byte string and return them as a FileEntities.
+    
+    If the parser fails (e.g., raises TypeError or ValueError), an empty FileEntities for the given file_path is returned.
+    
+    Returns:
+        FileEntities: A FileEntities instance populated with functions, classes, methods, imports, and calls found in the source.
+    """
     entities = FileEntities(file_path=file_path)
     try:
         tree = parser.parse(source)
@@ -50,7 +62,17 @@ def parse_directory(
     parser: Parser,
     exclude_patterns: list[str] | None = None,
 ) -> list[FileEntities]:
-    """Walk a directory and parse every .py file, returning one FileEntities per file."""
+    """
+    Parse all Python files under a directory and collect their FileEntities.
+    
+    Parameters:
+        directory (str): Root directory to search for `.py` files.
+        parser (Parser): Tree-sitter Parser configured for Python.
+        exclude_patterns (list[str] | None): Optional list of glob or substring patterns; any path matching a pattern will be skipped.
+    
+    Returns:
+        list[FileEntities]: List of FileEntities objects, one for each successfully parsed Python file found under `directory`. Files that cannot be read are skipped.
+    """
     results: list[FileEntities] = []
     for path in _iter_python_files(directory, exclude_patterns or []):
         try:
@@ -63,7 +85,18 @@ def parse_directory(
 
 
 def _is_excluded(path_str: str, patterns: list[str]) -> bool:
-    """Check if a path matches any of the exclude patterns."""
+    """
+    Determine whether a filepath matches any of the provided exclude patterns.
+    
+    Patterns containing wildcard characters (*, ?, [, ]) are treated as shell-style glob patterns; other patterns are matched by simple substring containment.
+    
+    Parameters:
+        path_str (str): Filesystem path to test.
+        patterns (list[str]): Exclude patterns to check against.
+    
+    Returns:
+        bool: `True` if `path_str` matches any pattern, `False` otherwise.
+    """
     for pattern in patterns:
         if any(char in pattern for char in "*?[]"):
             if fnmatch.fnmatch(path_str, pattern):
@@ -74,7 +107,16 @@ def _is_excluded(path_str: str, patterns: list[str]) -> bool:
 
 
 def _iter_python_files(directory: str, exclude_patterns: list[str]) -> Iterator[Path]:
-    """Yield all .py files under directory that don't match any exclude pattern."""
+    """
+    Generate Path objects for Python (.py) files under the given directory, excluding any that match the provided patterns.
+    
+    Parameters:
+        directory (str): Root directory to search for Python files.
+        exclude_patterns (list[str]): Patterns used to skip files; patterns may be wildcards or substrings.
+    
+    Returns:
+        Iterator[Path]: An iterator of Path objects for .py files under `directory` that do not match any exclude pattern.
+    """
     for path in Path(directory).rglob("*.py"):
         if not _is_excluded(str(path), exclude_patterns):
             yield path
