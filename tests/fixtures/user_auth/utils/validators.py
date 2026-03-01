@@ -7,37 +7,20 @@ logger = logging.getLogger(__name__)
 
 
 def validate_email(email: str) -> bool:
-    """
-    Determine whether an email address is in a valid format.
-    
-    Returns:
-        bool: True if the email matches the expected pattern, False otherwise. This validates only the syntactic format, not deliverability or domain existence.
-    """
+    """Check if the email address has a valid format."""
     pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     return bool(re.match(pattern, email))
 
 
 def validate_username(username: str) -> bool:
-    """
-    Ensure the username length is between 3 and 32 characters and contains only letters, digits, or underscores.
-    
-    Returns:
-        `True` if the username meets the length and character requirements, `False` otherwise.
-    """
+    """Check if the username meets length and character requirements."""
     if len(username) < 3 or len(username) > 32:
         return False
     return bool(re.match(r"^[a-zA-Z0-9_]+$", username))
 
 
 def validate_password(password: str) -> bool:
-    """
-    Determine whether a password meets minimum security requirements.
-    
-    A valid password is at least 8 characters long, contains at least one digit, and contains at least one uppercase letter.
-    
-    Returns:
-        `true` if the password meets these requirements, `false` otherwise.
-    """
+    """Check if the password meets minimum security requirements."""
     if len(password) < 8:
         return False
     has_digit = any(c.isdigit() for c in password)
@@ -46,10 +29,5 @@ def validate_password(password: str) -> bool:
 
 
 def validate_password_strength(password: str) -> bool:
-    """
-    Check whether a password meets the minimum length requirement.
-    
-    Returns:
-        `true` if the password length is at least 8 characters, `false` otherwise.
-    """
+    """Return True if password length is acceptable."""
     return len(password) >= 8

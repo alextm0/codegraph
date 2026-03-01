@@ -13,18 +13,7 @@ class AuthService:
         self._next_id: int = 1
 
     def register(self, username: str, email: str, password: str) -> User:
-        """
-        Create and store a new user after validating username, email, and password.
-        
-        Returns:
-            User: The newly created user with an assigned `id`, `username`, and `email`.
-        
-        Raises:
-            ValueError: If a user with `username` already exists.
-            ValueError: If `username` fails validation.
-            ValueError: If `email` fails validation.
-            ValueError: If `password` does not meet requirements.
-        """
+        """Register a new user and return the created User instance."""
         if username in self._users:
             raise ValueError(f"User already exists: {username}")
         if not validate_username(username):
@@ -39,10 +28,5 @@ class AuthService:
         return user
 
     def get_user(self, username: str) -> User | None:
-        """
-        Retrieve a user by username.
-        
-        Returns:
-            User | None: `User` if a user with the given username exists, `None` otherwise.
-        """
+        """Return the User with the given username, or None if not found."""
         return self._users.get(username)

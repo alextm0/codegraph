@@ -30,12 +30,6 @@ PROJECT = FIXTURES_DIR / "user_auth"
 
 @pytest.fixture(scope="module")
 def parser():
-    """
-    Provide a parser instance used by tests to parse Python source files.
-    
-    Returns:
-        Parser: A fresh parser instance configured for the project's Python grammar.
-    """
     return create_parser()
 
 
@@ -175,9 +169,7 @@ def test_imported_names_captured_for_each_module(parser):
 
 
 def test_absolute_import_is_not_marked_relative(parser):
-    """
-    Verify absolute import statements are not marked as relative.
-    """
+    """Absolute imports must have is_relative=False."""
     entities = parse_file(read("services/auth_service.py"), "auth_service.py", parser)
 
     for imp in entities.imports:
@@ -263,11 +255,7 @@ def test_file_path_is_stored_on_entities(parser):
 
 
 def test_syntax_error_file_does_not_raise(parser):
-    """
-    Ensure parsing a syntactically broken file does not raise.
-    
-    Asserts that parse_file returns a FileEntities instance when given malformed source containing a syntax error.
-    """
+    """tree-sitter is error-tolerant: a broken file must not raise and must return a FileEntities."""
     broken = b"def foo(\n    x: int\n# missing closing paren\nclass Bar:\n    pass\n"
     entities = parse_file(broken, "broken.py", parser)
 

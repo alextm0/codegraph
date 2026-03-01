@@ -1,0 +1,7 @@
+project_root: "."
+exclude_patterns:
+  - "__pycache__"
+  - ".venv"
+  - ".git"
+  - "*.pyc"
+  - ".pytest_cache"
