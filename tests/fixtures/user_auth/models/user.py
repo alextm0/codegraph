@@ -40,4 +40,4 @@ class User(BaseModel):
 
 def create_guest_user() -> "User":
     """Create and return a guest user instance with default values."""
-    return User(id=0, username="guest", email="guest@example.com")
+    return User(id=1, username="guest", email="guest@example.com")

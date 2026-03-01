@@ -14,6 +14,8 @@ class AuthService:
 
     def register(self, username: str, email: str, password: str) -> User:
         """Register a new user and return the created User instance."""
+        if username in self._users:
+            raise ValueError(f"User already exists: {username}")
         if not validate_username(username):
             raise ValueError(f"Invalid username: {username}")
         if not validate_email(email):

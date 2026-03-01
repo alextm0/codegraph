@@ -1,5 +1,6 @@
 """Tree-sitter based Python source file parser"""
 
+import fnmatch
 import logging
 from collections.abc import Iterator
 from pathlib import Path
@@ -31,7 +32,7 @@ def parse_file(source: bytes, file_path: str, parser: Parser) -> FileEntities:
     entities = FileEntities(file_path=file_path)
     try:
         tree = parser.parse(source)
-    except Exception as exc:
+    except (TypeError, ValueError) as exc:
         logger.warning("Failed to parse %s: %s", file_path, exc)
         return entities
 
@@ -61,8 +62,19 @@ def parse_directory(
     return results
 
 
+def _is_excluded(path_str: str, patterns: list[str]) -> bool:
+    """Check if a path matches any of the exclude patterns."""
+    for pattern in patterns:
+        if any(char in pattern for char in "*?[]"):
+            if fnmatch.fnmatch(path_str, pattern):
+                return True
+        elif pattern in path_str:
+            return True
+    return False
+
+
 def _iter_python_files(directory: str, exclude_patterns: list[str]) -> Iterator[Path]:
     """Yield all .py files under directory that don't match any exclude pattern."""
     for path in Path(directory).rglob("*.py"):
-        if not any(pattern in str(path) for pattern in exclude_patterns):
+        if not _is_excluded(str(path), exclude_patterns):
             yield path

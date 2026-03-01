@@ -22,18 +22,24 @@ def get_docstring(body_node: Node, source: bytes) -> str | None:
         return None
 
     for child in body_node.children:
-        if child.type == "expression_statement":
-            for inner in child.children:
-                if inner.type == "string":
-                    raw = node_text(inner, source)
-                    for prefix in ('"""', "'''", '"', "'"):
-                        if raw.startswith(prefix) and raw.endswith(prefix) and len(raw) > 2 * len(prefix):
-                            return raw[len(prefix):-len(prefix)].strip()
-                        if raw.startswith(prefix) and raw.endswith(prefix) and len(raw) == 2 * len(prefix):
-                            return ""
-                    return raw.strip()
-        if child.type not in ("comment", "expression_statement"):
-            break
+        if child.type == "comment":
+            continue
+
+        if child.type != "expression_statement":
+            return None
+
+        for inner in child.children:
+            if inner.type == "string":
+                raw = node_text(inner, source)
+                for prefix in ('"""', "'''", '"', "'"):
+                    if raw.startswith(prefix) and raw.endswith(prefix) and len(raw) > 2 * len(prefix):
+                        return raw[len(prefix):-len(prefix)].strip()
+                    if raw.startswith(prefix) and raw.endswith(prefix) and len(raw) == 2 * len(prefix):
+                        return ""
+                return raw.strip()
+        
+        return None
+        
     return None
 
 

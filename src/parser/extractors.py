@@ -162,7 +162,7 @@ def _collect_methods_from_class(
         )
 
 
-def extract_imports(root: Node, source: bytes, file_path: str) -> list[ImportEntity]:
+def extract_imports(root: Node, source: bytes, _file_path: str) -> list[ImportEntity]:
     """Extract non-stdlib import statements from the module."""
     imports: list[ImportEntity] = []
     for node in root.children:
@@ -268,7 +268,7 @@ def _parse_import(node: Node, source: bytes) -> list[ImportEntity]:
     return results
 
 
-def extract_calls(root: Node, source: bytes, file_path: str) -> list[CallEntity]:
+def extract_calls(root: Node, source: bytes, _file_path: str) -> list[CallEntity]:
     """Extract all call expressions and their enclosing scope."""
     calls: list[CallEntity] = []
     _walk_calls(root, source, calls)
