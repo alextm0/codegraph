@@ -121,34 +121,34 @@ def test_build_graph_creates_function_nodes(clean_db, user_auth_entities):
 
 @neo4j_required
 def test_build_graph_creates_contains_edges(clean_db, user_auth_entities):
-    """CONTAINS edges must be created (file->entity, class->method)."""
+    """5 File->Function + 3 File->Class + 9 Class->Method = 17 CONTAINS edges."""
     build_graph(clean_db, user_auth_entities)
     edge_counts = count_edges_by_type(clean_db)
-    assert edge_counts.get("CONTAINS", 0) > 0
+    assert edge_counts.get("CONTAINS", 0) == 17
 
 
 @neo4j_required
 def test_build_graph_creates_inherits_from_edge(clean_db, user_auth_entities):
-    """User inherits from BaseModel -> at least 1 INHERITS_FROM edge."""
+    """User inherits from BaseModel -> exactly 1 INHERITS_FROM edge."""
     build_graph(clean_db, user_auth_entities)
     edge_counts = count_edges_by_type(clean_db)
-    assert edge_counts.get("INHERITS_FROM", 0) >= 1
+    assert edge_counts.get("INHERITS_FROM", 0) == 1
 
 
 @neo4j_required
 def test_build_graph_creates_calls_edges(clean_db, user_auth_entities):
-    """AuthService.register calls validators -> CALLS edges must exist."""
+    """register->3 validators + register->User + create_guest_user->User + validate_password->validate_password_strength = 6."""
     build_graph(clean_db, user_auth_entities)
     edge_counts = count_edges_by_type(clean_db)
-    assert edge_counts.get("CALLS", 0) > 0
+    assert edge_counts.get("CALLS", 0) == 6
 
 
 @neo4j_required
 def test_build_graph_creates_imports_edges(clean_db, user_auth_entities):
-    """auth_service.py imports from models and utils -> IMPORTS edges must exist."""
+    """models/__init__->user + auth_service->user + auth_service->validators = 3."""
     build_graph(clean_db, user_auth_entities)
     edge_counts = count_edges_by_type(clean_db)
-    assert edge_counts.get("IMPORTS", 0) > 0
+    assert edge_counts.get("IMPORTS", 0) == 3
 
 
 # ---------------------------------------------------------------------------

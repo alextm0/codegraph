@@ -17,8 +17,8 @@ class PPRConfig:
     """Parameters controlling Personalized PageRank execution.
 
     Attributes:
-        damping_factor: Probability of following a graph edge vs. teleporting back
-            to a seed node (0–1). Higher values weight graph structure more heavily.
+        damping_factor: Probability of following a graph edge vs. teleporting back to a seed node.
+            Higher values weight graph structure more heavily.
         max_iterations: Upper bound on the number of convergence iterations.
         tolerance: Convergence threshold — iteration stops when score delta falls below this.
         top_k: Maximum number of ranked results to return.
@@ -81,16 +81,19 @@ def drop_projection(gds: GraphDataScience) -> bool:
     """Drop the in-memory projection if it exists. Returns True if it existed."""
     try:
         exists_result = gds.graph.exists(_PROJECTION_NAME)
-        # exists_result may be a dict or a Series depending on GDS version
-        exists = exists_result["exists"] if hasattr(exists_result, "__getitem__") else bool(exists_result)
+        exists = exists_result["exists"]
         if exists:
             graph = gds.graph.get(_PROJECTION_NAME)
             gds.graph.drop(graph)
             logger.debug("Dropped GDS projection '%s'", _PROJECTION_NAME)
             return True
+        return False
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        logger.debug("drop_projection: expected error (e.g., missing key/projection): %s", exc)
+        return False
     except Exception as exc:
-        logger.debug("drop_projection: %s", exc)
-    return False
+        logger.error("drop_projection: unexpected error: %s", exc)
+        raise
 
 
 def run_ppr(
@@ -164,17 +167,28 @@ def run_ppr_from_node_ids(
 # ---------------------------------------------------------------------------
 
 def _resolve_seed_ids(driver: Driver, seed_names: list[str]) -> list[int]:
-    """Query Neo4j for the internal node IDs of nodes matching seed_names."""
+    """Query Neo4j for the internal node IDs of all nodes matching seed_names.
+
+    Returns every matching node ID so that PPR seeds on all of them,
+    rather than picking an arbitrary single match per name.
+    """
     ids: list[int] = []
     with driver.session() as session:
         for name in seed_names:
             result = session.run(
-                "MATCH (n) WHERE n.name = $name OR n.qualified_name = $name RETURN id(n) AS nid LIMIT 1",
+                """
+                MATCH (n)
+                WHERE n.name = $name
+                   OR n.qualified_name = $name
+                   OR (n:Method AND (n.class_name + "." + n.name) = $name)
+                RETURN id(n) AS nid
+                """,
                 name=name,
             )
-            record = result.single()
-            if record:
-                ids.append(record["nid"])
+            records = list(result)
+            if records:
+                for record in records:
+                    ids.append(record["nid"])
             else:
                 logger.warning("PPR seed not found: '%s'", name)
     return ids

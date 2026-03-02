@@ -52,14 +52,25 @@ def qnames(user_auth_entities):
 
 @pytest.fixture(scope="module")
 def file_paths(user_auth_entities):
-    """Map of short suffix (e.g. 'services/auth_service.py') -> full normalized path."""
+    """Map of short suffix (e.g. 'services/auth_service.py') -> full normalized path.
+
+    Uses basename as key when unique; falls back to the last two path segments
+    to disambiguate collisions (e.g. multiple ``__init__.py``).
+    """
     lookup: dict[str, str] = {}
     for fe in user_auth_entities:
         fp = normalize_path(fe.file_path)
-        # Key by the last two path segments for readable test references
         parts = fp.split("/")
+        # Always key by the last two path segments
         lookup["/".join(parts[-2:])] = fp
-        lookup[parts[-1]] = fp  # also by filename alone
+        # Key by basename only when there is no collision
+        basename = parts[-1]
+        if basename not in lookup:
+            lookup[basename] = fp
+        elif lookup[basename] != fp:
+            # Collision: remove the ambiguous basename key so only the
+            # two-segment key is usable for both paths.
+            del lookup[basename]
     return lookup
 
 

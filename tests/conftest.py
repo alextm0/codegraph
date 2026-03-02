@@ -5,9 +5,13 @@ Tests that need Neo4j are marked with @pytest.mark.neo4j and are skipped when
 the database is not reachable.
 """
 
+from pathlib import Path
+
 import pytest
 
-from src.graph.connection import Neo4jConfig, create_driver, verify_connectivity, close_driver
+from src.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
+
+_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 
 # ---------------------------------------------------------------------------
 # Neo4j availability check
@@ -15,7 +19,7 @@ from src.graph.connection import Neo4jConfig, create_driver, verify_connectivity
 
 def _neo4j_available() -> bool:
     """Return True if the test Neo4j instance is reachable."""
-    config = Neo4jConfig()
+    config = load_config(_CONFIG_PATH)
     try:
         driver = create_driver(config)
         ok = verify_connectivity(driver)
@@ -38,8 +42,8 @@ neo4j_required = pytest.mark.skipif(
 
 @pytest.fixture(scope="session")
 def neo4j_config() -> Neo4jConfig:
-    """Return the default test Neo4j config."""
-    return Neo4jConfig()
+    """Return the Neo4j config loaded from config.yaml."""
+    return load_config(_CONFIG_PATH)
 
 
 @pytest.fixture(scope="session")

@@ -189,7 +189,7 @@ def test_run_ppr_unknown_seed_returns_empty(projected, neo4j_driver):
 @neo4j_required
 def test_run_ppr_auth_service_register_ranks_validators_highly(projected, neo4j_driver):
     """Seeding from AuthService.register should rank validator functions highly."""
-    results = run_ppr(projected, neo4j_driver, ["register"], config=PPRConfig(top_k=10))
+    results = run_ppr(projected, neo4j_driver, ["AuthService.register"], config=PPRConfig(top_k=10))
     top_names = {r.name for r in results}
     # At least one validator should appear in top-10
     validators = {"validate_email", "validate_username", "validate_password"}

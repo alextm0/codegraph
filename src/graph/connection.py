@@ -2,7 +2,9 @@
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
+import yaml
 from neo4j import GraphDatabase, Driver
 
 logger = logging.getLogger(__name__)
@@ -12,10 +14,24 @@ logger = logging.getLogger(__name__)
 class Neo4jConfig:
     """Connection parameters for Neo4j."""
 
-    uri: str = "neo4j://localhost:7687"
-    username: str = "neo4j"
-    password: str = "alex17toma02mihai04"
-    database: str = "neo4j"
+    uri: str
+    username: str
+    password: str
+    database: str
+
+
+def load_config(config_path: str | Path) -> Neo4jConfig:
+    """Load Neo4j connection config from a YAML file."""
+    with open(config_path) as f:
+        data = yaml.safe_load(f)
+
+    neo4j = data["neo4j"]
+    return Neo4jConfig(
+        uri=neo4j["uri"],
+        username=neo4j["username"],
+        password=neo4j["password"],
+        database=neo4j["database"],
+    )
 
 
 def create_driver(config: Neo4jConfig) -> Driver:

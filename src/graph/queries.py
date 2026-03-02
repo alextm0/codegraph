@@ -127,12 +127,12 @@ def get_inheritance_chain(driver: Driver, class_qname: str) -> list[NodeInfo]:
     with driver.session() as session:
         result = session.run(
             """
-            MATCH (cls:Class {qualified_name: $qname})-[:INHERITS_FROM*1..]->(ancestor:Class)
+            MATCH p = (cls:Class {qualified_name: $qname})-[:INHERITS_FROM*1..]->(ancestor:Class)
             RETURN ancestor.qualified_name AS qualified_name,
                    ancestor.name AS name,
                    labels(ancestor)[0] AS label,
                    ancestor.file_path AS file_path
-            ORDER BY qualified_name
+            ORDER BY length(p) ASC
             """,
             qname=class_qname,
         )

@@ -1,18 +1,21 @@
 """Tests for src/graph/connection.py — Neo4j driver lifecycle."""
 
+from pathlib import Path
+
 import pytest
 
-from src.graph.connection import Neo4jConfig, create_driver, verify_connectivity, close_driver
+from src.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
 from tests.conftest import neo4j_required
 
+_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 
 # ---------------------------------------------------------------------------
 # Neo4jConfig
 # ---------------------------------------------------------------------------
 
-def test_neo4j_config_defaults():
-    """Default config points to localhost with standard credentials."""
-    config = Neo4jConfig()
+def test_load_config_reads_yaml():
+    """load_config returns a Neo4jConfig with values from config.yaml."""
+    config = load_config(_CONFIG_PATH)
     assert "localhost" in config.uri
     assert "7687" in config.uri
     assert config.username == "neo4j"
@@ -21,7 +24,7 @@ def test_neo4j_config_defaults():
 
 def test_neo4j_config_is_frozen():
     """Neo4jConfig must be immutable."""
-    config = Neo4jConfig()
+    config = load_config(_CONFIG_PATH)
     with pytest.raises((AttributeError, TypeError)):
         config.uri = "bolt://other:7687"  # type: ignore[misc]
 
@@ -41,7 +44,7 @@ def test_neo4j_config_custom_values():
 
 def test_create_driver_returns_driver_object():
     """create_driver returns a Neo4j Driver without raising."""
-    config = Neo4jConfig()
+    config = load_config(_CONFIG_PATH)
     driver = create_driver(config)
     assert driver is not None
     close_driver(driver)
@@ -59,7 +62,8 @@ def test_verify_connectivity_returns_true_when_reachable(neo4j_driver):
 
 def test_verify_connectivity_returns_false_for_bad_uri():
     """verify_connectivity must return False when the URI is unreachable."""
-    config = Neo4jConfig(uri="bolt://localhost:19999")  # unlikely to be in use
+    base = load_config(_CONFIG_PATH)
+    config = Neo4jConfig(uri="bolt://localhost:19999", username=base.username, password=base.password, database=base.database)
     driver = create_driver(config)
     result = verify_connectivity(driver)
     close_driver(driver)
@@ -73,7 +77,7 @@ def test_verify_connectivity_returns_false_for_bad_uri():
 @neo4j_required
 def test_close_driver_does_not_raise(neo4j_driver):
     """Closing a second driver (not the session fixture) should not raise."""
-    config = Neo4jConfig()
+    config = load_config(_CONFIG_PATH)
     driver = create_driver(config)
     # Should complete without error
     close_driver(driver)
