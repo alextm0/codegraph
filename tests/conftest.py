@@ -8,6 +8,7 @@ the database is not reachable.
 from pathlib import Path
 
 import pytest
+from neo4j.exceptions import ServiceUnavailable, AuthError
 
 from src.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
 
@@ -18,14 +19,18 @@ _CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 # ---------------------------------------------------------------------------
 
 def _neo4j_available() -> bool:
-    """Return True if the test Neo4j instance is reachable."""
+    """Return True if the test Neo4j instance is reachable.
+
+    Configuration errors (bad config.yaml, missing keys) are re-raised so they
+    fail loudly. Only genuine connection failures return False.
+    """
     config = load_config(_CONFIG_PATH)
     try:
         driver = create_driver(config)
         ok = verify_connectivity(driver)
         close_driver(driver)
         return ok
-    except Exception:
+    except (ServiceUnavailable, AuthError, OSError, ConnectionError):
         return False
 
 
