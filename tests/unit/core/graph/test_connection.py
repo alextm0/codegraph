@@ -7,7 +7,7 @@ import pytest
 from codegraph.core.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
 from tests.conftest import neo4j_required
 
-_CONFIG_PATH = Path(__file__).parents[2] / "config.yaml"
+_CONFIG_PATH = Path(__file__).parents[4] / "config.yaml"
 
 # ---------------------------------------------------------------------------
 # Neo4jConfig

@@ -14,7 +14,7 @@ from neo4j.exceptions import ServiceUnavailable, AuthError
 from codegraph.core.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
 from codegraph.core.graph.database import DatabaseManager
 
-_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+_CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
 @pytest.fixture(autouse=True)
 def reset_database_manager():
