@@ -26,6 +26,7 @@ from codegraph.mcp.tools import (
     get_graph_stats_impl,
     get_relevant_context_impl,
     query_dependencies_impl,
+    execute_cypher_query_impl,
 )
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,18 @@ def get_graph_stats(ctx: Context) -> str:
     state = ctx.request_context.lifespan_context
     return get_graph_stats_impl(state)
 
+@mcp.tool()
+def execute_cypher_query(cypher_query: str, ctx: Context) -> str:
+    """Fallback tool to run a direct, read-only Cypher query against the code graph.
+    
+    Use this for complex questions not covered by other tools. The graph contains nodes representing code structures and relationships between them.
+    **Schema Overview:**
+    - **Nodes:** `Repository`, `File`, `Module`, `Class`, `Function`, `Method`.
+    - **Properties:** Nodes have properties like `name`, `qualified_name`, `file_path`, `line_number`, and `end_line`.
+    - **Relationships:** `CONTAINS` (e.g., File-[:CONTAINS]->Function), `CALLS` (Function-[:CALLS]->Function), `IMPORTS` (File-[:IMPORTS]->Module), `INHERITS_FROM` (Class-[:INHERITS_FROM]->Class).
+    """
+    state = ctx.request_context.lifespan_context
+    return execute_cypher_query_impl(cypher_query, state)
 
 @mcp.tool()
 def find_dead_code(limit: int, ctx: Context) -> str:

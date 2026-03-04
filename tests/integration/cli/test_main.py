@@ -1,67 +1,77 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import sys
 import pytest
-from codegraph.cli.main import cli
+from typer.testing import CliRunner
+from codegraph.cli.main import app
 
-@pytest.fixture(autouse=True)
-def mock_db_manager_singleton():
-    """Mock get_database_manager to return a mock DM for all CLI tests."""
-    with patch("codegraph.cli.main.get_database_manager") as mock_get_dm:
-        mock_dm = MagicMock()
-        mock_get_dm.return_value = mock_dm
-        # Default behavior: connected
-        mock_dm.is_connected.return_value = True
-        mock_driver = MagicMock()
-        mock_dm.get_driver.return_value = mock_driver
-        mock_dm._config = MagicMock()
-        mock_dm._config.uri = "bolt://localhost:7687"
-        yield mock_dm
+runner = CliRunner()
 
-def test_cli_no_args():
-    """Test CLI without any arguments should print help."""
-    with patch("sys.argv", ["codegraph"]):
-        with patch("argparse.ArgumentParser.print_help") as mock_help:
-            cli()
-            mock_help.assert_called_once()
+@pytest.fixture
+def mock_db_manager():
+    """Mock get_database_manager for CLI tests."""
+    with patch("codegraph.cli.main._initialize_db") as mock_init:
+        with patch("codegraph.cli.cli_helpers.get_database_manager") as mock_get_dm:
+            mock_dm = MagicMock()
+            mock_get_dm.return_value = mock_dm
+            mock_init.return_value = mock_dm
+            
+            # Default behavior: connected
+            mock_dm.is_connected.return_value = True
+            mock_driver = MagicMock()
+            mock_dm.get_driver.return_value = mock_driver
+            mock_dm._config = MagicMock()
+            mock_dm._config.uri = "bolt://localhost:7687"
+            yield mock_dm
 
-def test_cli_rebuild_command():
+def test_cli_help():
+    """Test CLI help output."""
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "CodeGraph" in result.stdout
+    assert "rebuild" in result.stdout
+    assert "stats" in result.stdout
+
+def test_cli_rebuild_command(mock_db_manager):
     """Test the 'rebuild' command call."""
-    with patch("sys.argv", ["codegraph", "rebuild"]):
-        with patch("codegraph.cli.main.cmd_rebuild") as mock_rebuild:
-            # Mock Path.exists to return True so we don't worry about actual config.yaml
-            with patch("pathlib.Path.exists", return_value=True):
-                cli()
-                mock_rebuild.assert_called_once()
+    with patch("codegraph.cli.main.rebuild_helper") as mock_rebuild:
+        result = runner.invoke(app, ["rebuild"])
+        assert result.exit_code == 0
+        mock_rebuild.assert_called_once()
 
-def test_cli_serve_command():
-    """Test the 'serve' command call."""
-    with patch("sys.argv", ["codegraph", "serve"]):
-        with patch("codegraph.cli.main.cmd_serve") as mock_serve:
-            with patch("pathlib.Path.exists", return_value=True):
-                cli()
-                mock_serve.assert_called_once()
+def test_cli_stats_command(mock_db_manager):
+    """Test the 'stats' command call."""
+    with patch("codegraph.cli.main.stats_helper") as mock_stats:
+        result = runner.invoke(app, ["stats"])
+        assert result.exit_code == 0
+        mock_stats.assert_called_once()
 
-def test_cli_custom_config():
+def test_cli_doctor_command(mock_db_manager):
+    """Test the 'doctor' command call."""
+    with patch("codegraph.cli.main.doctor_helper") as mock_doctor:
+        result = runner.invoke(app, ["doctor"])
+        assert result.exit_code == 0
+        mock_doctor.assert_called_once()
+
+def test_cli_custom_config(mock_db_manager):
     """Test using a custom config path."""
     custom_config = "custom_config.yaml"
-    with patch("sys.argv", ["codegraph", "--config", custom_config, "rebuild"]):
-        with patch("codegraph.cli.main.cmd_rebuild") as mock_rebuild:
-            with patch("pathlib.Path.exists", return_value=True):
-                cli()
-                mock_rebuild.assert_called_once()
-                # Check that the first argument to cmd_rebuild is the custom config path
-                called_path = mock_rebuild.call_args[0][0]
-                assert str(called_path).endswith(custom_config)
+    with patch("codegraph.cli.main.rebuild_helper") as mock_rebuild:
+        # Mock Path.exists to return True for the custom config
+        with patch("pathlib.Path.exists", return_value=True):
+            result = runner.invoke(app, ["--config", custom_config, "rebuild"])
+            assert result.exit_code == 0
+            mock_rebuild.assert_called_once()
+            called_path = mock_rebuild.call_args[0][0]
+            assert str(called_path).endswith(custom_config)
 
-@patch("codegraph.cli.main.setup_logging")
-@patch("codegraph.cli.main.load_raw_config")
-@patch("codegraph.cli.main.resolve_project_root")
-@patch("codegraph.cli.main.clear_database")
-@patch("codegraph.cli.main.create_parser")
-@patch("codegraph.cli.main.parse_directory")
-@patch("codegraph.cli.main.build_graph")
-def test_cmd_rebuild_logic(
+@patch("codegraph.cli.cli_helpers.setup_logging")
+@patch("codegraph.cli.cli_helpers.load_raw_config")
+@patch("codegraph.cli.cli_helpers.resolve_project_root")
+@patch("codegraph.cli.cli_helpers.clear_database")
+@patch("codegraph.cli.cli_helpers.create_parser")
+@patch("codegraph.cli.cli_helpers.parse_directory")
+@patch("codegraph.cli.cli_helpers.build_graph")
+def test_rebuild_helper_logic(
     mock_build_graph,
     mock_parse_directory,
     mock_create_parser,
@@ -69,17 +79,17 @@ def test_cmd_rebuild_logic(
     mock_resolve_root,
     mock_load_raw,
     mock_setup_logging,
-    mock_db_manager_singleton,
+    mock_db_manager,
 ):
-    """Test the logic flow inside cmd_rebuild."""
-    from codegraph.cli.main import cmd_rebuild
+    """Test the logic flow inside rebuild_helper."""
+    from codegraph.cli.cli_helpers import rebuild_helper
 
     config_path = Path("config.yaml")
     mock_load_raw.return_value = {"parser": {"exclude_patterns": ["ignored/"]}}
     mock_resolve_root.return_value = Path("/project/root")
     
-    mock_driver = mock_db_manager_singleton.get_driver()
-    mock_db_manager_singleton.is_connected.return_value = True
+    mock_driver = mock_db_manager.get_driver()
+    mock_db_manager.is_connected.return_value = True
     
     mock_clear_database.return_value = 0
     mock_parse_directory.return_value = []
@@ -88,33 +98,32 @@ def test_cmd_rebuild_logic(
         "CONTAINS": 0, "CALLS": 0, "IMPORTS": 0, "INHERITS_FROM": 0,
     }
 
-    cmd_rebuild(config_path)
+    rebuild_helper(config_path)
 
     mock_setup_logging.assert_called_once()
-    mock_db_manager_singleton.is_connected.assert_called_once()
+    mock_db_manager.is_connected.assert_called_once()
     mock_clear_database.assert_called_with(mock_driver)
     mock_create_parser.assert_called_once()
     mock_parse_directory.assert_called_once()
     mock_build_graph.assert_called_once()
 
-@patch("codegraph.cli.main.setup_logging")
-def test_cmd_doctor_logic_success(
+@patch("codegraph.cli.cli_helpers.setup_logging")
+def test_doctor_helper_logic_success(
     mock_setup_logging,
-    mock_db_manager_singleton,
+    mock_db_manager,
 ):
-    """Test the logic flow inside cmd_doctor when all checks pass."""
-    from codegraph.cli.main import cmd_doctor
+    """Test the logic flow inside doctor_helper when all checks pass."""
+    from codegraph.cli.cli_helpers import doctor_helper
     
-    mock_driver = mock_db_manager_singleton.get_driver()
-    mock_db_manager_singleton.is_connected.return_value = True
+    mock_db_manager.is_connected.return_value = True
     
-    # Mock GDS version call inside cmd_doctor
+    # Mock GDS version call inside doctor_helper
     with patch("codegraph.core.graph.ppr.create_gds_client") as mock_gds_client:
         mock_gds = MagicMock()
         mock_gds.version.return_value = "2.6.0"
         mock_gds_client.return_value = mock_gds
         
-        cmd_doctor()
+        doctor_helper()
     
     mock_setup_logging.assert_called_once()
-    mock_db_manager_singleton.is_connected.assert_called_once()
+    mock_db_manager.is_connected.assert_called_once()

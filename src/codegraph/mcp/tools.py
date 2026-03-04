@@ -125,3 +125,17 @@ def get_graph_stats_impl(state) -> str:
         "most_connected_files": most_connected,
     }
     return json.dumps(stats, indent=2)
+
+def execute_cypher_query_impl(cypher_query: str, state) -> str:
+    """Implementation of execute_cypher_query tool."""
+    logger.info("execute_cypher_query called")
+    try:
+        def _execute(tx):
+            result = tx.run(cypher_query)
+            return [record.data() for record in result]
+            
+        with state.driver.session() as session:
+            records = session.execute_read(_execute)
+        return json.dumps(records, indent=2, default=str)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})

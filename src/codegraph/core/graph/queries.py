@@ -137,6 +137,27 @@ def find_node_by_name(driver: Driver | None = None, name: str = "") -> list[Node
         return [_row_to_node_info(r) for r in result]
 
 
+def find_node_by_pattern(driver: Driver | None = None, pattern: str = "") -> list[NodeInfo]:
+    """Return all nodes whose name property contains the given pattern (case-insensitive)."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (n)
+            WHERE n.name CONTAINS $pattern OR n.qualified_name CONTAINS $pattern
+            RETURN n.qualified_name AS qualified_name,
+                   n.name AS name,
+                   labels(n)[0] AS label,
+                   n.file_path AS file_path
+            ORDER BY qualified_name
+            LIMIT 100
+            """,
+            pattern=pattern,
+        )
+        return [_row_to_node_info(r) for r in result]
+
+
 def get_inheritance_chain(driver: Driver | None = None, class_qname: str = "") -> list[NodeInfo]:
     """Return the full inheritance chain (ancestors) of a class, ordered from immediate parent upward."""
     if driver is None:
