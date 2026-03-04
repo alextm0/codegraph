@@ -224,6 +224,8 @@ def cmd_doctor(config_path: Path) -> None:
         finally:
             driver.close()
     else:
+        if driver:
+            driver.close()
         print("      SKIP (Neo4j not reachable)")
 
     # 4. Project root

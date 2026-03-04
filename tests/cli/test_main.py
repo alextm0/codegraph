@@ -87,3 +87,47 @@ def test_cmd_rebuild_logic(
     mock_parse_directory.assert_called_once()
     mock_build_graph.assert_called_once()
     mock_driver.close.assert_called_once()
+
+@patch("codegraph.cli.main.setup_logging")
+@patch("codegraph.cli.main.load_config")
+@patch("codegraph.cli.main.create_driver")
+@patch("codegraph.cli.main.verify_connectivity")
+@patch("codegraph.cli.main.load_raw_config")
+@patch("codegraph.cli.main.resolve_project_root")
+@patch("pathlib.Path.exists")
+@patch("pathlib.Path.rglob")
+def test_cmd_doctor_logic_success(
+    mock_rglob,
+    mock_exists,
+    mock_resolve_root,
+    mock_load_raw,
+    mock_verify,
+    mock_create_driver,
+    mock_load_config,
+    mock_setup_logging,
+):
+    """Test the logic flow inside cmd_doctor when all checks pass."""
+    from codegraph.cli.main import cmd_doctor
+    
+    config_path = MagicMock(spec=Path)
+    config_path.exists.return_value = True
+    
+    mock_driver = MagicMock()
+    mock_create_driver.return_value = mock_driver
+    mock_verify.return_value = True
+    
+    mock_resolve_root.return_value = MagicMock(spec=Path)
+    mock_resolve_root.return_value.exists.return_value = True
+    mock_rglob.return_value = [Path("test.py")]
+    
+    # Mock GDS version call inside cmd_doctor
+    with patch("codegraph.core.graph.ppr.create_gds_client") as mock_gds_client:
+        mock_gds = MagicMock()
+        mock_gds.version.return_value = "2.6.0"
+        mock_gds_client.return_value = mock_gds
+        
+        cmd_doctor(config_path)
+    
+    mock_setup_logging.assert_called_once()
+    mock_driver.close.assert_called_once()
+
