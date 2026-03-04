@@ -20,7 +20,7 @@ from codegraph.core.graph.queries import (
 )
 from tests.conftest import neo4j_required
 
-FIXTURES_DIR = Path(__file__).parents[2] / "fixtures"
+FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 USER_AUTH = str(FIXTURES_DIR / "user_auth")
 
 

@@ -8,6 +8,7 @@ from codegraph.core.graph.connection import (
     load_config,
     load_full_config,
 )
+from codegraph.core.graph.database import DatabaseManager, get_database_manager
 from codegraph.core.graph.graph_builder import build_graph, clear_database
 from codegraph.core.graph.ppr import (
     PPRConfig,
@@ -36,6 +37,8 @@ from codegraph.core.graph.utils import normalize_path
 
 __all__ = [
     "Neo4jConfig",
+    "DatabaseManager",
+    "get_database_manager",
     "create_driver",
     "verify_connectivity",
     "close_driver",

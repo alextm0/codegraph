@@ -23,7 +23,9 @@ import pytest
 from codegraph.core.parser.models import FileEntities
 from codegraph.core.parser.python_parser import create_parser, parse_directory, parse_file
 
-FIXTURES_DIR = Path(__file__).parents[2] / "fixtures"
+# Reorganized path: tests/unit/core/parser/test_user_auth.py
+# Fixtures are at: tests/fixtures/
+FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 
 PROJECT = FIXTURES_DIR / "user_auth"
 

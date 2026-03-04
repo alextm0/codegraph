@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from neo4j import Driver
+from codegraph.core.graph.database import get_database_manager
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,10 @@ class NodeInfo:
     file_path: str
 
 
-def count_nodes_by_label(driver: Driver) -> dict[str, int]:
+def count_nodes_by_label(driver: Driver | None = None) -> dict[str, int]:
     """Return a mapping of node label -> count."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             "MATCH (n) RETURN labels(n)[0] AS label, count(n) AS cnt ORDER BY label"
@@ -28,8 +31,10 @@ def count_nodes_by_label(driver: Driver) -> dict[str, int]:
         return {record["label"]: record["cnt"] for record in result}
 
 
-def count_edges_by_type(driver: Driver) -> dict[str, int]:
+def count_edges_by_type(driver: Driver | None = None) -> dict[str, int]:
     """Return a mapping of relationship type -> count."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             "MATCH ()-[r]->() RETURN type(r) AS rel_type, count(r) AS cnt ORDER BY rel_type"
@@ -37,8 +42,10 @@ def count_edges_by_type(driver: Driver) -> dict[str, int]:
         return {record["rel_type"]: record["cnt"] for record in result}
 
 
-def get_neighbors(driver: Driver, qualified_name: str) -> list[NodeInfo]:
+def get_neighbors(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
     """Return all nodes directly connected (in either direction) to the given node."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             """
@@ -54,8 +61,10 @@ def get_neighbors(driver: Driver, qualified_name: str) -> list[NodeInfo]:
         return [_row_to_node_info(r) for r in result]
 
 
-def get_file_contents(driver: Driver, file_path: str) -> list[NodeInfo]:
+def get_file_contents(driver: Driver | None = None, file_path: str = "") -> list[NodeInfo]:
     """Return all entities directly contained in a file."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             """
@@ -71,8 +80,10 @@ def get_file_contents(driver: Driver, file_path: str) -> list[NodeInfo]:
         return [_row_to_node_info(r) for r in result]
 
 
-def find_callers(driver: Driver, qualified_name: str) -> list[NodeInfo]:
+def find_callers(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
     """Return all nodes that call the given node."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             """
@@ -88,8 +99,10 @@ def find_callers(driver: Driver, qualified_name: str) -> list[NodeInfo]:
         return [_row_to_node_info(r) for r in result]
 
 
-def find_callees(driver: Driver, qualified_name: str) -> list[NodeInfo]:
+def find_callees(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
     """Return all nodes called by the given node."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             """
@@ -105,8 +118,10 @@ def find_callees(driver: Driver, qualified_name: str) -> list[NodeInfo]:
         return [_row_to_node_info(r) for r in result]
 
 
-def find_node_by_name(driver: Driver, name: str) -> list[NodeInfo]:
+def find_node_by_name(driver: Driver | None = None, name: str = "") -> list[NodeInfo]:
     """Return all nodes whose name property matches exactly."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             """
@@ -122,8 +137,10 @@ def find_node_by_name(driver: Driver, name: str) -> list[NodeInfo]:
         return [_row_to_node_info(r) for r in result]
 
 
-def get_inheritance_chain(driver: Driver, class_qname: str) -> list[NodeInfo]:
+def get_inheritance_chain(driver: Driver | None = None, class_qname: str = "") -> list[NodeInfo]:
     """Return the full inheritance chain (ancestors) of a class, ordered from immediate parent upward."""
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             """
@@ -140,8 +157,8 @@ def get_inheritance_chain(driver: Driver, class_qname: str) -> list[NodeInfo]:
 
 
 def query_entity_dependencies(
-    driver: Driver,
-    entity_name: str,
+    driver: Driver | None = None,
+    entity_name: str = "",
     direction: str = "both",
     depth: int = 1,
 ) -> list[NodeInfo]:
@@ -156,6 +173,8 @@ def query_entity_dependencies(
     Returns:
         Deduplicated list of NodeInfo for all found dependencies.
     """
+    if driver is None:
+        driver = get_database_manager().get_driver()
     _validate_direction(direction)
     depth = max(1, min(depth, 2))  # clamp to supported range
 
@@ -185,7 +204,7 @@ def query_entity_dependencies(
     return results
 
 
-def find_dead_code(driver: Driver, limit: int = 50) -> list[NodeInfo]:
+def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[NodeInfo]:
     """Return Function and Method nodes that have zero incoming CALLS edges.
 
     These are candidates for dead code — they are never called by any other
@@ -199,6 +218,8 @@ def find_dead_code(driver: Driver, limit: int = 50) -> list[NodeInfo]:
     Returns:
         List of NodeInfo for uncalled Function/Method nodes, sorted by file.
     """
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             """
@@ -217,7 +238,7 @@ def find_dead_code(driver: Driver, limit: int = 50) -> list[NodeInfo]:
         return [_row_to_node_info(r) for r in result]
 
 
-def get_most_connected_files(driver: Driver, limit: int = 10) -> list[dict]:
+def get_most_connected_files(driver: Driver | None = None, limit: int = 10) -> list[dict]:
     """Return files ranked by number of directly contained entities.
 
     Useful for understanding which files are the most structurally
@@ -227,6 +248,8 @@ def get_most_connected_files(driver: Driver, limit: int = 10) -> list[dict]:
         List of dicts with keys "file_path" and "entity_count",
         sorted descending by entity_count.
     """
+    if driver is None:
+        driver = get_database_manager().get_driver()
     with driver.session() as session:
         result = session.run(
             """

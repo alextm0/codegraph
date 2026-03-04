@@ -4,6 +4,20 @@ import sys
 import pytest
 from codegraph.cli.main import cli
 
+@pytest.fixture(autouse=True)
+def mock_db_manager_singleton():
+    """Mock get_database_manager to return a mock DM for all CLI tests."""
+    with patch("codegraph.cli.main.get_database_manager") as mock_get_dm:
+        mock_dm = MagicMock()
+        mock_get_dm.return_value = mock_dm
+        # Default behavior: connected
+        mock_dm.is_connected.return_value = True
+        mock_driver = MagicMock()
+        mock_dm.get_driver.return_value = mock_driver
+        mock_dm._config = MagicMock()
+        mock_dm._config.uri = "bolt://localhost:7687"
+        yield mock_dm
+
 def test_cli_no_args():
     """Test CLI without any arguments should print help."""
     with patch("sys.argv", ["codegraph"]):
@@ -43,9 +57,6 @@ def test_cli_custom_config():
 @patch("codegraph.cli.main.setup_logging")
 @patch("codegraph.cli.main.load_raw_config")
 @patch("codegraph.cli.main.resolve_project_root")
-@patch("codegraph.cli.main.load_config")
-@patch("codegraph.cli.main.create_driver")
-@patch("codegraph.cli.main.verify_connectivity")
 @patch("codegraph.cli.main.clear_database")
 @patch("codegraph.cli.main.create_parser")
 @patch("codegraph.cli.main.parse_directory")
@@ -55,12 +66,10 @@ def test_cmd_rebuild_logic(
     mock_parse_directory,
     mock_create_parser,
     mock_clear_database,
-    mock_verify,
-    mock_create_driver,
-    mock_load_config,
     mock_resolve_root,
     mock_load_raw,
     mock_setup_logging,
+    mock_db_manager_singleton,
 ):
     """Test the logic flow inside cmd_rebuild."""
     from codegraph.cli.main import cmd_rebuild
@@ -68,9 +77,10 @@ def test_cmd_rebuild_logic(
     config_path = Path("config.yaml")
     mock_load_raw.return_value = {"parser": {"exclude_patterns": ["ignored/"]}}
     mock_resolve_root.return_value = Path("/project/root")
-    mock_driver = MagicMock()
-    mock_create_driver.return_value = mock_driver
-    mock_verify.return_value = True
+    
+    mock_driver = mock_db_manager_singleton.get_driver()
+    mock_db_manager_singleton.is_connected.return_value = True
+    
     mock_clear_database.return_value = 0
     mock_parse_directory.return_value = []
     mock_build_graph.return_value = {
@@ -81,44 +91,22 @@ def test_cmd_rebuild_logic(
     cmd_rebuild(config_path)
 
     mock_setup_logging.assert_called_once()
-    mock_verify.assert_called_once_with(mock_driver)
+    mock_db_manager_singleton.is_connected.assert_called_once()
     mock_clear_database.assert_called_with(mock_driver)
     mock_create_parser.assert_called_once()
     mock_parse_directory.assert_called_once()
     mock_build_graph.assert_called_once()
-    mock_driver.close.assert_called_once()
 
 @patch("codegraph.cli.main.setup_logging")
-@patch("codegraph.cli.main.load_config")
-@patch("codegraph.cli.main.create_driver")
-@patch("codegraph.cli.main.verify_connectivity")
-@patch("codegraph.cli.main.load_raw_config")
-@patch("codegraph.cli.main.resolve_project_root")
-@patch("pathlib.Path.exists")
-@patch("pathlib.Path.rglob")
 def test_cmd_doctor_logic_success(
-    mock_rglob,
-    mock_exists,
-    mock_resolve_root,
-    mock_load_raw,
-    mock_verify,
-    mock_create_driver,
-    mock_load_config,
     mock_setup_logging,
+    mock_db_manager_singleton,
 ):
     """Test the logic flow inside cmd_doctor when all checks pass."""
     from codegraph.cli.main import cmd_doctor
     
-    config_path = MagicMock(spec=Path)
-    config_path.exists.return_value = True
-    
-    mock_driver = MagicMock()
-    mock_create_driver.return_value = mock_driver
-    mock_verify.return_value = True
-    
-    mock_resolve_root.return_value = MagicMock(spec=Path)
-    mock_resolve_root.return_value.exists.return_value = True
-    mock_rglob.return_value = [Path("test.py")]
+    mock_driver = mock_db_manager_singleton.get_driver()
+    mock_db_manager_singleton.is_connected.return_value = True
     
     # Mock GDS version call inside cmd_doctor
     with patch("codegraph.core.graph.ppr.create_gds_client") as mock_gds_client:
@@ -126,8 +114,7 @@ def test_cmd_doctor_logic_success(
         mock_gds.version.return_value = "2.6.0"
         mock_gds_client.return_value = mock_gds
         
-        cmd_doctor(config_path)
+        cmd_doctor()
     
     mock_setup_logging.assert_called_once()
-    mock_driver.close.assert_called_once()
-
+    mock_db_manager_singleton.is_connected.assert_called_once()

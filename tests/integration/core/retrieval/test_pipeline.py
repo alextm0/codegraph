@@ -15,7 +15,7 @@ from codegraph.core.retrieval.post_processing import ContextResult
 from codegraph.core.parser.python_parser import create_parser, parse_directory
 from tests.conftest import neo4j_required
 
-FIXTURES_DIR = Path(__file__).parents[2] / "fixtures"
+FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 USER_AUTH = str(FIXTURES_DIR / "user_auth")
 PROJECT_ROOT = str(FIXTURES_DIR / "user_auth")
 

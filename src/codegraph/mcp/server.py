@@ -14,13 +14,11 @@ from neo4j import Driver
 from graphdatascience import GraphDataScience
 
 from codegraph.core.graph import (
-    Neo4jConfig,
-    close_driver,
-    create_driver,
+    get_database_manager,
     load_full_config,
-    verify_connectivity,
+    create_gds_client,
 )
-from codegraph.core.graph.ppr import PPRConfig, create_gds_client
+from codegraph.core.graph.ppr import PPRConfig
 from codegraph.core.retrieval.pipeline import ensure_graph_ready
 from codegraph.mcp.prompts import LLM_SYSTEM_PROMPT
 from codegraph.mcp.tools import (
@@ -61,25 +59,16 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     logger.info("CodeGraph MCP server starting up")
     config_path = _resolve_config_path()
     logger.info("Using config: %s", config_path)
+    
+    db_manager = get_database_manager()
+    db_manager.initialize(str(config_path))
+    
     raw_config = load_full_config(config_path)
 
-    neo4j_section = raw_config.get("neo4j", {})
     ppr_section = raw_config.get("ppr", {})
     mcp_section = raw_config.get("mcp", {})
     seed_section = raw_config.get("seed_selection", {})
 
-    # Read password, ensuring it is provided
-    password = os.environ.get("NEO4J_PASSWORD", neo4j_section.get("password"))
-    if not password:
-        logger.error("Missing mandatory Neo4j configuration: NEO4J_PASSWORD must be set in environment or config.yaml")
-        sys.exit(1)
-
-    neo4j_config = Neo4jConfig(
-        uri=os.environ.get("NEO4J_URI", neo4j_section.get("uri", "neo4j://localhost:7687")),
-        username=os.environ.get("NEO4J_USERNAME", neo4j_section.get("username", "neo4j")),
-        password=password,
-        database=os.environ.get("NEO4J_DATABASE", neo4j_section.get("database", "neo4j")),
-    )
     ppr_config = PPRConfig(
         damping_factor=ppr_section.get("damping_factor", 0.85),
         max_iterations=ppr_section.get("max_iterations", 20),
@@ -90,12 +79,11 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     raw_project_root = raw_config.get("project_root", ".")
     project_root = str(config_path.parent / raw_project_root)
 
-    driver = create_driver(neo4j_config)
-    if not verify_connectivity(driver):
+    if not db_manager.is_connected():
         logger.error("Cannot reach Neo4j. Shutting down.")
-        close_driver(driver)
         sys.exit(1)
 
+    driver = db_manager.get_driver()
     gds = create_gds_client(driver)
     try:
         ensure_graph_ready(driver, gds)
@@ -125,7 +113,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     try:
         yield state
     finally:
-        close_driver(driver)
+        db_manager.close_driver()
 
 mcp = FastMCP(
     name="codegraph",

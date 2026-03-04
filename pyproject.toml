@@ -29,9 +29,11 @@ codegraph-mcp = "codegraph.mcp.server:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
 ]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 # Don't recurse into fixture repos — they ship their own test suites
 # that require dependencies we don't install.
 norecursedirs = ["tests/fixtures"]

@@ -24,7 +24,7 @@ import pytest
 from tests.conftest import neo4j_required
 
 # Fixtures path used by Neo4j-backed tests.
-FIXTURES_DIR = Path(__file__).parents[1] / "fixtures"
+FIXTURES_DIR = Path(__file__).parents[2] / "fixtures"
 USER_AUTH_DIR = str(FIXTURES_DIR / "user_auth")
 
 

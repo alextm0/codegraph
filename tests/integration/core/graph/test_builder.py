@@ -9,7 +9,7 @@ from codegraph.core.graph.graph_builder import build_graph, clear_database, EDGE
 from codegraph.core.graph.queries import count_nodes_by_label, count_edges_by_type
 from tests.conftest import neo4j_required
 
-FIXTURES_DIR = Path(__file__).parents[2] / "fixtures"
+FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 USER_AUTH = str(FIXTURES_DIR / "user_auth")
 
 

@@ -25,7 +25,7 @@ class SeedNode:
     source: str  # "entity_match", "bm25", "current_file"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class PersonalizationVector:
     """Normalized seed weights ready for PPR.
 
@@ -33,6 +33,13 @@ class PersonalizationVector:
     """
 
     seeds: dict[int, float]
+
+    def normalize(self) -> None:
+        """Scale weights so they sum to 1.0."""
+        total = sum(self.seeds.values())
+        if total == 0.0:
+            return
+        self.seeds = {nid: w / total for nid, w in self.seeds.items()}
 
 
 def extract_seeds(
