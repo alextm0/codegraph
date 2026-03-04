@@ -13,16 +13,15 @@ jobs:
 
     services:
       neo4j:
-        image: neo4j:5.25.1-community # Pinned — 5.26+ has no GDS release yet
+        image: neo4j:5.25.1-community
         ports:
           - 7687:7687
           - 7474:7474
         env:
           NEO4J_AUTH: neo4j/test_password
           NEO4J_PLUGINS: '["graph-data-science"]'
-          # Neo4j 5.x renamed config keys — dots become underscores, new prefixes
-          NEO4J_server_security_procedures_unrestricted: "gds.*"
-          NEO4J_server_security_procedures_allowlist: "gds.*"
+          NEO4J_dbms_security_procedures_unrestricted: "gds.*"
+          NEO4J_dbms_security_procedures_allowlist: "gds.*"
         options: >-
           --health-cmd "cypher-shell -u neo4j -p test_password 'CALL gds.version() YIELD version RETURN version'"
           --health-interval 15s
