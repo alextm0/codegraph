@@ -23,11 +23,11 @@ jobs:
           NEO4J_dbms_security_procedures_unrestricted: "gds.*"
           NEO4J_dbms_security_procedures_allowlist: "gds.*"
         options: >-
-          --health-cmd "cypher-shell -u neo4j -p test_password 'CALL gds.version() YIELD version RETURN version'"
-          --health-interval 15s
-          --health-timeout 10s
-          --health-retries 15
-          --health-start-period 30s
+          --health-cmd "wget -q --spider http://localhost:7474 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 60s
 
     steps:
       - uses: actions/checkout@v4
