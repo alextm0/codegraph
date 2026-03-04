@@ -1,30 +1,51 @@
 """Tests for src/graph/connection.py — Neo4j driver lifecycle."""
 
+import os
 from pathlib import Path
-
+import yaml
 import pytest
 
 from codegraph.core.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
 from tests.conftest import neo4j_required
 
-_CONFIG_PATH = Path(__file__).parents[4] / "config.yaml"
+@pytest.fixture
+def temp_config_file(tmp_path):
+    """Create a temporary valid config file for testing load_config."""
+    config_data = {
+        "neo4j": {
+            "uri": "bolt://localhost:7687",
+            "username": "neo4j",
+            "password": "test_password",
+            "database": "neo4j"
+        }
+    }
+    config_path = tmp_path / "config.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+    return config_path
 
 # ---------------------------------------------------------------------------
 # Neo4jConfig
 # ---------------------------------------------------------------------------
 
-def test_load_config_reads_yaml():
+def test_load_config_reads_yaml(temp_config_file, monkeypatch):
     """load_config returns a Neo4jConfig with values from config.yaml."""
-    config = load_config(_CONFIG_PATH)
+    # Ensure env vars don't override the YAML during this test
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.delenv("NEO4J_USERNAME", raising=False)
+    monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+    
+    config = load_config(temp_config_file)
     assert "localhost" in config.uri
     assert "7687" in config.uri
     assert config.username == "neo4j"
     assert config.database == "neo4j"
+    assert config.password == "test_password"
 
 
-def test_neo4j_config_is_frozen():
+def test_neo4j_config_is_frozen(temp_config_file):
     """Neo4jConfig must be immutable."""
-    config = load_config(_CONFIG_PATH)
+    config = load_config(temp_config_file)
     with pytest.raises((AttributeError, TypeError)):
         config.uri = "bolt://other:7687"  # type: ignore[misc]
 
@@ -42,9 +63,10 @@ def test_neo4j_config_custom_values():
 # create_driver
 # ---------------------------------------------------------------------------
 
-def test_create_driver_returns_driver_object():
+def test_create_driver_returns_driver_object(temp_config_file):
     """create_driver returns a Neo4j Driver without raising."""
-    config = load_config(_CONFIG_PATH)
+    config = load_config(temp_config_file)
+    # create_driver doesn't actually connect immediately, it just creates the object
     driver = create_driver(config)
     assert driver is not None
     close_driver(driver)
@@ -60,11 +82,12 @@ def test_verify_connectivity_returns_true_when_reachable(neo4j_driver):
     assert verify_connectivity(neo4j_driver) is True
 
 
-def test_verify_connectivity_returns_false_for_bad_uri():
+def test_verify_connectivity_returns_false_for_bad_uri(temp_config_file):
     """verify_connectivity must return False when the URI is unreachable."""
-    base = load_config(_CONFIG_PATH)
+    base = load_config(temp_config_file)
     config = Neo4jConfig(uri="bolt://localhost:19999", username=base.username, password=base.password, database=base.database)
     driver = create_driver(config)
+    # This should fail connection because nothing is listening on 19999
     result = verify_connectivity(driver)
     close_driver(driver)
     assert result is False
@@ -75,9 +98,9 @@ def test_verify_connectivity_returns_false_for_bad_uri():
 # ---------------------------------------------------------------------------
 
 @neo4j_required
-def test_close_driver_does_not_raise(neo4j_driver):
+def test_close_driver_does_not_raise(neo4j_driver, temp_config_file):
     """Closing a second driver (not the session fixture) should not raise."""
-    config = load_config(_CONFIG_PATH)
+    config = load_config(temp_config_file)
     driver = create_driver(config)
     # Should complete without error
     close_driver(driver)
