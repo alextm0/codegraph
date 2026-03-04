@@ -38,10 +38,17 @@ def main():
     # 2. Connect to Neo4j
     # Construct Neo4jConfig preferring environment variables
     neo4j_section = raw_config.get("neo4j", {})
+    
+    # Read password, ensuring it is provided
+    password = os.environ.get("NEO4J_PASSWORD", neo4j_section.get("password"))
+    if not password:
+        logger.error("Missing mandatory Neo4j configuration: NEO4J_PASSWORD must be set in environment or config.yaml")
+        sys.exit(1)
+
     neo4j_config = Neo4jConfig(
         uri=os.environ.get("NEO4J_URI", neo4j_section.get("uri", "bolt://localhost:7687")),
         username=os.environ.get("NEO4J_USERNAME", neo4j_section.get("username", "neo4j")),
-        password=os.environ.get("NEO4J_PASSWORD", neo4j_section.get("password", "password")),
+        password=password,
         database=os.environ.get("NEO4J_DATABASE", neo4j_section.get("database", "neo4j")),
     )
     

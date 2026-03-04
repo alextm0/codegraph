@@ -68,11 +68,17 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     mcp_section = raw_config.get("mcp", {})
     seed_section = raw_config.get("seed_selection", {})
 
+    # Read password, ensuring it is provided
+    password = os.environ.get("NEO4J_PASSWORD", neo4j_section.get("password"))
+    if not password:
+        logger.error("Missing mandatory Neo4j configuration: NEO4J_PASSWORD must be set in environment or config.yaml")
+        sys.exit(1)
+
     neo4j_config = Neo4jConfig(
-        uri=neo4j_section.get("uri", "neo4j://localhost:7687"),
-        username=neo4j_section.get("username", "neo4j"),
-        password=neo4j_section.get("password", ""),
-        database=neo4j_section.get("database", "neo4j"),
+        uri=os.environ.get("NEO4J_URI", neo4j_section.get("uri", "neo4j://localhost:7687")),
+        username=os.environ.get("NEO4J_USERNAME", neo4j_section.get("username", "neo4j")),
+        password=password,
+        database=os.environ.get("NEO4J_DATABASE", neo4j_section.get("database", "neo4j")),
     )
     ppr_config = PPRConfig(
         damping_factor=ppr_section.get("damping_factor", 0.85),

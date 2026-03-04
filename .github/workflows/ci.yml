@@ -13,7 +13,7 @@ jobs:
 
     services:
       neo4j:
-        image: neo4j:5-community
+        image: neo4j:5.25.1-community
         ports:
           - 7687:7687
           - 7474:7474

@@ -48,7 +48,6 @@ devfile.yaml
 # local scratch
 
 javascript.py.bak
-src/codegraphcontext/cli/nl.py
 *.bak
 
 # temporary files
