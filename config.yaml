@@ -7,13 +7,25 @@ exclude_patterns:
   - ".pytest_cache"
 
 neo4j:
-  uri: "bolt://localhost:7687"
+  # Connection settings can be provided here or via environment variables:
+  # NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
+  uri: "neo4j://localhost:7687"
   username: "neo4j"
-  password: "neo4j"
-  database: "neo4j"
+  # password: removed (must be in .env or environment)
 
 ppr:
   damping_factor: 0.85
   max_iterations: 20
   tolerance: 1.0e-7
   top_k: 20
+
+seed_selection:
+  entity_match_weight: 0.6
+  bm25_weight: 0.3
+  current_file_weight: 0.1
+  bm25_top_n: 5
+
+mcp:
+  server_name: "codegraph"
+  default_token_budget: 6000
+  default_top_k: 15

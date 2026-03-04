@@ -1,0 +1,4088 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../contributing/">
+      
+      
+        <link rel="next" href="../troubleshooting/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Cookbook - CodeGraph</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#mcp-tool-cookbook" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="CodeGraph" class="md-header__button md-logo" aria-label="CodeGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CodeGraph
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Cookbook
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../00-overview/" class="md-tabs__link">
+          
+  
+  
+  Project Overview
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../02-tree-sitter-and-parsing/" class="md-tabs__link">
+          
+  
+  
+  Technical Details
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../06-seed-node-selection/" class="md-tabs__link">
+          
+  
+  
+  Pipeline Stages
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../09-evaluation/" class="md-tabs__link">
+          
+  
+  
+  Research & Evaluation
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../11-glossary/" class="md-tabs__link">
+          
+  
+  
+  Resources
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../wiki/" class="md-tabs__link">
+          
+  
+  
+  Wiki
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Example Docs
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="CodeGraph" class="md-nav__button md-logo" aria-label="CodeGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    CodeGraph
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project Overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../00-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../01-problem-and-motivation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Problem & Motivation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Details
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Technical Details
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../02-tree-sitter-and-parsing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tree-sitter & Parsing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../03-import-and-call-resolution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import & Call Resolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../04-neo4j-and-graph-schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j & Graph Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../05-personalized-pagerank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personalized PageRank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipeline Stages
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Pipeline Stages
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../06-seed-node-selection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seed Node Selection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../07-post-processing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Processing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../08-mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research & Evaluation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research & Evaluation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../09-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../10-research-papers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research Papers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Resources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../11-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project-documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wiki
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Wiki
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/future-work/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Future Work
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/concepts/graph-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graph Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/concepts/import-call-resolution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import & Call Resolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/concepts/parsing-and-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parsing & Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/concepts/personalized-pagerank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personalized PageRank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/concepts/post-processing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-processing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/concepts/seed-selection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seed Selection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_5" id="__nav_7_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/getting-started/prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_6" id="__nav_7_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/guides/building-the-graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building the Graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/guides/evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/guides/mcp-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_7" id="__nav_7_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/reference/cypher-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cypher Queries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/reference/mcp-tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../wiki/reference/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Example Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#basic-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Queries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Basic Queries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-find-a-specific-function-by-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Find a specific function by name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-find-all-calls-to-a-specific-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Find all calls to a specific function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-find-what-a-function-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Find what a function calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-find-all-imports-of-a-specific-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Find all imports of a specific module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-find-all-methods-of-a-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Find all methods of a class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-find-all-classes-that-inherit-from-a-specific-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Find all classes that inherit from a specific class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-find-all-functions-with-a-specific-decorator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Find all functions with a specific decorator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-find-all-dataclasses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Find all dataclasses
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-analysis-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Analysis &amp; Quality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Code Analysis &amp; Quality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#9-find-the-5-most-complex-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Find the 5 most complex functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-calculate-cyclomatic-complexity-of-a-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Calculate cyclomatic complexity of a function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-find-unused-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Find unused code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-find-the-call-chain-between-two-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Find the call chain between two functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-find-all-direct-and-indirect-callers-of-a-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Find all direct and indirect callers of a function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-find-functions-by-argument-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Find functions by argument name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-list-all-python-package-imports-from-a-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. List all python package imports from a directory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-information-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Information Queries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Repository Information Queries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#16-list-all-indexed-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. List all indexed projects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-check-the-status-of-an-indexing-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Check the status of an indexing job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#18-list-all-background-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. List all background jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-cypher-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Cypher Queries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Cypher Queries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#19-find-all-function-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        19. Find all function definitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#20-find-all-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        20. Find all classes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#21-find-all-functions-in-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        21. Find all functions in a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-find-all-classes-in-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        22. Find all classes in a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-list-all-top-level-functions-and-classes-in-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        23. List all top-level functions and classes in a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-find-functions-in-one-module-that-call-a-function-in-another" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        24. Find functions in one module that call a function in another
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-find-circular-file-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        25. Find circular file imports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-find-all-functions-with-more-than-5-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        26. Find all functions with more than 5 arguments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#27-find-all-functions-in-a-file-that-have-a-docstring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        27. Find all functions in a file that have a docstring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#28-find-all-classes-that-have-a-specific-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        28. Find all classes that have a specific method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#29-find-the-depth-of-inheritance-for-all-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        29. Find the depth of inheritance for all classes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#30-find-all-functions-that-have-a-docstring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        30. Find all functions that have a docstring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#31-find-all-decorated-methods-in-a-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        31. Find all decorated methods in a class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-find-the-number-of-functions-in-each-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        32. Find the number of functions in each file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-find-all-methods-that-override-a-parent-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        33. Find all methods that override a parent method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-find-all-functions-that-call-super" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        34. Find all functions that call super()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-find-all-calls-to-a-function-with-a-specific-argument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        35. Find all calls to a function with a specific argument
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#36-find-all-functions-that-are-not-called-by-any-other-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        36. Find all functions that are not called by any other function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#37-find-all-functions-that-are-called-with-a-specific-argument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        37. Find all functions that are called with a specific argument
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#38-find-all-direct-and-indirect-callees-of-a-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        38. Find all direct and indirect callees of a function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#39-find-all-functions-that-are-overridden" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        39. Find all functions that are overridden
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#40-find-all-modules-imported-by-module_a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        40. Find all modules imported by module_a
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#41-find-large-functions-that-should-be-refactored" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        41. Find large functions that should be refactored
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-find-recursive-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        42. Find recursive functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-find-most-connected-functions-hub-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        43. Find most connected functions (hub functions)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-sensitive-data-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security &amp; Sensitive Data Analysis
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security &amp; Sensitive Data Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#44-find-potential-security-vulnerabilities-hardcoded-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        44. Find potential security vulnerabilities (hardcoded secrets)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_6" id="__nav_8_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli_indexing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Indexing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#basic-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Queries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Basic Queries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-find-a-specific-function-by-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Find a specific function by name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-find-all-calls-to-a-specific-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Find all calls to a specific function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-find-what-a-function-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Find what a function calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-find-all-imports-of-a-specific-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Find all imports of a specific module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-find-all-methods-of-a-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Find all methods of a class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-find-all-classes-that-inherit-from-a-specific-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Find all classes that inherit from a specific class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-find-all-functions-with-a-specific-decorator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Find all functions with a specific decorator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-find-all-dataclasses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Find all dataclasses
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-analysis-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Analysis &amp; Quality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Code Analysis &amp; Quality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#9-find-the-5-most-complex-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Find the 5 most complex functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-calculate-cyclomatic-complexity-of-a-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Calculate cyclomatic complexity of a function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-find-unused-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Find unused code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-find-the-call-chain-between-two-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Find the call chain between two functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-find-all-direct-and-indirect-callers-of-a-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Find all direct and indirect callers of a function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-find-functions-by-argument-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Find functions by argument name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-list-all-python-package-imports-from-a-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. List all python package imports from a directory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-information-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Information Queries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Repository Information Queries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#16-list-all-indexed-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. List all indexed projects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-check-the-status-of-an-indexing-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Check the status of an indexing job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#18-list-all-background-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. List all background jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-cypher-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Cypher Queries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Cypher Queries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#19-find-all-function-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        19. Find all function definitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#20-find-all-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        20. Find all classes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#21-find-all-functions-in-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        21. Find all functions in a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-find-all-classes-in-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        22. Find all classes in a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-list-all-top-level-functions-and-classes-in-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        23. List all top-level functions and classes in a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-find-functions-in-one-module-that-call-a-function-in-another" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        24. Find functions in one module that call a function in another
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-find-circular-file-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        25. Find circular file imports
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-find-all-functions-with-more-than-5-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        26. Find all functions with more than 5 arguments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#27-find-all-functions-in-a-file-that-have-a-docstring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        27. Find all functions in a file that have a docstring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#28-find-all-classes-that-have-a-specific-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        28. Find all classes that have a specific method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#29-find-the-depth-of-inheritance-for-all-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        29. Find the depth of inheritance for all classes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#30-find-all-functions-that-have-a-docstring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        30. Find all functions that have a docstring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#31-find-all-decorated-methods-in-a-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        31. Find all decorated methods in a class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-find-the-number-of-functions-in-each-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        32. Find the number of functions in each file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-find-all-methods-that-override-a-parent-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        33. Find all methods that override a parent method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-find-all-functions-that-call-super" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        34. Find all functions that call super()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-find-all-calls-to-a-function-with-a-specific-argument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        35. Find all calls to a function with a specific argument
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#36-find-all-functions-that-are-not-called-by-any-other-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        36. Find all functions that are not called by any other function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#37-find-all-functions-that-are-called-with-a-specific-argument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        37. Find all functions that are called with a specific argument
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#38-find-all-direct-and-indirect-callees-of-a-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        38. Find all direct and indirect callees of a function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#39-find-all-functions-that-are-overridden" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        39. Find all functions that are overridden
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#40-find-all-modules-imported-by-module_a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        40. Find all modules imported by module_a
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#41-find-large-functions-that-should-be-refactored" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        41. Find large functions that should be refactored
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-find-recursive-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        42. Find recursive functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-find-most-connected-functions-hub-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        43. Find most connected functions (hub functions)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-sensitive-data-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security &amp; Sensitive Data Analysis
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security &amp; Sensitive Data Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#44-find-potential-security-vulnerabilities-hardcoded-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        44. Find potential security vulnerabilities (hardcoded secrets)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="mcp-tool-cookbook">MCP Tool Cookbook</h1>
+<p>This cookbook provides examples of how to use the <code>mcp</code> tool to query and understand your Python codebase. The "Tool" indicates which <code>mcp</code> tool to use, and the "JSON Arguments" are what the LLM would provide to that tool.</p>
+<hr />
+<h2 id="basic-queries">Basic Queries</h2>
+<h3 id="1-find-a-specific-function-by-name">1. Find a specific function by name</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Where is the function <code>foo</code> defined?"</li>
+<li><strong>Tool:</strong> <code>find_code</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 1" src="../images/1.png" /></p>
+<h3 id="2-find-all-calls-to-a-specific-function">2. Find all calls to a specific function</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all calls to the <code>helper</code> function."</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;find_callers&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;helper&quot;</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 2" src="../images/2.png" /></p>
+<h3 id="3-find-what-a-function-calls">3. Find what a function calls</h3>
+<ul>
+<li><strong>Natural Language:</strong> "What functions are called inside the <code>foo</code> function?"</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;find_callees&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">&quot;context&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/teamspace/studios/this_studio/demo/CodeGraphContext/tests/sample_project/module_a.py&quot;</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 3" src="../images/3.png" /></p>
+<h3 id="4-find-all-imports-of-a-specific-module">4. Find all imports of a specific module</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Where is the <code>math</code> module imported?"</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;find_importers&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;math&quot;</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 4" src="../images/4.png" /></p>
+<h3 id="5-find-all-methods-of-a-class">5. Find all methods of a class</h3>
+<ul>
+<li><strong>Natural Language:</strong> "What are the methods of the <code>A</code> class?"</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;class_hierarchy&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A&quot;</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">}</span>
+</code></pre></div></li>
+<li><strong>Note:</strong> The response for <code>class_hierarchy</code> includes a list of methods.</li>
+</ul>
+<p><img alt="Query 5" src="../images/5.png" /></p>
+<h3 id="6-find-all-classes-that-inherit-from-a-specific-class">6. Find all classes that inherit from a specific class</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Show me all classes that inherit from <code>Base</code>."</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;class_hierarchy&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Base&quot;</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="p">}</span>
+</code></pre></div></li>
+<li><strong>Note:</strong> The response for <code>class_hierarchy</code> includes a list of child classes.</li>
+</ul>
+<p><img alt="Query 6" src="../images/6.png" /></p>
+<h3 id="7-find-all-functions-with-a-specific-decorator">7. Find all functions with a specific decorator</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all functions with the <code>log_decorator</code>."</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;find_functions_by_decorator&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;log_decorator&quot;</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 7" src="../images/7.png" /></p>
+<h3 id="8-find-all-dataclasses">8. Find all dataclasses</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all dataclasses."</li>
+<li><strong>Tool:</strong> <code>execute_cypher_query</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (c:Class) WHERE &#39;dataclass&#39; IN c.decorators RETURN c.name, c.path&quot;</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 8" src="../images/8.png" /></p>
+<hr />
+<h2 id="code-analysis-quality">Code Analysis &amp; Quality</h2>
+<h3 id="9-find-the-5-most-complex-functions">9. Find the 5 most complex functions</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find the 5 most complex functions."</li>
+<li><strong>Tool:</strong> <code>find_most_complex_functions</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;limit&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 9" src="../images/9.png" /></p>
+<h3 id="10-calculate-cyclomatic-complexity-of-a-function">10. Calculate cyclomatic complexity of a function</h3>
+<ul>
+<li><strong>Natural Language:</strong> "What is the cyclomatic complexity of <code>try_except_finally</code>?"</li>
+<li><strong>Tool:</strong> <code>calculate_cyclomatic_complexity</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&quot;function_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;try_except_finally&quot;</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<h3 id="11-find-unused-code">11. Find unused code</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find unused code, but ignore API endpoints decorated with <code>@app.route</code>."</li>
+<li><strong>Tool:</strong> <code>find_dead_code</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;exclude_decorated_with&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;@app.route&quot;</span><span class="p">]</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 11" src="../images/11.png" /></p>
+<h3 id="12-find-the-call-chain-between-two-functions">12. Find the call chain between two functions</h3>
+<ul>
+<li><strong>Natural Language:</strong> "What is the call chain from <code>wrapper</code> to <code>helper</code>?"</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p">{</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;call_chain&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;wrapper-&gt;helper&quot;</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 12" src="../images/12.png" /></p>
+<h3 id="13-find-all-direct-and-indirect-callers-of-a-function">13. Find all direct and indirect callers of a function</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Show me all functions that eventually call the <code>helper</code> function."</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;find_all_callers&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;helper&quot;</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 13" src="../images/13.png" /></p>
+<h3 id="14-find-functions-by-argument-name">14. Find functions by argument name</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all functions that take <code>self</code> as an argument."</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p">{</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;find_functions_by_argument&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;self&quot;</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 14" src="../images/14.png" /></p>
+<h3 id="15-list-all-python-package-imports-from-a-directory">15. List all python package imports from a directory</h3>
+<ul>
+<li><strong>Natural Language:</strong> "List all python package imports from my project directory."</li>
+<li><strong>Tool:</strong> <code>execute_cypher_query</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">{</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:File)-[:IMPORTS]-&gt;(m:Module) WHERE f.path ENDS WITH &#39;.py&#39; RETURN DISTINCT m.name&quot;</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<hr />
+<h2 id="repository-information-queries">Repository Information Queries</h2>
+<h3 id="16-list-all-indexed-projects">16. List all indexed projects</h3>
+<ul>
+<li><strong>Natural Language:</strong> "List all projects I have indexed."</li>
+<li><strong>Tool:</strong> <code>list_indexed_repositories</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="w">  </span><span class="p">{}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 16" src="../images/16.png" /></p>
+<h3 id="17-check-the-status-of-an-indexing-job">17. Check the status of an indexing job</h3>
+<ul>
+<li><strong>Natural Language:</strong> "What is the status of job <code>4cb9a60e-c1b1-43a7-9c94-c840771506bc</code>?"</li>
+<li><strong>Tool:</strong> <code>check_job_status</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="p">{</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">&quot;job_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;4cb9a60e-c1b1-43a7-9c94-c840771506bc&quot;</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<h3 id="18-list-all-background-jobs">18. List all background jobs</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Show me all background jobs."</li>
+<li><strong>Tool:</strong> <code>list_jobs</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="w">  </span><span class="p">{}</span>
+</code></pre></div></li>
+</ul>
+<hr />
+<h2 id="advanced-cypher-queries">Advanced Cypher Queries</h2>
+<p>These examples use the <code>execute_cypher_query</code> tool for more specific and complex questions.</p>
+<h3 id="19-find-all-function-definitions">19. Find all function definitions</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all function definitions in the codebase."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="p">{</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (n:Function) RETURN n.name, n.path, n.line_number LIMIT 50&quot;</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 19" src="../images/19.png" /></p>
+<h3 id="20-find-all-classes">20. Find all classes</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Show me all the classes."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="p">{</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (n:Class) RETURN n.name, n.path, n.line_number LIMIT 50&quot;</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 20" src="../images/20.png" /></p>
+<h3 id="21-find-all-functions-in-a-file">21. Find all functions in a file</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all functions in <code>module_a.py</code>."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function) WHERE f.path ENDS WITH &#39;module_a.py&#39; RETURN f.name&quot;</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 21" src="../images/21.png" /></p>
+<h3 id="22-find-all-classes-in-a-file">22. Find all classes in a file</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all classes in <code>advanced_classes.py</code>."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="p">{</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (c:Class) WHERE c.path ENDS WITH &#39;advanced_classes.py&#39; RETURN c.name&quot;</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 22" src="../images/22.png" /></p>
+<h3 id="23-list-all-top-level-functions-and-classes-in-a-file">23. List all top-level functions and classes in a file</h3>
+<ul>
+<li><strong>Natural Language:</strong> "List all top-level functions and classes in <code>module_a.py</code>."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="p">{</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:File)-[:CONTAINS]-&gt;(n) WHERE f.name = &#39;module_a.py&#39; AND (n:Function OR n:Class) AND n.context IS NULL RETURN n.name&quot;</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 23" src="../images/23.png" /></p>
+<h3 id="24-find-functions-in-one-module-that-call-a-function-in-another">24. Find functions in one module that call a function in another</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find functions in <code>module_a.py</code> that call <code>helper</code> in <code>module_b.py</code>."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="p">{</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (caller:Function)-[:CALLS]-&gt;(callee:Function {name: &#39;helper&#39;}) WHERE caller.path ENDS WITH &#39;module_a.py&#39; AND callee.path ENDS WITH &#39;module_b.py&#39; RETURN caller.name&quot;</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 24" src="../images/24.png" /></p>
+<h3 id="25-find-circular-file-imports">25. Find circular file imports</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Are there any circular dependencies between files?"</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="p">{</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f1:File)-[:IMPORTS]-&gt;(m2:Module), (f2:File)-[:IMPORTS]-&gt;(m1:Module) WHERE f1.name = m1.name + &#39;.py&#39; AND f2.name = m2.name + &#39;.py&#39; RETURN f1.name, f2.name&quot;</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<h3 id="26-find-all-functions-with-more-than-5-arguments">26. Find all functions with more than 5 arguments</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all functions with a large number of arguments."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="p">{</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function) WHERE size(f.args) &gt; 5 RETURN f.name, f.path, size(f.args) as arg_count&quot;</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 26" src="../images/26.png" /></p>
+<h3 id="27-find-all-functions-in-a-file-that-have-a-docstring">27. Find all functions in a file that have a docstring</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all functions in <code>module_a.py</code> that have a docstring."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="p">{</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function) WHERE f.path ENDS WITH &#39;module_a.py&#39; AND f.docstring IS NOT NULL AND f.docstring &lt;&gt; &#39;&#39; RETURN f.name&quot;</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<h3 id="28-find-all-classes-that-have-a-specific-method">28. Find all classes that have a specific method</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all classes that have a <code>greet</code> method."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="p">{</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (c:Class)-[:CONTAINS]-&gt;(m:Function {name: &#39;greet&#39;}) RETURN c.name, c.path&quot;</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 28" src="../images/28.png" /></p>
+<h3 id="29-find-the-depth-of-inheritance-for-all-classes">29. Find the depth of inheritance for all classes</h3>
+<ul>
+<li><strong>Natural Language:</strong> "How deep are the inheritance chains for all classes?"</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="p">{</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (c:Class) OPTIONAL MATCH path = (c)-[:INHERITS*]-&gt;(parent:Class) RETURN c.name, c.path, length(path) AS depth ORDER BY depth DESC&quot;</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 29" src="../images/29.png" /></p>
+<h3 id="30-find-all-functions-that-have-a-docstring">30. Find all functions that have a docstring</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Show me all functions that are documented."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="p">{</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function) WHERE f.docstring IS NOT NULL AND f.docstring &lt;&gt; &#39;&#39; RETURN f.name, f.path LIMIT 50&quot;</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 30" src="../images/30.png" /></p>
+<h3 id="31-find-all-decorated-methods-in-a-class">31. Find all decorated methods in a class</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all decorated methods in the <code>Child</code> class."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="p">{</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (c:Class {name: &#39;Child&#39;})-[:CONTAINS]-&gt;(m:Function) WHERE m.decorators IS NOT NULL AND size(m.decorators) &gt; 0 RETURN m.name&quot;</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 31" src="../images/31.png" /></p>
+<h3 id="32-find-the-number-of-functions-in-each-file">32. Find the number of functions in each file</h3>
+<ul>
+<li><strong>Natural Language:</strong> "How many functions are in each file?"</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="p">{</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function) RETURN f.path, count(f) AS function_count ORDER BY function_count DESC&quot;</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 32" src="../images/32.png" /></p>
+<h3 id="33-find-all-methods-that-override-a-parent-method">33. Find all methods that override a parent method</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all methods that are overridden from a parent class."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="p">{</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (c:Class)-[:INHERITS]-&gt;(p:Class), (c)-[:CONTAINS]-&gt;(m:Function), (p)-[:CONTAINS]-&gt;(m_parent:Function) WHERE m.name = m_parent.name RETURN m.name as method, c.name as child_class, p.name as parent_class&quot;</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 33" src="../images/33.png" /></p>
+<h3 id="34-find-all-functions-that-call-super">34. Find all functions that call <code>super()</code></h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all methods that call their parent's method via <code>super()</code>."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="p">{</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function)-[r:CALLS]-&gt;() WHERE r.full_call_name STARTS WITH &#39;super(&#39; RETURN f.name, f.path&quot;</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 34" src="../images/34.png" /></p>
+<h3 id="35-find-all-calls-to-a-function-with-a-specific-argument">35. Find all calls to a function with a specific argument</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all calls to <code>helper</code> with the argument <code>x</code>."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="p">{</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH ()-[r:CALLS]-&gt;(f:Function {name: &#39;helper&#39;}) WHERE &#39;x&#39; IN r.args RETURN r.full_call_name, r.line_number, r.path&quot;</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 35" src="../images/35.png" /></p>
+<h3 id="36-find-all-functions-that-are-not-called-by-any-other-function">36. Find all functions that are not called by any other function</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all dead code (functions that are never called)."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="p">{</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function) WHERE NOT (()-[:CALLS]-&gt;(f)) AND f.is_dependency = false RETURN f.name, f.path&quot;</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 36" src="../images/36.png" /></p>
+<h3 id="37-find-all-functions-that-are-called-with-a-specific-argument">37. Find all functions that are called with a specific argument</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all calls to <code>print</code> with the argument <code>'hello'</code>."</li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="p">{</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (c:Call) WHERE c.name = &#39;print&#39; AND &#39;hello&#39; IN c.args RETURN c.file, c.lineno&quot;</span>
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<h3 id="38-find-all-direct-and-indirect-callees-of-a-function">38. Find all direct and indirect callees of a function</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Show me all functions that are eventually called by the <code>foo</code> function."</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="p">{</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;find_all_callees&quot;</span><span class="p">,</span>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span><span class="p">,</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">  </span><span class="nt">&quot;context&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/teamspace/studios/this_studio/demo/CodeGraphContext/tests/sample_project/module_a.py&quot;</span>
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 38" src="../images/38.png" /></p>
+<h3 id="39-find-all-functions-that-are-overridden">39. Find all functions that are overridden</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all functions that are overridden."</li>
+<li><strong>Tool:</strong> <code>analyze_code_relationships</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="p">{</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="w">  </span><span class="nt">&quot;query_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;overrides&quot;</span><span class="p">,</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">  </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 39" src="../images/39.png" /></p>
+<h3 id="40-find-all-modules-imported-by-module_a">40. Find all modules imported by <code>module_a</code></h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all modules imported by <code>module_a</code>."</li>
+<li><strong>Tool:</strong> <code>execute_cypher_query</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="p">{</span>
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:File {name: &#39;module_a.py&#39;})-[:IMPORTS]-&gt;(m:Module) RETURN m.name AS imported_module_name&quot;</span>
+<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 40" src="../images/40.png" /></p>
+<h3 id="41-find-large-functions-that-should-be-refactored">41. Find large functions that should be refactored</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find functions with more than 20 lines of code that might need refactoring."</li>
+<li><strong>Tool:</strong> <code>execute_cypher_query</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="p">{</span>
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function)\n    WHERE f.end_line - f.line_number &gt; 20\n    RETURN f&quot;</span>
+<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+<p><img alt="Query 41" src="../images/41.png" /></p>
+<h3 id="42-find-recursive-functions">42. Find recursive functions</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find all functions that call themselves (recursive functions)."</li>
+<li><strong>Tool:</strong> <code>execute_cypher_query</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="p">{</span>
+<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH p=(f:Function)-[:CALLS]-&gt;(f2:Function)\n    WHERE f.name = f2.name AND f.path = f2.path\n    RETURN p&quot;</span>
+<a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="p">}</span>
+</code></pre></div>
+<img alt="Query 42" src="../images/42.png" /></li>
+</ul>
+<h3 id="43-find-most-connected-functions-hub-functions">43. Find most connected functions (hub functions)</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find the functions that are most central to the codebase (called by many and call many others)."</li>
+<li><strong>Tool:</strong> <code>execute_cypher_query</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="p">{</span>
+<a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MATCH (f:Function)\n    OPTIONAL MATCH (f)-[:CALLS]-&gt;(callee:Function)\n    OPTIONAL MATCH (caller:Function)-[:CALLS]-&gt;(f)\n    WITH f, count(DISTINCT callee) AS calls_out, count(DISTINCT caller) AS calls_in\n    ORDER BY (calls_out + calls_in) DESC\n    LIMIT 5\n    MATCH p=(f)-[*0..2]-()\n    RETURN p&quot;</span>
+<a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="p">}</span>
+</code></pre></div>
+<img alt="Query 43" src="../images/43.png" /></li>
+</ul>
+<h2 id="security-sensitive-data-analysis">Security &amp; Sensitive Data Analysis</h2>
+<h3 id="44-find-potential-security-vulnerabilities-hardcoded-secrets">44. Find potential security vulnerabilities (hardcoded secrets)</h3>
+<ul>
+<li><strong>Natural Language:</strong> "Find potential hardcoded passwords, API keys, or secrets in the codebase."</li>
+<li><strong>Tool:</strong> <code>execute_cypher_query</code></li>
+<li><strong>JSON Arguments:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="p">{</span>
+<a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="w">  </span><span class="nt">&quot;cypher_query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;WITH [\&quot;password\&quot;,  \&quot;api_key\&quot;, \&quot;apikey\&quot;,    \&quot;secret_token\&quot;, \&quot;token\&quot;, \&quot;auth\&quot;, \&quot;access_key\&quot;, \&quot;private_key\&quot;, \&quot;client_secret\&quot;, \&quot;sessionid\&quot;, \&quot;jwt\&quot;] AS keywords\n    MATCH (f:Function)\n    WHERE ANY(word IN keywords WHERE toLower(f.source_code) CONTAINS word)\n    RETURN f&quot;</span>
+<a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="p">}</span>
+</code></pre></div></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

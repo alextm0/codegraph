@@ -14,18 +14,32 @@ dependencies = [
     "pathspec>=0.12",
     "neo4j>=5.0",
     "graphdatascience>=1.7",
+    "rank-bm25>=0.2.2",
+    "tiktoken>=0.7.0",
+    "mcp>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "typer[all]>=0.12.0",
+    "rich>=13.0.0",
 ]
+
+[project.scripts]
+# New unified CLI entry point
+codegraph = "codegraph.cli.main:cli"
+# MCP server entry point (kept for backward compatibility)
+codegraph-mcp = "codegraph.mcp.server:main"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
 ]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 # Don't recurse into fixture repos — they ship their own test suites
 # that require dependencies we don't install.
 norecursedirs = ["tests/fixtures"]
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+include = ["codegraph*", "src*"]

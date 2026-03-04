@@ -53,7 +53,8 @@ def main() -> None:
     # -----------------------------------------------------------------------
     # Step 2: Connect to Neo4j
     # -----------------------------------------------------------------------
-    logger.info("\n=== Step 2: Connect to Neo4j ===")
+    logger.info("")
+    logger.info("=== Step 2: Connect to Neo4j ===")
 
     from src.graph.connection import load_config, create_driver, verify_connectivity, close_driver
     from src.graph.ppr import PPRConfig, create_gds_client, project_graph, drop_projection, run_ppr
@@ -75,7 +76,8 @@ def main() -> None:
         # -----------------------------------------------------------------------
         # Step 3: Clear the database and build the graph
         # -----------------------------------------------------------------------
-        logger.info("\n=== Step 3: Clear database and build code graph ===")
+        logger.info("")
+        logger.info("=== Step 3: Clear database and build code graph ===")
 
         from src.graph.graph_builder import clear_database, build_graph
 
@@ -90,7 +92,8 @@ def main() -> None:
         # -----------------------------------------------------------------------
         # Step 4: Run read-only queries
         # -----------------------------------------------------------------------
-        logger.info("\n=== Step 4: Read-only queries ===")
+        logger.info("")
+        logger.info("=== Step 4: Read-only queries ===")
 
         from src.graph.queries import (
             count_nodes_by_label,
@@ -102,6 +105,7 @@ def main() -> None:
             get_inheritance_chain,
             find_node_by_name,
         )
+        from src.graph.utils import normalize_path
 
         node_counts = count_nodes_by_label(driver)
         logger.info("Node counts by label:")
@@ -113,45 +117,61 @@ def main() -> None:
         for rel, cnt in sorted(edge_counts.items()):
             logger.info("  %-16s %d", rel, cnt)
 
+        # Derive qualified names directly from the parsed entities — these
+        # always match the graph regardless of where the repo is checked out.
+        auth_fe = next(fe for fe in all_entities if fe.file_path.endswith("auth_service.py"))
+        auth_fp = normalize_path(auth_fe.file_path)
+        auth_service_qname = f"{auth_fp}::AuthService"
+        register_qname = f"{auth_fp}::AuthService.register"
+
+        validators_fe = next(fe for fe in all_entities if fe.file_path.endswith("validators.py"))
+        validators_fp = normalize_path(validators_fe.file_path)
+        validate_email_qname = f"{validators_fp}::validate_email"
+
+        models_fe = next(fe for fe in all_entities if fe.file_path.endswith("user.py"))
+        models_fp = normalize_path(models_fe.file_path)
+        user_qname = f"{models_fp}::User"
+
         # Neighbors of AuthService
-        auth_service_qname = "services/auth_service.py::AuthService"
         neighbors = get_neighbors(driver, auth_service_qname)
-        logger.info("\nNeighbors of %s (%d total):", auth_service_qname, len(neighbors))
+        logger.info("")
+        logger.info("Neighbors of AuthService (%d total):", len(neighbors))
         for n in neighbors:
-            logger.info("  [%s] %s", n.label, n.qualified_name)
+            logger.info("  [%-8s] %s", n.label, n.name)
 
         # File contents
-        file_path = "services/auth_service.py"
-        contents = get_file_contents(driver, file_path)
-        logger.info("\nContents of %s (%d entities):", file_path, len(contents))
+        contents = get_file_contents(driver, auth_fp)
+        logger.info("")
+        logger.info("Contents of auth_service.py (%d entities):", len(contents))
         for n in contents:
-            logger.info("  [%s] %s", n.label, n.name)
+            logger.info("  [%-8s] %s", n.label, n.name)
 
         # Callers of validate_email
-        validate_email_qname = "utils/validators.py::validate_email"
         callers = find_callers(driver, validate_email_qname)
-        logger.info("\nCallers of %s:", validate_email_qname)
+        logger.info("")
+        logger.info("Callers of validate_email:")
         for c in callers:
-            logger.info("  [%s] %s", c.label, c.qualified_name)
+            logger.info("  [%-8s] %s", c.label, c.name)
 
         # Callees of AuthService.register
-        register_qname = "services/auth_service.py::AuthService.register"
         callees = find_callees(driver, register_qname)
-        logger.info("\nCallees of %s:", register_qname)
+        logger.info("")
+        logger.info("Callees of AuthService.register:")
         for c in callees:
-            logger.info("  [%s] %s", c.label, c.qualified_name)
+            logger.info("  [%-8s] %s", c.label, c.name)
 
         # Inheritance chain: User -> BaseModel
-        user_qname = "models/user.py::User"
         chain = get_inheritance_chain(driver, user_qname)
-        logger.info("\nInheritance chain of %s:", user_qname)
+        logger.info("")
+        logger.info("Inheritance chain of User:")
         for c in chain:
-            logger.info("  [%s] %s", c.label, c.qualified_name)
+            logger.info("  [%-8s] %s", c.label, c.name)
 
         # -----------------------------------------------------------------------
         # Step 5: GDS projection + Personalized PageRank
         # -----------------------------------------------------------------------
-        logger.info("\n=== Step 5: GDS projection + Personalized PageRank ===")
+        logger.info("")
+        logger.info("=== Step 5: GDS projection + Personalized PageRank ===")
 
         gds = create_gds_client(driver)
         projection = project_graph(gds)
@@ -166,23 +186,109 @@ def main() -> None:
         cfg = PPRConfig(top_k=10)
         ppr_results = run_ppr(gds, driver, [seed], config=cfg)
 
-        logger.info("\nTop-%d PPR results seeded from '%s':", cfg.top_k, seed)
-        logger.info("  %-4s %-12s %-45s %s", "Rank", "Label", "Qualified Name", "Score")
-        logger.info("  " + "-" * 75)
+        logger.info("")
+        logger.info("Top-%d PPR results seeded from '%s':", cfg.top_k, seed)
+        logger.info("  %-4s %-12s %-35s %s", "Rank", "Label", "Name", "Score")
+        logger.info("  " + "-" * 60)
         for rank, result in enumerate(ppr_results, start=1):
             logger.info(
-                "  %-4d %-12s %-45s %.6f",
+                "  %-4d %-12s %-35s %.6f",
                 rank,
                 result.label,
-                result.qualified_name,
+                result.name,
                 result.score,
             )
 
+        # -----------------------------------------------------------------------
+        # Step 6: Seed node selection (new retrieval layer)
+        # -----------------------------------------------------------------------
+        logger.info("")
+        logger.info("=== Step 6: Seed node selection ===")
+
+        from src.retrieval.seed_selection import extract_seeds
+
+        task = "fix the user registration validation bug"
+        logger.info("Task: '%s'", task)
+
+        # Pass the actual file path as stored in the graph (absolute, forward slashes).
+        pv = extract_seeds(
+            driver,
+            task_description=task,
+            mentioned_entities=["AuthService"],
+            current_file=validators_fp,
+        )
+        logger.info("Personalization vector (%d seeds):", len(pv.seeds))
+        if pv.seeds:
+            # Fetch display names for each seed node ID.
+            with driver.session() as session:
+                result = session.run(
+                    "UNWIND $ids AS nid MATCH (n) WHERE id(n)=nid RETURN id(n) AS nid, n.name AS name",
+                    ids=list(pv.seeds.keys()),
+                )
+                id_to_name = {r["nid"]: r["name"] for r in result}
+            for nid, weight in sorted(pv.seeds.items(), key=lambda x: -x[1]):
+                logger.info("  weight=%.4f  %s", weight, id_to_name.get(nid, f"id={nid}"))
+
+        # -----------------------------------------------------------------------
+        # Step 7: IDF reweighting + full PPR from seed vector
+        # -----------------------------------------------------------------------
+        logger.info("")
+        logger.info("=== Step 7: IDF edge reweighting + PPR from seed vector ===")
+
+        from src.retrieval.post_processing import apply_idf_weights
+
+        updated = apply_idf_weights(driver)
+        logger.info("IDF weights applied to %d edges", updated)
+
+        # Drop old projection and create a fresh one with IDF weights
+        drop_projection(gds)
+        projection = project_graph(gds)
+
+        if pv.seeds:
+            from src.graph.ppr import run_ppr_from_node_ids
+
+            cfg = PPRConfig(top_k=10)
+            ppr_results = run_ppr_from_node_ids(gds, driver, list(pv.seeds.keys()), cfg)
+
+            logger.info("")
+            logger.info("Top-%d PPR results from seed vector:", cfg.top_k)
+            logger.info("  %-4s %-12s %-45s %s", "Rank", "Label", "Qualified Name", "Score")
+            logger.info("  " + "-" * 75)
+            for rank, result in enumerate(ppr_results, start=1):
+                logger.info(
+                    "  %-4d %-12s %-45s %.6f",
+                    rank,
+                    result.label,
+                    result.qualified_name,
+                    result.score,
+                )
+
+            # -----------------------------------------------------------------------
+            # Step 8: format_context (token-budgeted source code)
+            # -----------------------------------------------------------------------
+            logger.info("")
+            logger.info("=== Step 8: format_context (token budget=500) ===")
+
+            from src.retrieval.post_processing import format_context
+
+            # File paths in the graph are absolute; pathlib discards project_root
+            # when file_path is itself absolute, so any value works here.
+            context_items = format_context(ppr_results, str(REPO_ROOT), token_budget=500)
+            logger.info("Context items returned: %d", len(context_items))
+            for item in context_items:
+                logger.info(
+                    "  score=%.4f  tokens=%-4d  %s",
+                    item.relevance_score,
+                    item.token_count,
+                    item.entity_name,
+                )
+
     finally:
         # -----------------------------------------------------------------------
-        # Step 6: Clean up
+        # Step 9: Clean up
         # -----------------------------------------------------------------------
-        logger.info("\n=== Step 6: Clean up ===")
+        logger.info("")
+        logger.info("=== Step 9: Clean up ===")
 
         if gds is not None and projection is not None:
             try:
@@ -197,7 +303,8 @@ def main() -> None:
         except Exception as e:
             logger.warning("Error closing Neo4j driver: %s", e)
 
-    logger.info("\nDemo complete. Visit http://localhost:7474 to explore the graph visually.")
+    logger.info("")
+    logger.info("Demo complete. Visit http://localhost:7474 to explore the graph visually.")
 
 
 if __name__ == "__main__":
