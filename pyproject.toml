@@ -14,7 +14,16 @@ dependencies = [
     "pathspec>=0.12",
     "neo4j>=5.0",
     "graphdatascience>=1.7",
+    "rank-bm25>=0.2.2",
+    "mcp>=1.0.0",
+    "python-dotenv>=1.0.0",
 ]
+
+[project.scripts]
+# New unified CLI entry point
+codegraph = "codegraph.cli.main:cli"
+# MCP server entry point (kept for backward compatibility)
+codegraph-mcp = "codegraph.mcp.server:main"
 
 [project.optional-dependencies]
 dev = [
@@ -27,5 +36,5 @@ dev = [
 norecursedirs = ["tests/fixtures"]
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+include = ["codegraph*", "src*"]

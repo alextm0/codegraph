@@ -1,0 +1,93 @@
+site_name: CodeGraph
+theme:
+    name: material
+    palette:
+        - media: "(prefers-color-scheme: light)"
+          scheme: default
+          primary: indigo
+          accent: indigo
+          toggle:
+              icon: material/brightness-7
+              name: Switch to dark mode
+        - media: "(prefers-color-scheme: dark)"
+          scheme: slate
+          primary: indigo
+          accent: indigo
+          toggle:
+              icon: material/brightness-4
+              name: Switch to light mode
+    features:
+        - navigation.tabs
+        - navigation.sections
+        - navigation.expand
+        - navigation.top
+        - search.suggest
+        - search.highlight
+        - content.code.copy
+
+markdown_extensions:
+    - pymdownx.highlight:
+          anchor_linenums: true
+    - pymdownx.inlinehilite
+    - pymdownx.snippets
+    - pymdownx.superfences
+    - admonition
+    - footnotes
+    - attr_list
+    - md_in_html
+
+nav:
+    - Home: index.md
+    - Project Overview:
+          - Introduction: 00-overview.md
+          - Problem & Motivation: 01-problem-and-motivation.md
+    - Technical Details:
+          - Tree-sitter & Parsing: 02-tree-sitter-and-parsing.md
+          - Import & Call Resolution: 03-import-and-call-resolution.md
+          - Neo4j & Graph Schema: 04-neo4j-and-graph-schema.md
+          - Personalized PageRank: 05-personalized-pagerank.md
+    - Pipeline Stages:
+          - Seed Node Selection: 06-seed-node-selection.md
+          - Post-Processing: 07-post-processing.md
+          - MCP Server: 08-mcp-server.md
+    - Research & Evaluation:
+          - Evaluation: 09-evaluation.md
+          - Research Papers: 10-research-papers.md
+    - Resources:
+          - Glossary: 11-glossary.md
+          - Plan: plan.md
+          - Project Documentation: project-documentation.md
+    - Wiki:
+          - Home: wiki/index.md
+          - Architecture: wiki/architecture.md
+          - Future Work: wiki/future-work.md
+          - Concepts:
+                - Graph Model: wiki/concepts/graph-model.md
+                - Import & Call Resolution: wiki/concepts/import-call-resolution.md
+                - Parsing & Extraction: wiki/concepts/parsing-and-extraction.md
+                - Personalized PageRank: wiki/concepts/personalized-pagerank.md
+                - Post-processing: wiki/concepts/post-processing.md
+                - Seed Selection: wiki/concepts/seed-selection.md
+          - Getting Started:
+                - Installation: wiki/getting-started/installation.md
+                - Prerequisites: wiki/getting-started/prerequisites.md
+                - Quickstart: wiki/getting-started/quickstart.md
+          - Guides:
+                - Building the Graph: wiki/guides/building-the-graph.md
+                - Evaluation: wiki/guides/evaluation.md
+                - MCP Setup: wiki/guides/mcp-setup.md
+          - Reference:
+                - Configuration: wiki/reference/configuration.md
+                - Cypher Queries: wiki/reference/cypher-queries.md
+                - MCP Tools: wiki/reference/mcp-tools.md
+                - Troubleshooting: wiki/reference/troubleshooting.md
+    - Example Docs:
+          - Home: example-of-proper-docs/index.md
+          - Architecture: example-of-proper-docs/architecture.md
+          - Contributing: example-of-proper-docs/contributing.md
+          - Cookbook: example-of-proper-docs/cookbook.md
+          - Troubleshooting: example-of-proper-docs/troubleshooting.md
+          - Reference:
+                - CLI Analysis: example-of-proper-docs/reference/cli_analysis.md
+                - CLI Indexing: example-of-proper-docs/reference/cli_indexing.md
+                - Configuration: example-of-proper-docs/reference/configuration.md

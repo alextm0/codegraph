@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from neo4j.exceptions import ServiceUnavailable, AuthError
 
-from src.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
+from codegraph.core.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
 
 _CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 
@@ -64,7 +64,7 @@ def neo4j_driver(neo4j_config):
 @pytest.fixture
 def clean_db(neo4j_driver):
     """Wipe the database before (and after) each test that uses it."""
-    from src.graph.graph_builder import clear_database
+    from codegraph.core.graph.graph_builder import clear_database
     clear_database(neo4j_driver)
     yield neo4j_driver
     clear_database(neo4j_driver)

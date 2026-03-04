@@ -1,0 +1,3537 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../11-glossary/">
+      
+      
+        <link rel="next" href="../project-documentation/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Plan - CodeGraph</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#codegraph-implementation-plan-for-remaining-stages" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="CodeGraph" class="md-header__button md-logo" aria-label="CodeGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CodeGraph
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../00-overview/" class="md-tabs__link">
+          
+  
+  
+  Project Overview
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../02-tree-sitter-and-parsing/" class="md-tabs__link">
+          
+  
+  
+  Technical Details
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../06-seed-node-selection/" class="md-tabs__link">
+          
+  
+  
+  Pipeline Stages
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../09-evaluation/" class="md-tabs__link">
+          
+  
+  
+  Research & Evaluation
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../11-glossary/" class="md-tabs__link">
+          
+  
+  
+  Resources
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../wiki/" class="md-tabs__link">
+          
+  
+  
+  Wiki
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../example-of-proper-docs/" class="md-tabs__link">
+          
+  
+  
+  Example Docs
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="CodeGraph" class="md-nav__button md-logo" aria-label="CodeGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    CodeGraph
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project Overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-problem-and-motivation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Problem & Motivation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Details
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Technical Details
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-tree-sitter-and-parsing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tree-sitter & Parsing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-import-and-call-resolution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import & Call Resolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-neo4j-and-graph-schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j & Graph Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-personalized-pagerank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personalized PageRank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipeline Stages
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Pipeline Stages
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-seed-node-selection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seed Node Selection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-post-processing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-Processing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research & Evaluation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research & Evaluation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../09-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../10-research-papers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research Papers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Resources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../11-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-4a-seed-node-selection-srcretrievalseed_selectionpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 4a: Seed Node Selection (src/retrieval/seed_selection.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage 4a: Seed Node Selection (src/retrieval/seed_selection.py)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-thinking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-module-srcretrievalseed_selectionpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New module: src/retrieval/seed_selection.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-additions-to-configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config additions to config.yaml:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-file-teststest_seed_selectionpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test file: tests/test_seed_selection.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-4b-post-processing-srcretrievalpost_processingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 4b: Post-Processing (src/retrieval/post_processing.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage 4b: Post-Processing (src/retrieval/post_processing.py)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-thinking_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-module-srcretrievalpost_processingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New module: src/retrieval/post_processing.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-whitespace-tokenization-is-fine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why whitespace tokenization is fine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-file-teststest_post_processingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test file: tests/test_post_processing.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-5-mcp-server-srcmcp_serverpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 5: MCP Server (src/mcp_server.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage 5: MCP Server (src/mcp_server.py)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-thinking_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tool-signatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool signatures:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies-to-add-mcp-python-sdk-already-in-claudemd-tech-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies to add: mcp (Python SDK, already in CLAUDE.md tech stack)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-additions-to-configyaml_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config additions to config.yaml:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-file-teststest_mcp_serverpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test file: tests/test_mcp_server.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-integration-srcretrievalpipelinepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline Integration: src/retrieval/pipeline.py
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pipeline Integration: src/retrieval/pipeline.py">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-thinking_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-file-teststest_pipelinepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test file: tests/test_pipeline.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-file-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New File Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Order
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Order">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-add-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Add dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-create-srcretrieval-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Create src/retrieval/ package
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-post-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Post-processing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-mcp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: MCP server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6: Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-not-in-this-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's NOT in this plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project-documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wiki
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Wiki
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/future-work/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Future Work
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/concepts/graph-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graph Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/concepts/import-call-resolution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import & Call Resolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/concepts/parsing-and-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parsing & Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/concepts/personalized-pagerank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personalized PageRank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/concepts/post-processing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Post-processing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/concepts/seed-selection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seed Selection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_5" id="__nav_7_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/getting-started/prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_6" id="__nav_7_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/guides/building-the-graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building the Graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/guides/evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/guides/mcp-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_7" id="__nav_7_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/reference/cypher-queries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cypher Queries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/reference/mcp-tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/reference/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Example Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../example-of-proper-docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../example-of-proper-docs/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../example-of-proper-docs/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../example-of-proper-docs/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../example-of-proper-docs/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_6" id="__nav_8_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../example-of-proper-docs/reference/cli_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../example-of-proper-docs/reference/cli_indexing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Indexing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../example-of-proper-docs/reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-4a-seed-node-selection-srcretrievalseed_selectionpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 4a: Seed Node Selection (src/retrieval/seed_selection.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage 4a: Seed Node Selection (src/retrieval/seed_selection.py)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-thinking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-module-srcretrievalseed_selectionpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New module: src/retrieval/seed_selection.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-additions-to-configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config additions to config.yaml:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-file-teststest_seed_selectionpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test file: tests/test_seed_selection.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-4b-post-processing-srcretrievalpost_processingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 4b: Post-Processing (src/retrieval/post_processing.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage 4b: Post-Processing (src/retrieval/post_processing.py)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-thinking_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-module-srcretrievalpost_processingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New module: src/retrieval/post_processing.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-whitespace-tokenization-is-fine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why whitespace tokenization is fine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-file-teststest_post_processingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test file: tests/test_post_processing.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-5-mcp-server-srcmcp_serverpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 5: MCP Server (src/mcp_server.py)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stage 5: MCP Server (src/mcp_server.py)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-thinking_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tool-signatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool signatures:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies-to-add-mcp-python-sdk-already-in-claudemd-tech-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies to add: mcp (Python SDK, already in CLAUDE.md tech stack)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-additions-to-configyaml_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config additions to config.yaml:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-file-teststest_mcp_serverpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test file: tests/test_mcp_server.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-integration-srcretrievalpipelinepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline Integration: src/retrieval/pipeline.py
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pipeline Integration: src/retrieval/pipeline.py">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-thinking_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-file-teststest_pipelinepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test file: tests/test_pipeline.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-file-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New File Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Order
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Order">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-add-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Add dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-create-srcretrieval-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Create src/retrieval/ package
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-post-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Post-processing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-mcp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: MCP server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-6-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 6: Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-not-in-this-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's NOT in this plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="codegraph-implementation-plan-for-remaining-stages">CodeGraph: Implementation Plan for Remaining Stages</h1>
+<h2 id="context">Context</h2>
+<p><strong>What's done:</strong> Stages 1-3 (parsing, resolution, Neo4j graph, PPR) are fully implemented and tested (144 tests). The system can parse Python repos, build dependency graphs in Neo4j, and run Personalized PageRank.</p>
+<p><strong>What's missing:</strong> The "brain" that connects the task description to the graph (seed selection), the quality refinements (IDF + token budgeting), and the interface layer (MCP server). Without these, the system has all the components but no way for an AI agent to use them end-to-end.</p>
+<p><strong>Goal:</strong> Implement stages 4-5 so the full pipeline works: <code>task description -&gt; seed extraction -&gt; PPR -&gt; post-processing -&gt; formatted source code</code> exposed via MCP.</p>
+<hr />
+<h2 id="stage-4a-seed-node-selection-srcretrievalseed_selectionpy">Stage 4a: Seed Node Selection (<code>src/retrieval/seed_selection.py</code>)</h2>
+<h3 id="the-thinking">The thinking</h3>
+<p>PPR needs starting nodes ("seeds"). The quality of seeds determines the quality of results. The question is: given a task like "fix the authentication timeout bug", how do we pick the right graph nodes to start from?</p>
+<p>Three signals, ranked by confidence:</p>
+<ol>
+<li>
+<p><strong>Explicit entity matching (HIGH)</strong> — If the task mentions "AuthService" or "authenticate", match those directly against node names in the graph. This is the most reliable signal because the agent explicitly told us what matters.</p>
+</li>
+<li>
+<p><strong>BM25 keyword search (MEDIUM)</strong> — Search the task text against function signatures and docstrings stored in Neo4j. BM25 is a standard text-ranking algorithm (like a smarter ctrl+F). It finds functions whose descriptions are textually similar to the task, even when no exact entity name is mentioned.</p>
+</li>
+<li>
+<p><strong>Current file hint (LOW)</strong> — If the agent says "I'm currently in auth_service.py", add entities from that file as weak seeds. Low weight because "where the cursor is" does not always equal "what matters".</p>
+</li>
+</ol>
+<p>These signals are combined into a <strong>personalization vector</strong> — a dictionary mapping node IDs to weights that sum to 1.0 — which PPR uses as its teleportation distribution.</p>
+<h3 id="new-module-srcretrievalseed_selectionpy">New module: <code>src/retrieval/seed_selection.py</code></h3>
+<p><strong>Why a new <code>retrieval/</code> package?</strong> Seed selection and post-processing are about <em>retrieving relevant context from the graph</em>. They sit between the graph layer (storage/algorithms) and the MCP layer (interface). Grouping them in <code>src/retrieval/</code> keeps each module single-purpose per CLAUDE.md guidelines.</p>
+<p><strong>Data model:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">SeedNode</span><span class="p">:</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A single seed with its source signal and raw weight.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">node_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">qualified_name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">weight</span><span class="p">:</span> <span class="nb">float</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">source</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># &quot;entity_match&quot;, &quot;bm25&quot;, &quot;current_file&quot;</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">PersonalizationVector</span><span class="p">:</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalized seed weights ready for PPR.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">seeds</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>  <span class="c1"># node_id -&gt; normalized weight (sums to 1.0)</span>
+</code></pre></div>
+<p><strong>Functions:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>extract_seeds(
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    driver, task_description, mentioned_entities, current_file,
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    signal_weights
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>) -&gt; PersonalizationVector
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>_match_entities(driver, mentioned_entities) -&gt; list[SeedNode]
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>_bm25_search(driver, task_description, top_n) -&gt; list[SeedNode]
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>_current_file_seeds(driver, current_file) -&gt; list[SeedNode]
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>_normalize_seeds(all_seeds) -&gt; PersonalizationVector
+</code></pre></div>
+<p><strong>Dependencies to add:</strong> <code>rank-bm25</code> (already listed in CLAUDE.md tech stack but not in pyproject.toml yet).</p>
+<p><strong>How BM25 works here:</strong> We fetch all Function/Method nodes with their signature and docstring from Neo4j, build a BM25 index in memory, query it with the task description tokens, and take the top N results. This is fast (&lt; 50ms for 10k nodes) and doesn't require any external service.</p>
+<h3 id="config-additions-to-configyaml">Config additions to <code>config.yaml</code>:</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">seed_selection</span><span class="p">:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">entity_match_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.6</span><span class="w">    </span><span class="c1"># weight multiplier for exact entity matches</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">bm25_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.3</span><span class="w">            </span><span class="c1"># weight multiplier for BM25 results</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">current_file_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span><span class="w">    </span><span class="c1"># weight multiplier for current file entities</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">bm25_top_n</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span><span class="w">               </span><span class="c1"># how many BM25 results to include</span>
+</code></pre></div>
+<h3 id="test-file-teststest_seed_selectionpy">Test file: <code>tests/test_seed_selection.py</code></h3>
+<ul>
+<li>Test entity matching: known names resolve to correct node IDs</li>
+<li>Test BM25: task description "fix authentication" ranks auth-related functions higher</li>
+<li>Test current file: entities from specified file appear as seeds</li>
+<li>Test normalization: weights sum to 1.0</li>
+<li>Test graceful degradation: empty mentioned_entities still produces seeds from BM25</li>
+<li>Uses the <code>user_auth</code> fixture graph (requires Neo4j)</li>
+</ul>
+<hr />
+<h2 id="stage-4b-post-processing-srcretrievalpost_processingpy">Stage 4b: Post-Processing (<code>src/retrieval/post_processing.py</code>)</h2>
+<h3 id="the-thinking_1">The thinking</h3>
+<p>PPR returns raw scores, but two problems remain:</p>
+<p><strong>Problem 1: Utility functions bubble up.</strong> A function like <code>log_error()</code> called by 200 others appears highly ranked for <em>any</em> seed because it has so many incoming edges. It's structurally important but not task-relevant.</p>
+<p>Solution: <strong>IDF-inspired edge reweighting.</strong> Before running PPR, adjust edge weights based on the target node's in-degree:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>adjusted_weight = base_weight / log2(in_degree + 2)
+</code></pre></div>
+<p>The <code>+2</code> prevents division by zero and keeps single-connection nodes nearly unchanged. Functions with many callers get heavily downweighted. This is applied when creating the GDS projection — we update the <code>weight</code> property on edges in Neo4j before projecting.</p>
+<p><strong>Problem 2: Token budget.</strong> PPR returns node names and scores, but the AI agent needs actual source code. We can't send everything — we need to stay within a token budget (4,000-8,000 tokens).</p>
+<p>Solution: Walk the ranked results top-down, read source code for each, accumulate until the budget is reached.</p>
+<h3 id="new-module-srcretrievalpost_processingpy">New module: <code>src/retrieval/post_processing.py</code></h3>
+<p><strong>Functions:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>apply_idf_weights(driver) -&gt; int
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    # Updates edge weights in Neo4j based on target node in-degree.
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    # Returns the number of edges updated.
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    # Must be called BEFORE project_graph() in the pipeline.
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>format_context(
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    ppr_results, project_root, token_budget
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>) -&gt; list[ContextResult]
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    # Reads source code for each PPR result, accumulates until budget.
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>count_tokens(text) -&gt; int
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    # Simple whitespace-based token estimation (len(text.split())).
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    # No need for tiktoken — rough estimate is sufficient.
+</code></pre></div>
+<p><strong>Data model:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">ContextResult</span><span class="p">:</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A single code entity with its source code, ready to serve.&quot;&quot;&quot;</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">entity_name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">qualified_name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">line_start</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">line_end</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">relevance_score</span><span class="p">:</span> <span class="nb">float</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">source_code</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">token_count</span><span class="p">:</span> <span class="nb">int</span>
+</code></pre></div>
+<h3 id="why-whitespace-tokenization-is-fine">Why whitespace tokenization is fine</h3>
+<p>The doc suggests 4,000-8,000 tokens. We're using this as a rough budget, not billing. <code>len(text.split())</code> correlates ~0.75x with actual LLM tokens. Close enough for budgeting — and zero dependencies.</p>
+<h3 id="test-file-teststest_post_processingpy">Test file: <code>tests/test_post_processing.py</code></h3>
+<ul>
+<li>Test IDF: high in-degree nodes get lower edge weights</li>
+<li>Test token counting: basic correctness</li>
+<li>Test format_context: respects budget, returns results in score order</li>
+<li>Test edge case: budget smaller than first result still returns one result</li>
+<li>IDF tests require Neo4j; token counting/formatting tests are pure functions (no Neo4j)</li>
+</ul>
+<hr />
+<h2 id="stage-5-mcp-server-srcmcp_serverpy">Stage 5: MCP Server (<code>src/mcp_server.py</code>)</h2>
+<h3 id="the-thinking_2">The thinking</h3>
+<p>MCP (Model Context Protocol) is how AI agents discover and call tools. Our server exposes three tools:</p>
+<ol>
+<li>
+<p><strong><code>get_relevant_context</code></strong> — The main tool. Full pipeline: seeds -&gt; PPR -&gt; post-processing -&gt; source code. This is what the agent calls when it needs to understand code relevant to a task.</p>
+</li>
+<li>
+<p><strong><code>query_dependencies</code></strong> — A simpler tool. Given an entity name, return its direct dependencies (what it calls, what calls it). No PPR — just raw graph traversal. Useful for focused exploration.</p>
+</li>
+<li>
+<p><strong><code>get_graph_stats</code></strong> — Diagnostic. Returns node counts, edge counts, most connected files. Helps the agent understand the codebase shape.</p>
+</li>
+</ol>
+<h3 id="architecture">Architecture</h3>
+<p>The MCP server is a <strong>single-file entry point</strong> (<code>src/mcp_server.py</code>) that:
+1. On startup: loads config, connects to Neo4j, verifies connectivity
+2. On first <code>get_relevant_context</code> call: applies IDF weights and creates GDS projection (lazy, since the graph may not be built yet)
+3. On tool call: runs the pipeline and returns formatted JSON</p>
+<p><strong>Why single file?</strong> The MCP server is thin glue — it calls into <code>retrieval/</code> and <code>graph/</code>. Each tool handler is ~15-20 lines. No need for a package.</p>
+<h3 id="tool-signatures">Tool signatures:</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nd">@mcp</span><span class="o">.</span><span class="n">tool</span><span class="p">()</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_relevant_context</span><span class="p">(</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">task_description</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">mentioned_entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">current_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">top_k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">15</span><span class="p">,</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">token_budget</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6000</span><span class="p">,</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Find structurally relevant code for a task using graph-based ranking.&quot;&quot;&quot;</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="nd">@mcp</span><span class="o">.</span><span class="n">tool</span><span class="p">()</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">query_dependencies</span><span class="p">(</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">entity_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="n">direction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;both&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Get direct dependencies for a code entity.&quot;&quot;&quot;</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="nd">@mcp</span><span class="o">.</span><span class="n">tool</span><span class="p">()</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_graph_stats</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return statistics about the code dependency graph.&quot;&quot;&quot;</span>
+</code></pre></div>
+<h3 id="dependencies-to-add-mcp-python-sdk-already-in-claudemd-tech-stack">Dependencies to add: <code>mcp</code> (Python SDK, already in CLAUDE.md tech stack)</h3>
+<h3 id="config-additions-to-configyaml_1">Config additions to <code>config.yaml</code>:</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">seed_selection</span><span class="p">:</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">entity_match_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.6</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">bm25_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.3</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">current_file_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">bm25_top_n</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="nt">mcp</span><span class="p">:</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="nt">server_name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;codegraph&quot;</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="nt">default_token_budget</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6000</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span><span class="nt">default_top_k</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15</span>
+</code></pre></div>
+<h3 id="test-file-teststest_mcp_serverpy">Test file: <code>tests/test_mcp_server.py</code></h3>
+<ul>
+<li>Test tool registration: all 3 tools are registered</li>
+<li>Test get_relevant_context: returns valid JSON with source code</li>
+<li>Test query_dependencies: returns correct neighbors</li>
+<li>Test get_graph_stats: returns correct counts</li>
+<li>Tests use the <code>user_auth</code> fixture graph</li>
+</ul>
+<hr />
+<h2 id="pipeline-integration-srcretrievalpipelinepy">Pipeline Integration: <code>src/retrieval/pipeline.py</code></h2>
+<h3 id="the-thinking_3">The thinking</h3>
+<p>The MCP server shouldn't contain pipeline logic. A separate <code>pipeline.py</code> orchestrates the full flow so it can be tested independently of MCP.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">run_retrieval_pipeline</span><span class="p">(</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">driver</span><span class="p">,</span> <span class="n">gds</span><span class="p">,</span> <span class="n">task_description</span><span class="p">,</span> <span class="n">mentioned_entities</span><span class="p">,</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">current_file</span><span class="p">,</span> <span class="n">ppr_config</span><span class="p">,</span> <span class="n">token_budget</span><span class="p">,</span> <span class="n">project_root</span><span class="p">,</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ContextResult</span><span class="p">]:</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Full pipeline: seed extraction -&gt; PPR -&gt; post-processing.&quot;&quot;&quot;</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">seeds</span> <span class="o">=</span> <span class="n">extract_seeds</span><span class="p">(</span><span class="n">driver</span><span class="p">,</span> <span class="n">task_description</span><span class="p">,</span> <span class="n">mentioned_entities</span><span class="p">,</span> <span class="n">current_file</span><span class="p">)</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">ppr_results</span> <span class="o">=</span> <span class="n">run_ppr_from_node_ids</span><span class="p">(</span><span class="n">gds</span><span class="p">,</span> <span class="n">driver</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">seeds</span><span class="o">.</span><span class="n">seeds</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span> <span class="n">ppr_config</span><span class="p">)</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="k">return</span> <span class="n">format_context</span><span class="p">(</span><span class="n">ppr_results</span><span class="p">,</span> <span class="n">project_root</span><span class="p">,</span> <span class="n">token_budget</span><span class="p">)</span>
+</code></pre></div>
+<p>This function is what the MCP tool calls. It's also what the evaluation harness will call.</p>
+<h3 id="test-file-teststest_pipelinepy">Test file: <code>tests/test_pipeline.py</code></h3>
+<ul>
+<li>End-to-end test: task description -&gt; formatted source code results</li>
+<li>Uses <code>user_auth</code> fixture</li>
+</ul>
+<hr />
+<h2 id="new-file-summary">New File Summary</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+<th>Lines (est.)</th>
+<th>Neo4j required?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/retrieval/__init__.py</code></td>
+<td>Package exports</td>
+<td>~15</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>src/retrieval/seed_selection.py</code></td>
+<td>Multi-signal seed extraction</td>
+<td>~120</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>src/retrieval/post_processing.py</code></td>
+<td>IDF reweighting + token budgeting</td>
+<td>~100</td>
+<td>Partially</td>
+</tr>
+<tr>
+<td><code>src/retrieval/pipeline.py</code></td>
+<td>Full pipeline orchestration</td>
+<td>~50</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>src/mcp_server.py</code></td>
+<td>MCP tool definitions</td>
+<td>~120</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>tests/test_seed_selection.py</code></td>
+<td>Seed selection tests</td>
+<td>~100</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>tests/test_post_processing.py</code></td>
+<td>Post-processing tests</td>
+<td>~80</td>
+<td>Partially</td>
+</tr>
+<tr>
+<td><code>tests/test_pipeline.py</code></td>
+<td>End-to-end pipeline tests</td>
+<td>~60</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>tests/test_mcp_server.py</code></td>
+<td>MCP server tests</td>
+<td>~80</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="implementation-order">Implementation Order</h2>
+<h3 id="step-1-add-dependencies">Step 1: Add dependencies</h3>
+<ul>
+<li>Add <code>rank-bm25</code> and <code>mcp</code> to <code>pyproject.toml</code></li>
+<li>Update <code>config.yaml</code> with new sections</li>
+</ul>
+<h3 id="step-2-create-srcretrieval-package">Step 2: Create <code>src/retrieval/</code> package</h3>
+<ul>
+<li><code>__init__.py</code> with exports</li>
+<li><code>seed_selection.py</code> — entity matching, BM25, current file, normalization</li>
+<li>Tests for seed selection</li>
+</ul>
+<h3 id="step-3-post-processing">Step 3: Post-processing</h3>
+<ul>
+<li><code>post_processing.py</code> — IDF weights, token budgeting, source code reading</li>
+<li>Tests for post-processing</li>
+</ul>
+<h3 id="step-4-pipeline">Step 4: Pipeline</h3>
+<ul>
+<li><code>pipeline.py</code> — orchestrates seed -&gt; PPR -&gt; post-processing</li>
+<li>Tests for pipeline</li>
+</ul>
+<h3 id="step-5-mcp-server">Step 5: MCP server</h3>
+<ul>
+<li><code>mcp_server.py</code> — tool definitions, startup logic</li>
+<li>Tests for MCP server</li>
+<li>Add <code>DECISIONS.md</code> entry for MCP server architecture</li>
+</ul>
+<h3 id="step-6-integration">Step 6: Integration</h3>
+<ul>
+<li>Update <code>scripts/demo_neo4j.py</code> to show the full pipeline</li>
+<li>Update <code>config.yaml</code> with final config</li>
+<li>Update <code>MEMORY.md</code></li>
+</ul>
+<hr />
+<h2 id="verification">Verification</h2>
+<p>After implementation, verify the full pipeline works:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># 1. Run all existing tests (should still pass)</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/<span class="w"> </span>-v
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># 2. Run new tests</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_seed_selection.py<span class="w"> </span>tests/test_post_processing.py<span class="w"> </span>tests/test_pipeline.py<span class="w"> </span>-v
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># 3. Run the demo script (requires Neo4j running)</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>python<span class="w"> </span>-m<span class="w"> </span>scripts.demo_neo4j
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># 4. Start the MCP server manually</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>python<span class="w"> </span>-m<span class="w"> </span>src.mcp_server
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="c1"># 5. Test with Claude Desktop or MCP inspector</span>
+</code></pre></div>
+<hr />
+<h2 id="whats-not-in-this-plan">What's NOT in this plan</h2>
+<ul>
+<li><strong>Evaluation (Stage 6)</strong> — SWE-bench benchmarking. This is a separate effort that should come after the pipeline is stable. It involves cloning repos, running the pipeline on 300 bug reports, computing metrics. Worth its own plan.</li>
+<li><strong>REST API fallback</strong> — Mentioned in docs but not essential. MCP is the primary interface.</li>
+<li><strong>CLI entry point</strong> — A <code>python -m codegraph</code> command for building graphs from CLI. Nice to have but not blocking.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
