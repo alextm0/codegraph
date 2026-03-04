@@ -2,6 +2,7 @@
 
 import builtins
 import logging
+from collections.abc import Callable
 
 from neo4j import Driver, ManagedTransaction
 
@@ -36,11 +37,27 @@ def clear_database(driver: Driver) -> int:
         return count
 
 
-def build_graph(driver: Driver, all_entities: list[FileEntities]) -> dict[str, int]:
+def build_graph(
+    driver: Driver,
+    all_entities: list[FileEntities],
+    progress_callback: Callable[[str, int], None] | None = None,
+) -> dict[str, int]:
     """Build the full code graph from parsed entities.
 
-    Returns a dict with creation counts: nodes_created, edges_created.
+    Args:
+        driver: Active Neo4j driver.
+        all_entities: Parsed entities from parse_directory().
+        progress_callback: Optional callable(stage_name, count) invoked after each
+            write stage completes. stage_name is e.g. "File nodes", "CALLS edges".
+
+    Returns:
+        Dict with creation counts keyed by node/edge type.
     """
+    def _report(stage: str, count: int) -> None:
+        logger.debug("Graph build: %s → %d", stage, count)
+        if progress_callback:
+            progress_callback(stage, count)
+
     lookup = _build_entity_lookup(all_entities)
     all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
     counts: dict[str, int] = {"File": 0, "Function": 0, "Class": 0, "Method": 0,
@@ -49,21 +66,29 @@ def build_graph(driver: Driver, all_entities: list[FileEntities]) -> dict[str, i
     with driver.session() as session:
         # --- Nodes ---
         counts["File"] = session.execute_write(_create_file_nodes, all_entities)
+        _report("File nodes", counts["File"])
         counts["Function"] = session.execute_write(_create_function_nodes, all_entities)
+        _report("Function nodes", counts["Function"])
         counts["Class"] = session.execute_write(_create_class_nodes, all_entities)
+        _report("Class nodes", counts["Class"])
         counts["Method"] = session.execute_write(_create_method_nodes, all_entities)
+        _report("Method nodes", counts["Method"])
 
         # --- Edges ---
         counts["CONTAINS"] += session.execute_write(_create_contains_function_edges, all_entities)
         counts["CONTAINS"] += session.execute_write(_create_contains_class_edges, all_entities)
         counts["CONTAINS"] += session.execute_write(_create_contains_method_edges, all_entities)
+        _report("CONTAINS edges", counts["CONTAINS"])
         counts["INHERITS_FROM"] = session.execute_write(
             _create_inherits_edges, all_entities, lookup, all_file_paths,
         )
+        _report("INHERITS_FROM edges", counts["INHERITS_FROM"])
         counts["CALLS"] = session.execute_write(
             _create_calls_edges, all_entities, lookup, all_file_paths,
         )
+        _report("CALLS edges", counts["CALLS"])
         counts["IMPORTS"] = session.execute_write(_create_imports_edges, all_entities)
+        _report("IMPORTS edges", counts["IMPORTS"])
 
     logger.info("Graph built: %s", counts)
     return counts

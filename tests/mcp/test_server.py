@@ -118,6 +118,7 @@ class TestServerState:
             gds=MagicMock(),
             project_root="/some/root",
             ppr_config=PPRConfig(),
+            signal_weights={},
             default_token_budget=6000,
             default_top_k=15,
         )

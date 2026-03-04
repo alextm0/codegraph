@@ -126,7 +126,11 @@ def run_ppr_from_node_ids(
     seed_ids: list[int],
     config: PPRConfig,
 ) -> list[PPRResult]:
-    """Run PPR from explicit internal node IDs and return ranked PPRResult list."""
+    """Run PPR from explicit internal node IDs and return ranked PPRResult list.
+
+    seed_ids are Neo4j internal integer IDs (from id(n)), which GDS requires for
+    sourceNodes. GDS stream results also return integer nodeIds mapped to id(n).
+    """
     projection = gds.graph.get(_PROJECTION_NAME)
 
     result_df = gds.pageRank.stream(
@@ -175,6 +179,9 @@ def _resolve_seed_ids(driver: Driver, seed_names: list[str]) -> list[int]:
 
     Returns every matching node ID so that PPR seeds on all of them,
     rather than picking an arbitrary single match per name.
+
+    Note: Returns id(n) integers (not elementId) because GDS sourceNodes requires
+    the internal integer IDs that correspond to id(n).
     """
     ids: list[int] = []
     with driver.session() as session:
@@ -204,7 +211,9 @@ def _fetch_all_node_properties(driver: Driver, node_ids: list[int]) -> dict[int,
     Uses a single UNWIND query instead of one round-trip per node.
     Returns a dict mapping nodeId -> property dict.
 
-    # TODO: migrate to elementId() for Neo4j 6.x (id() is deprecated in 5.x but still functional).
+    Note: id(n) is used here because node_ids come from GDS pageRank.stream()
+    which returns internal integer IDs that correspond to id(n) values. GDS does
+    not yet expose elementId in stream results, so elementId cannot be used here.
     """
     if not node_ids:
         return {}

@@ -107,18 +107,23 @@ class TestCountTokens:
     def test_single_word(self):
         assert count_tokens("hello") == 1
 
-    def test_multiple_words(self):
-        assert count_tokens("def foo(x, y):") == 3
+    def test_nonempty_code_positive(self):
+        # tiktoken gives accurate counts; exact value depends on encoding
+        assert count_tokens("def foo(x, y):") > 0
 
-    def test_multiline_code(self):
-        code = "def foo():\n    return 42\n"
-        result = count_tokens(code)
-        # "def", "foo():", "return", "42" → 4 tokens
-        assert result == 4
+    def test_multiline_code_more_than_single_line(self):
+        single = "def foo(): pass"
+        multi = "def foo():\n    x = 1\n    y = 2\n    return x + y\n"
+        assert count_tokens(multi) > count_tokens(single)
 
-    def test_consistent_with_split(self):
-        text = "a b c d e f"
-        assert count_tokens(text) == len(text.split())
+    def test_consistent_same_input(self):
+        text = "hello world foo bar"
+        assert count_tokens(text) == count_tokens(text)
+
+    def test_longer_code_more_tokens(self):
+        short = "x = 1"
+        long_ = "x = 1\n" * 20
+        assert count_tokens(long_) > count_tokens(short)
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 """Seed selection logic."""
 
 import logging
+import re
 from dataclasses import dataclass
 from neo4j import Driver
 from rank_bm25 import BM25Okapi
@@ -243,8 +244,6 @@ def _fetch_searchable_nodes(driver: Driver) -> list[dict]:
 
 def _tokenize(text: str) -> list[str]:
     """Simple whitespace + punctuation tokenizer for BM25."""
-    import re
-    # Lowercase, split on non-alphanumeric chars
     return [tok for tok in re.split(r"[^a-z0-9_]+", text.lower()) if tok]
 
 

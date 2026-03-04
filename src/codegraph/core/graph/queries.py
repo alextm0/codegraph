@@ -185,6 +185,38 @@ def query_entity_dependencies(
     return results
 
 
+def find_dead_code(driver: Driver, limit: int = 50) -> list[NodeInfo]:
+    """Return Function and Method nodes that have zero incoming CALLS edges.
+
+    These are candidates for dead code — they are never called by any other
+    entity in the graph. False positives include public API entry points,
+    decorated handlers (e.g. FastAPI routes), and test functions.
+
+    Args:
+        driver: Active Neo4j driver.
+        limit: Maximum number of results to return.
+
+    Returns:
+        List of NodeInfo for uncalled Function/Method nodes, sorted by file.
+    """
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (n)
+            WHERE (n:Function OR n:Method)
+              AND NOT ()-[:CALLS]->(n)
+            RETURN n.qualified_name AS qualified_name,
+                   n.name AS name,
+                   labels(n)[0] AS label,
+                   n.file_path AS file_path
+            ORDER BY file_path, qualified_name
+            LIMIT $limit
+            """,
+            limit=limit,
+        )
+        return [_row_to_node_info(r) for r in result]
+
+
 def get_most_connected_files(driver: Driver, limit: int = 10) -> list[dict]:
     """Return files ranked by number of directly contained entities.
 

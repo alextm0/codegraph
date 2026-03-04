@@ -1,6 +1,7 @@
 """FastMCP server instance and lifecycle management."""
 
 import logging
+import os
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -8,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from mcp.server.fastmcp import Context, FastMCP
+
+from neo4j import Driver
+from graphdatascience import GraphDataScience
 
 from codegraph.core.graph import (
     Neo4jConfig,
@@ -18,23 +22,36 @@ from codegraph.core.graph import (
 )
 from codegraph.core.graph.ppr import PPRConfig, create_gds_client
 from codegraph.core.retrieval.pipeline import ensure_graph_ready
+from codegraph.mcp.prompts import LLM_SYSTEM_PROMPT
 from codegraph.mcp.tools import (
+    find_dead_code_impl,
+    get_graph_stats_impl,
     get_relevant_context_impl,
     query_dependencies_impl,
-    get_graph_stats_impl,
 )
 
 logger = logging.getLogger(__name__)
 
-_CONFIG_PATH = Path(__file__).parent.parent.parent.parent / "config.yaml"
+_DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent.parent / "config.yaml"
+
+
+def _resolve_config_path(cli_arg: str | None = None) -> Path:
+    """Resolve config path from CLI arg, env var, or default location."""
+    if cli_arg:
+        return Path(cli_arg).resolve()
+    env_path = os.environ.get("CODEGRAPH_CONFIG")
+    if env_path:
+        return Path(env_path).resolve()
+    return _DEFAULT_CONFIG_PATH
 
 @dataclass
 class ServerState:
     """Long-lived resources initialized at startup."""
-    driver: object
-    gds: object
+    driver: Driver
+    gds: GraphDataScience
     project_root: str
     ppr_config: PPRConfig
+    signal_weights: dict[str, float]
     default_token_budget: int
     default_top_k: int
 
@@ -42,11 +59,14 @@ class ServerState:
 async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     """Initialize Neo4j and GDS on startup."""
     logger.info("CodeGraph MCP server starting up")
-    raw_config = load_full_config(_CONFIG_PATH)
+    config_path = _resolve_config_path()
+    logger.info("Using config: %s", config_path)
+    raw_config = load_full_config(config_path)
 
     neo4j_section = raw_config.get("neo4j", {})
     ppr_section = raw_config.get("ppr", {})
     mcp_section = raw_config.get("mcp", {})
+    seed_section = raw_config.get("seed_selection", {})
 
     neo4j_config = Neo4jConfig(
         uri=neo4j_section.get("uri", "neo4j://localhost:7687"),
@@ -62,7 +82,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     )
 
     raw_project_root = raw_config.get("project_root", ".")
-    project_root = str(Path(_CONFIG_PATH).parent / raw_project_root)
+    project_root = str(config_path.parent / raw_project_root)
 
     driver = create_driver(neo4j_config)
     if not verify_connectivity(driver):
@@ -76,11 +96,22 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     except Exception as exc:
         logger.warning("Warm-up failed: %s", exc)
 
+    signal_weights: dict[str, float] = {}
+    if seed_section.get("entity_match_weight") is not None:
+        signal_weights["entity_match"] = float(seed_section["entity_match_weight"])
+    if seed_section.get("bm25_weight") is not None:
+        signal_weights["bm25"] = float(seed_section["bm25_weight"])
+    if seed_section.get("current_file_weight") is not None:
+        signal_weights["current_file"] = float(seed_section["current_file_weight"])
+    if seed_section.get("bm25_top_n") is not None:
+        signal_weights["bm25_top_n"] = int(seed_section["bm25_top_n"])
+
     state = ServerState(
         driver=driver,
         gds=gds,
         project_root=project_root,
         ppr_config=ppr_config,
+        signal_weights=signal_weights,
         default_token_budget=mcp_section.get("default_token_budget", 6000),
         default_top_k=mcp_section.get("default_top_k", 15),
     )
@@ -92,7 +123,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
 
 mcp = FastMCP(
     name="codegraph",
-    instructions="Graph-based code context retrieval.",
+    instructions=LLM_SYSTEM_PROMPT,
     lifespan=_lifespan,
 )
 
@@ -128,8 +159,31 @@ def get_graph_stats(ctx: Context) -> str:
     state = ctx.request_context.lifespan_context
     return get_graph_stats_impl(state)
 
-def main():
-    """Start the MCP server using STDIO transport."""
+
+@mcp.tool()
+def find_dead_code(limit: int, ctx: Context) -> str:
+    """Find functions and methods that are never called by other code in the graph.
+
+    Returns candidates for dead code (zero incoming CALLS edges). Note: this may
+    include public API entry points, route handlers, and test functions.
+    """
+    state = ctx.request_context.lifespan_context
+    return find_dead_code_impl(limit, state)
+
+def main() -> None:
+    """Start the MCP server using STDIO transport.
+
+    Accepts an optional --config argument pointing to a config.yaml file.
+    The CODEGRAPH_CONFIG environment variable is also respected as a fallback.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description="CodeGraph MCP server")
+    parser.add_argument("--config", type=str, default=None, help="Path to config.yaml")
+    args, _ = parser.parse_known_args()
+
+    if args.config:
+        os.environ["CODEGRAPH_CONFIG"] = str(Path(args.config).resolve())
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)-8s %(name)s: %(message)s",

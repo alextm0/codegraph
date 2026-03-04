@@ -1,9 +1,8 @@
-"""Tree-sitter based Python source file parser"""
-
-import fnmatch
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+
+from codegraph.utils.ignore import is_ignored
 
 import tree_sitter_python as tspython
 from tree_sitter import Language, Parser
@@ -61,49 +60,36 @@ def parse_directory(
     directory: str,
     parser: Parser,
     exclude_patterns: list[str] | None = None,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> list[FileEntities]:
-    """
-    Parse all Python files under a directory and collect their FileEntities.
-    
+    """Parse all Python files under a directory and collect their FileEntities.
+
     Parameters:
-        directory (str): Root directory to search for `.py` files.
-        parser (Parser): Tree-sitter Parser configured for Python.
-        exclude_patterns (list[str] | None): Optional list of glob or substring patterns; any path matching a pattern will be skipped.
-    
+        directory: Root directory to search for `.py` files.
+        parser: Tree-sitter Parser configured for Python.
+        exclude_patterns: Optional list of glob or substring patterns to skip.
+        progress_callback: Optional callable(current, total, file_path) called
+            after each file is parsed. Useful for progress reporting.
+
     Returns:
-        list[FileEntities]: List of FileEntities objects, one for each successfully parsed Python file found under `directory`. Files that cannot be read are skipped.
+        List of FileEntities objects, one per successfully parsed Python file.
+        Files that cannot be read are skipped with a warning log.
     """
+    all_paths = list(_iter_python_files(directory, exclude_patterns or []))
+    total = len(all_paths)
     results: list[FileEntities] = []
-    for path in _iter_python_files(directory, exclude_patterns or []):
+    for idx, path in enumerate(all_paths, start=1):
         try:
             source = path.read_bytes()
         except OSError as exc:
             logger.warning("Cannot read %s: %s", str(path), exc)
+            if progress_callback:
+                progress_callback(idx, total, str(path))
             continue
         results.append(parse_file(source, str(path), parser))
+        if progress_callback:
+            progress_callback(idx, total, str(path))
     return results
-
-
-def _is_excluded(path_str: str, patterns: list[str]) -> bool:
-    """
-    Determine whether a filepath matches any of the provided exclude patterns.
-    
-    Patterns containing wildcard characters (*, ?, [, ]) are treated as shell-style glob patterns; other patterns are matched by simple substring containment.
-    
-    Parameters:
-        path_str (str): Filesystem path to test.
-        patterns (list[str]): Exclude patterns to check against.
-    
-    Returns:
-        bool: `True` if `path_str` matches any pattern, `False` otherwise.
-    """
-    for pattern in patterns:
-        if any(char in pattern for char in "*?[]"):
-            if fnmatch.fnmatch(path_str, pattern):
-                return True
-        elif pattern in path_str:
-            return True
-    return False
 
 
 def _iter_python_files(directory: str, exclude_patterns: list[str]) -> Iterator[Path]:
@@ -117,6 +103,14 @@ def _iter_python_files(directory: str, exclude_patterns: list[str]) -> Iterator[
     Returns:
         Iterator[Path]: An iterator of Path objects for .py files under `directory` that do not match any exclude pattern.
     """
-    for path in Path(directory).rglob("*.py"):
-        if not _is_excluded(str(path), exclude_patterns):
-            yield path
+    root = Path(directory)
+    for path in root.rglob("*.py"):
+        try:
+            # Use relative path for easier matching against ignore patterns
+            rel_path = path.relative_to(root)
+            if not is_ignored(str(rel_path), exclude_patterns):
+                yield path
+        except ValueError:
+            # Fallback to absolute path string if relative_to fails
+            if not is_ignored(str(path), exclude_patterns):
+                yield path

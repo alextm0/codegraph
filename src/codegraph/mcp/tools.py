@@ -6,7 +6,13 @@ import logging
 from mcp.server.fastmcp import Context
 
 from codegraph.core.graph.ppr import PPRConfig, run_ppr_from_node_ids
-from codegraph.core.graph.queries import count_edges_by_type, count_nodes_by_label, get_most_connected_files, query_entity_dependencies
+from codegraph.core.graph.queries import (
+    count_edges_by_type,
+    count_nodes_by_label,
+    find_dead_code,
+    get_most_connected_files,
+    query_entity_dependencies,
+)
 from codegraph.core.retrieval.pipeline import run_retrieval_pipeline
 
 logger = logging.getLogger(__name__)
@@ -44,6 +50,7 @@ def get_relevant_context_impl(
         mentioned_entities=mentioned_entities,
         current_file=current_file,
         ppr_config=ppr_config,
+        signal_weights=state.signal_weights or None,
         token_budget=effective_budget,
     )
 
@@ -85,6 +92,22 @@ def query_dependencies_impl(
         for node in nodes
     ]
     return json.dumps(serializable, indent=2)
+
+def find_dead_code_impl(limit: int, state) -> str:
+    """Implementation of find_dead_code tool."""
+    logger.info("find_dead_code called (limit=%d)", limit)
+    nodes = find_dead_code(driver=state.driver, limit=limit if limit > 0 else 50)
+    serializable = [
+        {
+            "qualified_name": node.qualified_name,
+            "name": node.name,
+            "label": node.label,
+            "file_path": node.file_path,
+        }
+        for node in nodes
+    ]
+    return json.dumps(serializable, indent=2)
+
 
 def get_graph_stats_impl(state) -> str:
     """Implementation of get_graph_stats tool."""
