@@ -23,11 +23,11 @@ jobs:
           NEO4J_dbms_security_procedures_unrestricted: "gds.*"
           NEO4J_dbms_security_procedures_allowlist: "gds.*"
         options: >-
-          --health-cmd "cypher-shell -u neo4j -p test_password 'CALL gds.version() YIELD version RETURN version'"
-          --health-interval 15s
-          --health-timeout 10s
-          --health-retries 20
-          --health-start-period 60s
+          --health-cmd "wget -q --spider http://localhost:7474 || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+          --health-start-period 30s
 
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +42,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+
+      - name: Wait for Neo4j + GDS to be ready
+        run: |
+          echo "Waiting for Neo4j GDS plugin to finish loading..."
+          for i in $(seq 1 30); do
+            if curl -sf \
+                 -u neo4j:test_password \
+                 -H "Content-Type: application/json" \
+                 -d '{"statements":[{"statement":"CALL gds.version() YIELD version RETURN version"}]}' \
+                 http://localhost:7474/db/neo4j/tx/commit 2>/dev/null \
+                 | grep -q '"errors":\[\]'; then
+              echo "Neo4j + GDS is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/30 — waiting 5s..."
+            sleep 5
+          done
+          echo "ERROR: Timed out waiting for Neo4j + GDS after 150s"
+          exit 1
 
       - name: Run tests
         env:
