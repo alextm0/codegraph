@@ -1,6 +1,7 @@
 """IDF weights and result formatting."""
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,12 +15,20 @@ logger = logging.getLogger(__name__)
 # Loaded once at module import; thread-safe for read-only use.
 _ENCODER = tiktoken.get_encoding("cl100k_base")
 
+_LABEL_TO_ENTITY_TYPE: dict[str, str] = {
+    "File": "file",
+    "Function": "function",
+    "Class": "class",
+    "Method": "method",
+}
+
 
 @dataclass(frozen=True)
 class ContextResult:
     """A single code entity with its source code, ready to serve to an AI agent."""
 
     entity_name: str
+    entity_type: str
     qualified_name: str
     file_path: str
     line_start: int
@@ -91,11 +100,36 @@ def format_context(
         if source_code is None:
             continue
 
+        # Convert absolute file_path to relative (from project_root).
+        try:
+            rel_file_path = os.path.relpath(ppr.file_path, project_root).replace("\\", "/")
+        except ValueError:
+            # relpath can fail on Windows when paths are on different drives.
+            rel_file_path = ppr.file_path
+
+        # For File nodes entity_name == absolute file_path; use relative path instead.
+        entity_type = _LABEL_TO_ENTITY_TYPE.get(ppr.label, ppr.label.lower())
+        if ppr.label == "File":
+            entity_name = rel_file_path
+        else:
+            entity_name = ppr.name
+
+        # Build relative qualified_name: replace absolute file prefix with relative one.
+        rel_qualified_name = _make_relative_qualified_name(
+            ppr.qualified_name, ppr.file_path, rel_file_path
+        )
+
+        # Fix sentinel line_end=0 for File nodes by counting actual lines.
+        if line_end == 0:
+            actual_lines = source_code.count("\n") + (1 if source_code else 0)
+            line_end = actual_lines
+
         tokens = count_tokens(source_code)
         item = ContextResult(
-            entity_name=ppr.name,
-            qualified_name=ppr.qualified_name,
-            file_path=ppr.file_path,
+            entity_name=entity_name,
+            entity_type=entity_type,
+            qualified_name=rel_qualified_name,
+            file_path=rel_file_path,
             line_start=line_start,
             line_end=line_end,
             relevance_score=ppr.score,
@@ -133,6 +167,20 @@ def count_tokens(text: str) -> int:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+def _make_relative_qualified_name(
+    qualified_name: str, abs_file_path: str, rel_file_path: str
+) -> str:
+    """Replace the absolute file prefix in a qualified_name with the relative path.
+
+    e.g. "/abs/path/auth.py::login" → "auth.py::login"
+    If the qualified_name doesn't start with the absolute path, return it unchanged.
+    """
+    if abs_file_path and qualified_name.startswith(abs_file_path):
+        suffix = qualified_name[len(abs_file_path):]
+        return rel_file_path + suffix
+    return qualified_name
+
 
 def _get_node_lines(ppr: PPRResult) -> tuple[int, int]:
     """Return the (line_start, line_end) range for a PPRResult.

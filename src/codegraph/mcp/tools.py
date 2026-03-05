@@ -1,8 +1,8 @@
 """MCP tool definitions."""
 
-import dataclasses
 import json
 import logging
+import os
 from mcp.server.fastmcp import Context
 
 from codegraph.core.graph.ppr import PPRConfig, run_ppr_from_node_ids
@@ -54,9 +54,31 @@ def get_relevant_context_impl(
         token_budget=effective_budget,
     )
 
-    # Serialize each ContextResult dataclass to a plain dict for JSON output.
-    serializable = [dataclasses.asdict(item) for item in context_items]
-    return json.dumps(serializable, indent=2)
+    total_tokens = sum(item.token_count for item in context_items)
+    effective_budget = token_budget if token_budget > 0 else state.default_token_budget
+
+    results = []
+    for item in context_items:
+        results.append({
+            "entity_name": item.entity_name,
+            "entity_type": item.entity_type,
+            "qualified_name": item.qualified_name,
+            "file_path": item.file_path,
+            "lines": [item.line_start, item.line_end],
+            "relevance_score": round(item.relevance_score, 4),
+            "token_count": item.token_count,
+            "source_code": item.source_code,
+        })
+
+    output = {
+        "summary": {
+            "result_count": len(results),
+            "total_tokens": total_tokens,
+            "token_budget": effective_budget,
+        },
+        "results": results,
+    }
+    return json.dumps(output, indent=2)
 
 def query_dependencies_impl(
     entity_name: str,
@@ -82,31 +104,43 @@ def query_dependencies_impl(
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
 
-    serializable = [
-        {
-            "qualified_name": node.qualified_name,
+    project_root = state.project_root
+    serializable = []
+    for node in nodes:
+        rel_file_path = _make_rel_path(node.file_path, project_root)
+        rel_qname = _make_rel_qualified_name(node.qualified_name, node.file_path, rel_file_path)
+        serializable.append({
+            "qualified_name": rel_qname,
             "name": node.name,
             "label": node.label,
-            "file_path": node.file_path,
-        }
-        for node in nodes
-    ]
+            "file_path": rel_file_path,
+            "relationship_type": node.relationship_type,
+        })
     return json.dumps(serializable, indent=2)
 
 def find_dead_code_impl(limit: int, state) -> str:
     """Implementation of find_dead_code tool."""
     logger.info("find_dead_code called (limit=%d)", limit)
     nodes = find_dead_code(driver=state.driver, limit=limit if limit > 0 else 50)
-    serializable = [
-        {
-            "qualified_name": node.qualified_name,
+
+    project_root = state.project_root
+    by_file: dict[str, list[dict]] = {}
+    for node in nodes:
+        rel_file_path = _make_rel_path(node.file_path, project_root)
+        rel_qname = _make_rel_qualified_name(node.qualified_name, node.file_path, rel_file_path)
+        entry = {
             "name": node.name,
-            "label": node.label,
-            "file_path": node.file_path,
+            "qualified_name": rel_qname,
+            "type": node.label.lower(),
+            "line": node.line_number,
         }
-        for node in nodes
-    ]
-    return json.dumps(serializable, indent=2)
+        by_file.setdefault(rel_file_path, []).append(entry)
+
+    output = {
+        "total_count": len(nodes),
+        "by_file": by_file,
+    }
+    return json.dumps(output, indent=2)
 
 
 def get_graph_stats_impl(state) -> str:
@@ -115,7 +149,16 @@ def get_graph_stats_impl(state) -> str:
 
     node_counts = count_nodes_by_label(state.driver)
     edge_counts = count_edges_by_type(state.driver)
-    most_connected = get_most_connected_files(state.driver, limit=10)
+    most_connected_raw = get_most_connected_files(state.driver, limit=10)
+
+    project_root = state.project_root
+    most_connected = [
+        {
+            "file_path": _make_rel_path(entry["file_path"], project_root),
+            "entity_count": entry["entity_count"],
+        }
+        for entry in most_connected_raw
+    ]
 
     stats = {
         "node_counts": node_counts,
@@ -125,6 +168,24 @@ def get_graph_stats_impl(state) -> str:
         "most_connected_files": most_connected,
     }
     return json.dumps(stats, indent=2)
+
+def _make_rel_path(abs_path: str, project_root: str) -> str:
+    """Convert an absolute path to a relative path from project_root."""
+    if not abs_path:
+        return abs_path
+    try:
+        return os.path.relpath(abs_path, project_root).replace("\\", "/")
+    except ValueError:
+        return abs_path
+
+
+def _make_rel_qualified_name(qualified_name: str, abs_file_path: str, rel_file_path: str) -> str:
+    """Replace the absolute file prefix in a qualified_name with the relative path."""
+    if abs_file_path and qualified_name.startswith(abs_file_path):
+        suffix = qualified_name[len(abs_file_path):]
+        return rel_file_path + suffix
+    return qualified_name
+
 
 def execute_cypher_query_impl(cypher_query: str, state) -> str:
     """Implementation of execute_cypher_query tool."""

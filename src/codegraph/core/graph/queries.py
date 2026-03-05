@@ -20,6 +20,24 @@ class NodeInfo:
     file_path: str
 
 
+@dataclass(frozen=True)
+class NodeInfoWithRel(NodeInfo):
+    """NodeInfo extended with the relationship type connecting it to the queried entity."""
+
+    relationship_type: str = ""
+
+
+@dataclass(frozen=True)
+class DeadCodeNode:
+    """A Function or Method node with no incoming CALLS edges."""
+
+    qualified_name: str
+    name: str
+    label: str
+    file_path: str
+    line_number: int
+
+
 def count_nodes_by_label(driver: Driver | None = None) -> dict[str, int]:
     """Return a mapping of node label -> count."""
     if driver is None:
@@ -182,7 +200,7 @@ def query_entity_dependencies(
     entity_name: str = "",
     direction: str = "both",
     depth: int = 1,
-) -> list[NodeInfo]:
+) -> list[NodeInfoWithRel]:
     """Return dependency nodes for a code entity.
 
     Args:
@@ -192,7 +210,7 @@ def query_entity_dependencies(
         depth: How many hops to follow. 1 = direct only, 2 = include indirect.
 
     Returns:
-        Deduplicated list of NodeInfo for all found dependencies.
+        Deduplicated list of NodeInfoWithRel for all found dependencies.
     """
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -209,11 +227,11 @@ def query_entity_dependencies(
     else:  # "both"
         cypher = _both_directions_cypher(depth)
 
-    results: list[NodeInfo] = []
+    results: list[NodeInfoWithRel] = []
     with driver.session() as session:
         records = session.run(cypher, name=entity_name)
         for record in records:
-            results.append(_row_to_node_info(record))
+            results.append(_row_to_node_info_with_rel(record))
 
     logger.debug(
         "query_entity_dependencies: found %d nodes for '%s' (direction=%s, depth=%d)",
@@ -225,7 +243,7 @@ def query_entity_dependencies(
     return results
 
 
-def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[NodeInfo]:
+def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[DeadCodeNode]:
     """Return Function and Method nodes that have zero incoming CALLS edges.
 
     These are candidates for dead code — they are never called by any other
@@ -237,7 +255,7 @@ def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[NodeIn
         limit: Maximum number of results to return.
 
     Returns:
-        List of NodeInfo for uncalled Function/Method nodes, sorted by file.
+        List of DeadCodeNode for uncalled Function/Method nodes, sorted by file.
     """
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -250,13 +268,23 @@ def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[NodeIn
             RETURN n.qualified_name AS qualified_name,
                    n.name AS name,
                    labels(n)[0] AS label,
-                   n.file_path AS file_path
+                   n.file_path AS file_path,
+                   coalesce(n.line_number, 0) AS line_number
             ORDER BY file_path, qualified_name
             LIMIT $limit
             """,
             limit=limit,
         )
-        return [_row_to_node_info(r) for r in result]
+        return [
+            DeadCodeNode(
+                qualified_name=r["qualified_name"] or "",
+                name=r["name"] or "",
+                label=r["label"] or "",
+                file_path=r["file_path"] or "",
+                line_number=r["line_number"] or 0,
+            )
+            for r in result
+        ]
 
 
 def get_most_connected_files(driver: Driver | None = None, limit: int = 10) -> list[dict]:
@@ -306,13 +334,15 @@ def _downstream_cypher(depth: int) -> str:
     return f"""
     MATCH (entity)
     WHERE entity.name = $name OR entity.qualified_name = $name
-    MATCH (entity)-[:CALLS|IMPORTS*1..{depth}]->(dep)
+    MATCH p = (entity)-[:CALLS|IMPORTS*1..{depth}]->(dep)
     WHERE dep <> entity
-    RETURN DISTINCT
-        dep.qualified_name AS qualified_name,
-        dep.name           AS name,
-        labels(dep)[0]     AS label,
-        dep.file_path      AS file_path
+    WITH dep, relationships(p)[0] AS first_rel
+    RETURN
+        dep.qualified_name   AS qualified_name,
+        dep.name             AS name,
+        labels(dep)[0]       AS label,
+        dep.file_path        AS file_path,
+        type(first_rel)      AS relationship_type
     ORDER BY qualified_name
     """
 
@@ -322,13 +352,15 @@ def _upstream_cypher(depth: int) -> str:
     return f"""
     MATCH (entity)
     WHERE entity.name = $name OR entity.qualified_name = $name
-    MATCH (caller)-[:CALLS|IMPORTS*1..{depth}]->(entity)
+    MATCH p = (caller)-[:CALLS|IMPORTS*1..{depth}]->(entity)
     WHERE caller <> entity
-    RETURN DISTINCT
+    WITH caller, relationships(p)[0] AS first_rel
+    RETURN
         caller.qualified_name AS qualified_name,
         caller.name           AS name,
         labels(caller)[0]     AS label,
-        caller.file_path      AS file_path
+        caller.file_path      AS file_path,
+        type(first_rel)       AS relationship_type
     ORDER BY qualified_name
     """
 
@@ -338,13 +370,15 @@ def _both_directions_cypher(depth: int) -> str:
     return f"""
     MATCH (entity)
     WHERE entity.name = $name OR entity.qualified_name = $name
-    MATCH (neighbor)-[:CALLS|IMPORTS*1..{depth}]-(entity)
+    MATCH p = (neighbor)-[:CALLS|IMPORTS*1..{depth}]-(entity)
     WHERE neighbor <> entity
-    RETURN DISTINCT
+    WITH neighbor, relationships(p)[0] AS first_rel
+    RETURN
         neighbor.qualified_name AS qualified_name,
         neighbor.name           AS name,
         labels(neighbor)[0]     AS label,
-        neighbor.file_path      AS file_path
+        neighbor.file_path      AS file_path,
+        type(first_rel)         AS relationship_type
     ORDER BY qualified_name
     """
 
@@ -356,4 +390,15 @@ def _row_to_node_info(record: Any) -> NodeInfo:
         name=record["name"] or "",
         label=record["label"] or "",
         file_path=record["file_path"] or "",
+    )
+
+
+def _row_to_node_info_with_rel(record: Any) -> NodeInfoWithRel:
+    """Convert a Neo4j record row (with relationship_type) to a NodeInfoWithRel."""
+    return NodeInfoWithRel(
+        qualified_name=record["qualified_name"] or "",
+        name=record["name"] or "",
+        label=record["label"] or "",
+        file_path=record["file_path"] or "",
+        relationship_type=record["relationship_type"] or "",
     )
