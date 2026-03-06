@@ -1,8 +1,9 @@
 """Main CLI implementation for CodeGraph."""
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Optional, List
 
 import typer
 from rich.console import Console
@@ -78,8 +79,8 @@ def doctor(ctx: typer.Context):
 def query(
     ctx: typer.Context,
     task: str = typer.Argument(..., help="Task description to retrieve context for"),
-    entities: Optional[List[str]] = typer.Option(None, "--entity", "-e", help="Specific entity names to include as seeds"),
-    file: Optional[str] = typer.Option(None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"),
+    entities: list[str] | None = typer.Option(None, "--entity", "-e", help="Specific entity names to include as seeds"),
+    file: str | None = typer.Option(None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"),
     top_k: int = typer.Option(0, "--top-k", help="Max results (0 = use config default)"),
     budget: int = typer.Option(0, "--budget", help="Token budget (0 = use config default)"),
 ):
@@ -93,7 +94,7 @@ def query(
 @app.command()
 def serve(
     ctx: typer.Context,
-    config: Optional[str] = typer.Option(None, "--config", help="Config path passed to the MCP server")
+    config: str | None = typer.Option(None, "--config", help="Config path passed to the MCP server")
 ):
     """
     Start the CodeGraph MCP server.
