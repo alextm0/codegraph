@@ -255,13 +255,36 @@ def _tokenize(text: str) -> list[str]:
 
 
 def _resolve_signal_weights(signal_weights: dict[str, float] | None) -> dict:
-    """Merge caller-supplied weights with defaults."""
+    """Merge caller-supplied weights with defaults, clamping invalid values."""
     defaults: dict = {
         "entity_match": _DEFAULT_ENTITY_MATCH_WEIGHT,
         "bm25": _DEFAULT_BM25_WEIGHT,
         "current_file": _DEFAULT_CURRENT_FILE_WEIGHT,
         "bm25_top_n": _DEFAULT_BM25_TOP_N,
     }
-    if signal_weights:
-        defaults.update(signal_weights)
-    return defaults
+    if not signal_weights:
+        return defaults
+
+    merged = dict(defaults)
+    for key, value in signal_weights.items():
+        if key == "bm25_top_n":
+            int_val = int(value)
+            if int_val < 1:
+                logger.warning(
+                    "Invalid bm25_top_n=%r; must be >= 1. Using default %d.",
+                    value,
+                    _DEFAULT_BM25_TOP_N,
+                )
+                merged[key] = _DEFAULT_BM25_TOP_N
+            else:
+                merged[key] = int_val
+        else:
+            if value < 0.0:
+                logger.warning(
+                    "Invalid signal weight %s=%r; must be >= 0. Using default.",
+                    key,
+                    value,
+                )
+            else:
+                merged[key] = value
+    return merged

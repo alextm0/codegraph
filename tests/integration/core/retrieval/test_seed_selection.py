@@ -5,9 +5,52 @@ from pathlib import Path
 import pytest
 
 from codegraph.core.graph.graph_builder import build_graph, clear_database
-from codegraph.core.retrieval.seed_selection import extract_seeds, PersonalizationVector
+from codegraph.core.retrieval.seed_selection import (
+    extract_seeds,
+    PersonalizationVector,
+    _resolve_signal_weights,
+)
 from codegraph.core.parser.python_parser import create_parser, parse_directory
 from tests.conftest import neo4j_required
+
+
+# ---------------------------------------------------------------------------
+# _resolve_signal_weights — pure function, no Neo4j required
+# ---------------------------------------------------------------------------
+
+class TestResolveSignalWeights:
+    """Unit tests for signal weight validation and merging."""
+
+    def test_defaults_returned_when_none(self):
+        weights = _resolve_signal_weights(None)
+        assert weights["entity_match"] == 0.6
+        assert weights["bm25"] == 0.3
+        assert weights["current_file"] == 0.1
+        assert weights["bm25_top_n"] == 5
+
+    def test_caller_values_override_defaults(self):
+        weights = _resolve_signal_weights({"entity_match": 0.8, "bm25": 0.1})
+        assert weights["entity_match"] == 0.8
+        assert weights["bm25"] == 0.1
+        # Unspecified keys stay at defaults
+        assert weights["current_file"] == 0.1
+
+    def test_negative_weight_clamped_to_default(self):
+        weights = _resolve_signal_weights({"entity_match": -0.5})
+        assert weights["entity_match"] == 0.6  # reverts to default
+
+    def test_zero_weight_accepted(self):
+        weights = _resolve_signal_weights({"bm25": 0.0})
+        assert weights["bm25"] == 0.0
+
+    def test_bm25_top_n_cast_to_int(self):
+        weights = _resolve_signal_weights({"bm25_top_n": 3})
+        assert weights["bm25_top_n"] == 3
+        assert isinstance(weights["bm25_top_n"], int)
+
+    def test_invalid_bm25_top_n_clamped_to_default(self):
+        weights = _resolve_signal_weights({"bm25_top_n": 0})
+        assert weights["bm25_top_n"] == 5  # default
 
 FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 USER_AUTH = str(FIXTURES_DIR / "user_auth")
