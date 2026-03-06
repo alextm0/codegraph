@@ -1,11 +1,12 @@
 """MCP tool definitions."""
 
+from __future__ import annotations
+
 import json
 import logging
-import os
-from mcp.server.fastmcp import Context
+from typing import TYPE_CHECKING
 
-from codegraph.core.graph.ppr import PPRConfig, run_ppr_from_node_ids
+from codegraph.core.graph.ppr import PPRConfig
 from codegraph.core.graph.queries import (
     count_edges_by_type,
     count_nodes_by_label,
@@ -14,8 +15,13 @@ from codegraph.core.graph.queries import (
     query_entity_dependencies,
 )
 from codegraph.core.retrieval.pipeline import run_retrieval_pipeline
+from codegraph.utils.paths import make_relative_path, make_relative_qualified_name
+
+if TYPE_CHECKING:
+    from codegraph.mcp.server import ServerState
 
 logger = logging.getLogger(__name__)
+
 
 def get_relevant_context_impl(
     task_description: str,
@@ -23,7 +29,7 @@ def get_relevant_context_impl(
     current_file: str | None,
     top_k: int,
     token_budget: int,
-    state,
+    state: ServerState,
 ) -> str:
     """Implementation of get_relevant_context tool."""
     # Override PPR top_k from tool argument
@@ -80,11 +86,12 @@ def get_relevant_context_impl(
     }
     return json.dumps(output, indent=2)
 
+
 def query_dependencies_impl(
     entity_name: str,
     direction: str,
     depth: int,
-    state,
+    state: ServerState,
 ) -> str:
     """Implementation of query_dependencies tool."""
     logger.info(
@@ -107,8 +114,8 @@ def query_dependencies_impl(
     project_root = state.project_root
     serializable = []
     for node in nodes:
-        rel_file_path = _make_rel_path(node.file_path, project_root)
-        rel_qname = _make_rel_qualified_name(node.qualified_name, node.file_path, rel_file_path)
+        rel_file_path = make_relative_path(node.file_path, project_root)
+        rel_qname = make_relative_qualified_name(node.qualified_name, node.file_path, rel_file_path)
         serializable.append({
             "qualified_name": rel_qname,
             "name": node.name,
@@ -118,7 +125,8 @@ def query_dependencies_impl(
         })
     return json.dumps(serializable, indent=2)
 
-def find_dead_code_impl(limit: int, state) -> str:
+
+def find_dead_code_impl(limit: int, state: ServerState) -> str:
     """Implementation of find_dead_code tool."""
     logger.info("find_dead_code called (limit=%d)", limit)
     nodes = find_dead_code(driver=state.driver, limit=limit if limit > 0 else 50)
@@ -126,8 +134,8 @@ def find_dead_code_impl(limit: int, state) -> str:
     project_root = state.project_root
     by_file: dict[str, list[dict]] = {}
     for node in nodes:
-        rel_file_path = _make_rel_path(node.file_path, project_root)
-        rel_qname = _make_rel_qualified_name(node.qualified_name, node.file_path, rel_file_path)
+        rel_file_path = make_relative_path(node.file_path, project_root)
+        rel_qname = make_relative_qualified_name(node.qualified_name, node.file_path, rel_file_path)
         entry = {
             "name": node.name,
             "qualified_name": rel_qname,
@@ -143,7 +151,7 @@ def find_dead_code_impl(limit: int, state) -> str:
     return json.dumps(output, indent=2)
 
 
-def get_graph_stats_impl(state) -> str:
+def get_graph_stats_impl(state: ServerState) -> str:
     """Implementation of get_graph_stats tool."""
     logger.info("get_graph_stats called")
 
@@ -154,7 +162,7 @@ def get_graph_stats_impl(state) -> str:
     project_root = state.project_root
     most_connected = [
         {
-            "file_path": _make_rel_path(entry["file_path"], project_root),
+            "file_path": make_relative_path(entry["file_path"], project_root),
             "entity_count": entry["entity_count"],
         }
         for entry in most_connected_raw
@@ -169,32 +177,15 @@ def get_graph_stats_impl(state) -> str:
     }
     return json.dumps(stats, indent=2)
 
-def _make_rel_path(abs_path: str, project_root: str) -> str:
-    """Convert an absolute path to a relative path from project_root."""
-    if not abs_path:
-        return abs_path
-    try:
-        return os.path.relpath(abs_path, project_root).replace("\\", "/")
-    except ValueError:
-        return abs_path
 
-
-def _make_rel_qualified_name(qualified_name: str, abs_file_path: str, rel_file_path: str) -> str:
-    """Replace the absolute file prefix in a qualified_name with the relative path."""
-    if abs_file_path and qualified_name.startswith(abs_file_path):
-        suffix = qualified_name[len(abs_file_path):]
-        return rel_file_path + suffix
-    return qualified_name
-
-
-def execute_cypher_query_impl(cypher_query: str, state) -> str:
+def execute_cypher_query_impl(cypher_query: str, state: ServerState) -> str:
     """Implementation of execute_cypher_query tool."""
     logger.info("execute_cypher_query called")
     try:
         def _execute(tx):
             result = tx.run(cypher_query)
             return [record.data() for record in result]
-            
+
         with state.driver.session() as session:
             records = session.execute_read(_execute)
         return json.dumps(records, indent=2, default=str)
