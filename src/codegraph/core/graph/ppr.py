@@ -108,6 +108,7 @@ def run_ppr(
 
     Returns top-k results sorted by descending score.
     The driver is used for Cypher lookups (seed node IDs and result properties).
+    Uses uniform weights across all seed nodes.
     """
     if config is None:
         config = PPRConfig()
@@ -117,30 +118,58 @@ def run_ppr(
         logger.warning("PPR: no seed nodes found for names %s", seed_names)
         return []
 
-    return run_ppr_from_node_ids(gds, driver, seed_ids, config)
+    uniform_weight = 1.0 / len(seed_ids)
+    seed_weights = {nid: uniform_weight for nid in seed_ids}
+    return run_ppr_from_node_ids(gds, driver, seed_weights, config)
 
 
 def run_ppr_from_node_ids(
     gds: GraphDataScience,
     driver: Driver,
-    seed_ids: list[int],
+    seed_weights: dict[int, float],
     config: PPRConfig,
 ) -> list[PPRResult]:
-    """Run PPR from explicit internal node IDs and return ranked PPRResult list.
+    """Run PPR from a weighted dict of {node_id: weight} and return ranked PPRResult list.
 
-    seed_ids are Neo4j internal integer IDs (from id(n)), which GDS requires for
-    sourceNodes. GDS stream results also return integer nodeIds mapped to id(n).
+    seed_weights maps Neo4j internal integer IDs (from id(n)) to personalization
+    weights. Weights should sum to 1.0 for correct PPR behaviour; callers using
+    PersonalizationVector.normalize() guarantee this.
+
+    Attempts to use personalizationProperty for true weighted PPR (GDS 2.x+).
+    Falls back to uniform sourceNodes if personalizationProperty is unsupported.
+    See DEC-008.
     """
     projection = gds.graph.get(_PROJECTION_NAME)
 
-    result_df = gds.pageRank.stream(
-        projection,
-        maxIterations=config.max_iterations,
-        dampingFactor=config.damping_factor,
-        tolerance=config.tolerance,
-        sourceNodes=seed_ids,
-        relationshipWeightProperty="weight",
-    )
+    _write_personalization_weights(driver, seed_weights)
+    try:
+        try:
+            result_df = gds.pageRank.stream(
+                projection,
+                maxIterations=config.max_iterations,
+                dampingFactor=config.damping_factor,
+                tolerance=config.tolerance,
+                personalizationProperty="personalization",
+                relationshipWeightProperty="weight",
+            )
+        except Exception as exc:
+            if "personalizationProperty" in str(exc) or "Unexpected configuration key" in str(exc):
+                logger.warning(
+                    "GDS does not support personalizationProperty (upgrade to GDS 2.x for "
+                    "weighted PPR); falling back to uniform sourceNodes."
+                )
+                result_df = gds.pageRank.stream(
+                    projection,
+                    maxIterations=config.max_iterations,
+                    dampingFactor=config.damping_factor,
+                    tolerance=config.tolerance,
+                    sourceNodes=list(seed_weights.keys()),
+                    relationshipWeightProperty="weight",
+                )
+            else:
+                raise
+    finally:
+        _clear_personalization_weights(driver)
 
     # result_df has columns: nodeId, score
     top_rows = result_df.sort_values("score", ascending=False).head(config.top_k)
@@ -173,6 +202,35 @@ def run_ppr_from_node_ids(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+def _write_personalization_weights(driver: Driver, seed_weights: dict[int, float]) -> None:
+    """Write a personalization property on all nodes for GDS PPR.
+
+    Sets personalization=0.0 on every node, then sets the actual weight on each
+    seed node. Must be called before gds.pageRank.stream() with
+    personalizationProperty="personalization".
+    """
+    with driver.session() as session:
+        session.run("MATCH (n) SET n.personalization = 0.0")
+        if seed_weights:
+            seeds_list = [{"nid": nid, "weight": w} for nid, w in seed_weights.items()]
+            session.run(
+                """
+                UNWIND $seeds AS s
+                MATCH (n) WHERE id(n) = s.nid
+                SET n.personalization = s.weight
+                """,
+                seeds=seeds_list,
+            )
+
+
+def _clear_personalization_weights(driver: Driver) -> None:
+    """Remove the personalization property from all nodes after PPR completes."""
+    with driver.session() as session:
+        session.run(
+            "MATCH (n) WHERE n.personalization IS NOT NULL REMOVE n.personalization"
+        )
+
 
 def _resolve_seed_ids(driver: Driver, seed_names: list[str]) -> list[int]:
     """Query Neo4j for the internal node IDs of all nodes matching seed_names.

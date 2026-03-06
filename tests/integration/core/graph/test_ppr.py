@@ -13,6 +13,8 @@ from codegraph.core.graph.ppr import (
     project_graph,
     drop_projection,
     run_ppr,
+    run_ppr_from_node_ids,
+    _resolve_seed_ids,
 )
 from tests.conftest import neo4j_required
 
@@ -194,3 +196,16 @@ def test_run_ppr_auth_service_register_ranks_validators_highly(projected, neo4j_
     # At least one validator should appear in top-10
     validators = {"validate_email", "validate_username", "validate_password"}
     assert top_names & validators, f"No validators in top results: {top_names}"
+
+
+@neo4j_required
+def test_run_ppr_weighted_seeds_produce_results(projected, neo4j_driver):
+    """run_ppr_from_node_ids with a weighted dict must produce PPRResult objects."""
+    seed_ids = _resolve_seed_ids(neo4j_driver, ["AuthService.register"])
+    if not seed_ids:
+        pytest.skip("Seed node not found")
+    seed_weights = {nid: 1.0 / len(seed_ids) for nid in seed_ids}
+    results = run_ppr_from_node_ids(projected, neo4j_driver, seed_weights, PPRConfig(top_k=5))
+    assert isinstance(results, list)
+    assert all(isinstance(r, PPRResult) for r in results)
+    assert all(r.score >= 0.0 for r in results)

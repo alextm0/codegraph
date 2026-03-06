@@ -1,16 +1,17 @@
 """Helper functions for the CodeGraph CLI."""
 
+from __future__ import annotations
+
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich import box
 
-from codegraph.utils.config import load_raw_config, resolve_project_root
+from codegraph.utils.config import load_raw_config, resolve_project_root, parse_signal_weights
 from codegraph.utils.logging import setup_logging
 from codegraph.utils.ignore import load_ignore_patterns
 from codegraph.core.graph import clear_database, build_graph, get_database_manager, load_full_config
@@ -215,8 +216,8 @@ def doctor_helper() -> None:
 def query_helper(
     config_path: Path,
     task: str,
-    entities: Optional[list[str]],
-    current_file: Optional[str],
+    entities: list[str] | None,
+    current_file: str | None,
     top_k: int,
     token_budget: int,
 ) -> None:
@@ -248,15 +249,7 @@ def query_helper(
         )
         effective_budget = token_budget if token_budget > 0 else mcp_section.get("default_token_budget", 6000)
 
-        signal_weights: dict[str, float] = {}
-        if seed_section.get("entity_match_weight") is not None:
-            signal_weights["entity_match"] = float(seed_section["entity_match_weight"])
-        if seed_section.get("bm25_weight") is not None:
-            signal_weights["bm25"] = float(seed_section["bm25_weight"])
-        if seed_section.get("current_file_weight") is not None:
-            signal_weights["current_file"] = float(seed_section["current_file_weight"])
-        if seed_section.get("bm25_top_n") is not None:
-            signal_weights["bm25_top_n"] = float(seed_section["bm25_top_n"])
+        signal_weights = parse_signal_weights(seed_section)
 
         gds = create_gds_client(driver)
 

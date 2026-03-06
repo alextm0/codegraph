@@ -21,6 +21,7 @@ from codegraph.core.graph import (
 from codegraph.core.graph.ppr import PPRConfig
 from codegraph.core.retrieval.pipeline import ensure_graph_ready
 from codegraph.mcp.prompts import LLM_SYSTEM_PROMPT
+from codegraph.utils.config import parse_signal_weights
 from codegraph.mcp.tools import (
     find_dead_code_impl,
     get_graph_stats_impl,
@@ -91,15 +92,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     except Exception as exc:
         logger.warning("Warm-up failed: %s", exc)
 
-    signal_weights: dict[str, float] = {}
-    if seed_section.get("entity_match_weight") is not None:
-        signal_weights["entity_match"] = float(seed_section["entity_match_weight"])
-    if seed_section.get("bm25_weight") is not None:
-        signal_weights["bm25"] = float(seed_section["bm25_weight"])
-    if seed_section.get("current_file_weight") is not None:
-        signal_weights["current_file"] = float(seed_section["current_file_weight"])
-    if seed_section.get("bm25_top_n") is not None:
-        signal_weights["bm25_top_n"] = int(seed_section["bm25_top_n"])
+    signal_weights = parse_signal_weights(seed_section)
 
     state = ServerState(
         driver=driver,

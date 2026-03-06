@@ -42,9 +42,8 @@ def run_retrieval_pipeline(
     # Step 2: Prepare the graph for PPR (IDF weights + fresh GDS projection).
     ensure_graph_ready(driver, gds)
 
-    # Step 3: Run Personalized PageRank from the seed node IDs.
-    seed_node_ids = list(seeds.seeds.keys())
-    ppr_results = run_ppr_from_node_ids(gds, driver, seed_node_ids, ppr_config)
+    # Step 3: Run Personalized PageRank using weighted seed dict (preserves signal weights).
+    ppr_results = run_ppr_from_node_ids(gds, driver, seeds.seeds, ppr_config)
     if not ppr_results:
         logger.warning("Pipeline: PPR returned no results")
         return []
