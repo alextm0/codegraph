@@ -48,6 +48,7 @@ def extract_seeds(
     mentioned_entities: list[str] | None = None,
     current_file: str | None = None,
     signal_weights: dict[str, float] | None = None,
+    project_scope: str | None = None,
 ) -> PersonalizationVector:
     """Build a personalization vector from multiple task signals.
 
@@ -57,6 +58,9 @@ def extract_seeds(
         mentioned_entities: Explicit entity names mentioned in the task (e.g., ["AuthService"]).
         current_file: File path the agent is currently editing. Used as a low-weight hint.
         signal_weights: Override default weights for each source signal.
+        project_scope: Optional file path prefix. When set, only nodes whose
+            file_path starts with this prefix are considered. Use to prevent
+            cross-project contamination when multiple repos share one Neo4j DB.
 
     Returns:
         A PersonalizationVector whose seeds sum to 1.0.
@@ -66,16 +70,22 @@ def extract_seeds(
     all_seeds: list[SeedNode] = []
 
     if mentioned_entities:
-        entity_seeds = _match_entities(driver, mentioned_entities, weights["entity_match"])
+        entity_seeds = _match_entities(
+            driver, mentioned_entities, weights["entity_match"], project_scope
+        )
         all_seeds.extend(entity_seeds)
         logger.debug("Entity match seeds: %d", len(entity_seeds))
 
-    bm25_seeds = _bm25_search(driver, task_description, weights["bm25"], weights["bm25_top_n"])
+    bm25_seeds = _bm25_search(
+        driver, task_description, weights["bm25"], weights["bm25_top_n"], project_scope
+    )
     all_seeds.extend(bm25_seeds)
     logger.debug("BM25 seeds: %d", len(bm25_seeds))
 
     if current_file:
-        file_seeds = _current_file_seeds(driver, current_file, weights["current_file"])
+        file_seeds = _current_file_seeds(
+            driver, current_file, weights["current_file"], project_scope
+        )
         all_seeds.extend(file_seeds)
         logger.debug("Current file seeds: %d", len(file_seeds))
 
@@ -86,6 +96,30 @@ def extract_seeds(
     return _normalize_seeds(all_seeds)
 
 
+def extract_entity_names(text: str) -> list[str]:
+    """Extract likely code identifiers from free-form text.
+
+    Finds CamelCase class names (two or more words joined) and snake_case
+    function/variable names (at least one underscore separator). Common
+    English words are not matched — only patterns that look like code.
+
+    Args:
+        text: Any free-form text, e.g. a task description or issue body.
+
+    Returns:
+        Deduplicated list preserving first-occurrence order.
+    """
+    camel = re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b", text)
+    snake = re.findall(r"\b[a-z][a-z0-9]*(?:_[a-z][a-z0-9]*)+\b", text)
+    seen: set[str] = set()
+    result: list[str] = []
+    for name in camel + snake:
+        if name not in seen:
+            seen.add(name)
+            result.append(name)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Private: signal extractors
 # ---------------------------------------------------------------------------
@@ -94,6 +128,7 @@ def _match_entities(
     driver: Driver,
     mentioned_entities: list[str],
     base_weight: float,
+    project_scope: str | None = None,
 ) -> list[SeedNode]:
     """Match entity names against graph nodes by name or qualified_name."""
     seeds: list[SeedNode] = []
@@ -102,12 +137,14 @@ def _match_entities(
             result = session.run(
                 """
                 MATCH (n)
-                WHERE n.name = $name
+                WHERE (n.name = $name
                    OR n.qualified_name = $name
-                   OR (n:Method AND (n.class_name + "." + n.name) = $name)
+                   OR (n:Method AND (n.class_name + "." + n.name) = $name))
+                  AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
                 RETURN id(n) AS nid, n.qualified_name AS qname
                 """,
                 name=entity,
+                scope=project_scope,
             )
             for record in result:
                 seeds.append(
@@ -128,13 +165,14 @@ def _bm25_search(
     task_description: str,
     base_weight: float,
     top_n: int,
+    project_scope: str | None = None,
 ) -> list[SeedNode]:
     """Score Function/Method nodes against task_description using BM25.
 
     Fetches all Function and Method nodes with their signature and docstring,
     builds an in-memory BM25 index, and returns the top_n matches.
     """
-    rows = _fetch_searchable_nodes(driver)
+    rows = _fetch_searchable_nodes(driver, project_scope)
     if not rows:
         logger.debug("BM25: no Function/Method nodes in graph")
         return []
@@ -173,21 +211,24 @@ def _current_file_seeds(
     driver: Driver,
     current_file: str,
     base_weight: float,
+    project_scope: str | None = None,
 ) -> list[SeedNode]:
     """Return seeds for all entities contained in current_file."""
     seeds: list[SeedNode] = []
     # Normalise to forward slashes for cross-platform matching.
     # Use ENDS WITH so callers can pass a relative suffix like
-    # 'services/auth_service.py' even though the graph stores full absolute paths.
+    # 'services/auth_service.py' even though the graph stores full paths.
     normalised = current_file.replace("\\", "/")
     with driver.session() as session:
         result = session.run(
             """
             MATCH (n)
             WHERE replace(n.file_path, '\\\\', '/') ENDS WITH $file_path
+              AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
             RETURN id(n) AS nid, n.qualified_name AS qname
             """,
             file_path=normalised,
+            scope=project_scope,
         )
         for record in result:
             seeds.append(
@@ -223,19 +264,24 @@ def _normalize_seeds(all_seeds: list[SeedNode]) -> PersonalizationVector:
     return PersonalizationVector(seeds=normalized)
 
 
-def _fetch_searchable_nodes(driver: Driver) -> list[dict]:
+def _fetch_searchable_nodes(
+    driver: Driver,
+    project_scope: str | None = None,
+) -> list[dict]:
     """Fetch all Function and Method nodes with their text fields for BM25 indexing."""
     rows: list[dict] = []
     with driver.session() as session:
         result = session.run(
             """
             MATCH (n)
-            WHERE n:Function OR n:Method
+            WHERE (n:Function OR n:Method)
+              AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
             RETURN id(n) AS node_id,
                    n.qualified_name AS qualified_name,
                    coalesce(n.signature, "") AS signature,
                    coalesce(n.docstring, "") AS docstring
-            """
+            """,
+            scope=project_scope,
         )
         for record in result:
             rows.append(
