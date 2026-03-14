@@ -26,6 +26,10 @@ dist/
 data/
 logs/
 
+# Benchmark runner cache and results
+.codegraph_cache/
+evaluation/results/
+
 # IDEs
 .vscode/
 .idea/
