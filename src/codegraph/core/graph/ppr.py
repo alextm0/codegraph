@@ -50,18 +50,30 @@ def create_gds_client(driver: Driver) -> GraphDataScience:
     return gds
 
 
-def project_graph(gds: GraphDataScience) -> Graph:
+_ALL_RELATIONSHIP_TYPES = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM"]
+
+
+def project_graph(
+    gds: GraphDataScience,
+    relationship_types: list[str] | None = None,
+    orientation: str = "UNDIRECTED",
+) -> Graph:
     """Create an in-memory GDS projection covering all node/edge types.
 
-    Uses UNDIRECTED orientation with relationship weight property.
+    Args:
+        gds: GDS client.
+        relationship_types: Edge types to include (default: all four). Useful for
+            ablation studies that drop individual edge types.
+        orientation: GDS orientation applied to all relationship types.
+            One of "UNDIRECTED", "NATURAL", or "REVERSE".
+
     Returns the GDS Graph object (supports node_count(), relationship_count()).
     """
     node_spec = ["File", "Function", "Class", "Method"]
+    rel_types = relationship_types or _ALL_RELATIONSHIP_TYPES
     relationship_spec = {
-        "CONTAINS": {"orientation": "UNDIRECTED", "properties": "weight"},
-        "CALLS": {"orientation": "UNDIRECTED", "properties": "weight"},
-        "IMPORTS": {"orientation": "UNDIRECTED", "properties": "weight"},
-        "INHERITS_FROM": {"orientation": "UNDIRECTED", "properties": "weight"},
+        rel_type: {"orientation": orientation, "properties": "weight"}
+        for rel_type in rel_types
     }
 
     # Drop any existing projection with the same name
