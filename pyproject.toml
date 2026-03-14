@@ -27,11 +27,20 @@ dependencies = [
 codegraph = "codegraph.cli.main:cli"
 # MCP server entry point (kept for backward compatibility)
 codegraph-mcp = "codegraph.mcp.server:main"
+# Dashboard for monitoring evaluation runs
+codegraph-bench-dashboard = "evaluation.dashboard.app:main"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",
+]
+bench = [
+    "datasets>=2.0",
+    "gitpython>=3.1",
+]
+dashboard = [
+    "textual>=0.70",
 ]
 
 [tool.pytest.ini_options]
