@@ -7,7 +7,6 @@ from pathlib import Path
 import tiktoken
 
 from codegraph.core.graph.ppr import PPRResult
-from codegraph.utils.paths import make_relative_path, make_relative_qualified_name
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +87,11 @@ def format_context(
         List of ContextResult in descending relevance order.
     """
     root = Path(project_root)
+    deduped_results = _deduplicate_file_entities(ppr_results)
     context_items: list[ContextResult] = []
     total_tokens = 0
 
-    for ppr in ppr_results:
+    for ppr in deduped_results:
         if not ppr.file_path:
             continue
 
@@ -100,20 +100,18 @@ def format_context(
         if source_code is None:
             continue
 
-        # Convert absolute file_path to relative (from project_root).
-        rel_file_path = make_relative_path(ppr.file_path, project_root)
+        # file_path is already relative (stored as relative by parse_directory).
+        rel_file_path = ppr.file_path
 
-        # For File nodes entity_name == absolute file_path; use relative path instead.
+        # For File nodes entity_name == file_path; for others use entity name.
         entity_type = _LABEL_TO_ENTITY_TYPE.get(ppr.label, ppr.label.lower())
         if ppr.label == "File":
             entity_name = rel_file_path
         else:
             entity_name = ppr.name
 
-        # Build relative qualified_name: replace absolute file prefix with relative one.
-        rel_qualified_name = make_relative_qualified_name(
-            ppr.qualified_name, ppr.file_path, rel_file_path
-        )
+        # qualified_name already uses the relative file prefix.
+        rel_qualified_name = ppr.qualified_name
 
         # Fix sentinel line_end=0 for File nodes by counting actual lines.
         if line_end == 0:
@@ -163,6 +161,34 @@ def count_tokens(text: str) -> int:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+def _deduplicate_file_entities(ppr_results: list[PPRResult]) -> list[PPRResult]:
+    """Drop File results whose content is already covered by 2+ sub-entity results.
+
+    When PPR returns both a File node and multiple functions/methods from that
+    file, the File node is redundant — its source code is a superset of what
+    the sub-entities already cover, wasting the token budget.
+
+    A File is dropped when 2 or more non-File results from the same file appear
+    anywhere in the ranked list.
+    """
+    sub_entity_count: dict[str, int] = {}
+    for ppr in ppr_results:
+        if ppr.label != "File" and ppr.file_path:
+            sub_entity_count[ppr.file_path] = sub_entity_count.get(ppr.file_path, 0) + 1
+
+    deduped: list[PPRResult] = []
+    for ppr in ppr_results:
+        if ppr.label == "File" and sub_entity_count.get(ppr.file_path, 0) >= 2:
+            logger.debug(
+                "Skipping duplicate File result '%s' (%d sub-entities already present)",
+                ppr.file_path,
+                sub_entity_count[ppr.file_path],
+            )
+            continue
+        deduped.append(ppr)
+    return deduped
+
 
 def _get_node_lines(ppr: PPRResult) -> tuple[int, int]:
     """Return the (line_start, line_end) range for a PPRResult.
