@@ -75,20 +75,22 @@ def parse_directory(
         List of FileEntities objects, one per successfully parsed Python file.
         Files that cannot be read are skipped with a warning log.
     """
+    root = Path(directory)
     all_paths = list(_iter_python_files(directory, exclude_patterns or []))
     total = len(all_paths)
     results: list[FileEntities] = []
     for idx, path in enumerate(all_paths, start=1):
+        rel_path = path.relative_to(root).as_posix()
         try:
             source = path.read_bytes()
         except OSError as exc:
-            logger.warning("Cannot read %s: %s", str(path), exc)
+            logger.warning("Cannot read %s: %s", rel_path, exc)
             if progress_callback:
-                progress_callback(idx, total, str(path))
+                progress_callback(idx, total, rel_path)
             continue
-        results.append(parse_file(source, str(path), parser))
+        results.append(parse_file(source, rel_path, parser))
         if progress_callback:
-            progress_callback(idx, total, str(path))
+            progress_callback(idx, total, rel_path)
     return results
 
 
