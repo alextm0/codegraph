@@ -198,3 +198,34 @@ class TestCurrentFileSeeds:
         )
         # Weights should be identical as if no file was provided
         assert pv_with_ghost_file.seeds == pv_only_task.seeds
+
+
+@neo4j_required
+class TestProjectScope:
+    """Tests for project_scope filtering (prevents cross-project contamination)."""
+
+    def test_matching_scope_returns_seeds(self, populated_db):
+        """A scope prefix that matches graph paths should still return seeds."""
+        pv = extract_seeds(
+            populated_db,
+            task_description="validate email and password",
+            project_scope="utils/",
+        )
+        # utils/ contains validate_* functions — BM25 should find them
+        assert len(pv.seeds) > 0, "Expected seeds within utils/ scope"
+
+    def test_nonmatching_scope_returns_empty(self, populated_db):
+        """A scope prefix that matches no file_path should produce no seeds."""
+        pv = extract_seeds(
+            populated_db,
+            task_description="validate email and password",
+            mentioned_entities=["validate_email"],
+            project_scope="nonexistent_prefix/",
+        )
+        assert len(pv.seeds) == 0, "Expected no seeds with a non-matching scope"
+
+    def test_none_scope_behaves_as_unfiltered(self, populated_db):
+        """project_scope=None (default) must behave identically to no filtering."""
+        pv_no_scope = extract_seeds(populated_db, "validate email")
+        pv_none_scope = extract_seeds(populated_db, "validate email", project_scope=None)
+        assert pv_no_scope.seeds == pv_none_scope.seeds
