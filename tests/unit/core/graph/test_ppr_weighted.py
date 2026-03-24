@@ -55,8 +55,9 @@ def _mock_fetch(driver, node_ids):
 # ---------------------------------------------------------------------------
 
 class TestPPRConfigRetrievalMode:
-    def test_default_is_weighted(self) -> None:
-        assert PPRConfig().retrieval_mode == "weighted"
+    def test_default_is_uniform(self) -> None:
+        """Uniform mode is the default after benchmark evidence showed 60.7% vs 42.0% R@10."""
+        assert PPRConfig().retrieval_mode == "uniform"
 
     def test_explicit_uniform(self) -> None:
         assert PPRConfig(retrieval_mode="uniform").retrieval_mode == "uniform"

@@ -23,15 +23,15 @@ class PPRConfig:
         max_iterations: Upper bound on the number of convergence iterations.
         tolerance: Convergence threshold — iteration stops when score delta falls below this.
         top_k: Maximum number of ranked results to return.
-        retrieval_mode: "weighted" runs PPR per seed and combines by weight (default).
-            "uniform" uses a single GDS call with equal restart probability.
+        retrieval_mode: "uniform" uses a single GDS call with equal restart probability (default).
+            "weighted" runs PPR per seed and combines by weight (retained for ablation).
     """
 
     damping_factor: float = 0.85
     max_iterations: int = 20
     tolerance: float = 1e-7
     top_k: int = 20
-    retrieval_mode: Literal["weighted", "uniform"] = "weighted"
+    retrieval_mode: Literal["weighted", "uniform"] = "uniform"
 
 
 @dataclass(frozen=True)

@@ -63,6 +63,8 @@ ABLATIONS: list[AblationConfig] = [
 
     # Weighted vs uniform PPR (isolates seed relevance scoring contribution)
     AblationConfig(name="ppr_uniform", ppr_config=PPRConfig(retrieval_mode="uniform")),
+    # Weighted PPR — kept for ablation regression tracking (was former default, now outperformed by uniform)
+    AblationConfig(name="ppr_weighted", ppr_config=PPRConfig(retrieval_mode="weighted")),
 
     # Damping factor sweep
     AblationConfig(name="alpha_010", ppr_config=PPRConfig(damping_factor=0.10)),

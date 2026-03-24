@@ -18,6 +18,7 @@ ppr:
   max_iterations: 20
   tolerance: 1.0e-7
   top_k: 20
+  retrieval_mode: "uniform"
 
 seed_selection:
   entity_match_weight: 0.6
