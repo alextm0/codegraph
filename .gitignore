@@ -35,3 +35,4 @@ evaluation/results/
 .idea/
 *.swp
 *.swo
+.worktrees/
