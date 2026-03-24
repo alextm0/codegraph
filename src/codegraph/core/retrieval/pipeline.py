@@ -6,7 +6,13 @@ from graphdatascience.graph.graph_object import Graph
 from neo4j import Driver
 
 from codegraph.core.graph.ppr import PPRConfig, drop_projection, project_graph, run_ppr_from_node_ids
-from codegraph.core.retrieval.post_processing import ContextResult, apply_idf_weights, format_context
+from codegraph.core.retrieval.post_processing import (
+    ContextResult,
+    apply_directory_colocation_bonus,
+    apply_idf_weights,
+    expand_structural_neighbors,
+    format_context,
+)
 from codegraph.core.retrieval.seed_selection import PersonalizationVector, extract_entity_names, extract_seeds
 
 logger = logging.getLogger(__name__)
@@ -25,6 +31,7 @@ def run_retrieval_pipeline(
     relationship_types: list[str] | None = None,
     orientation: str = "UNDIRECTED",
     apply_idf: bool = True,
+    expand_neighbors: bool = True,
 ) -> list[ContextResult]:
     """Run the full retrieval pipeline and return context results."""
     if ppr_config is None:
@@ -63,6 +70,11 @@ def run_retrieval_pipeline(
     if not ppr_results:
         logger.warning("Pipeline: PPR returned no results")
         return []
+
+    # Step 3.5: Structural neighborhood expansion (SpIDER-inspired).
+    if expand_neighbors:
+        ppr_results = expand_structural_neighbors(driver, ppr_results, task_description)
+        ppr_results = apply_directory_colocation_bonus(ppr_results)
 
     # Step 4: Format results into token-budgeted ContextResult items with source code.
     context_items = format_context(ppr_results, project_root, token_budget)

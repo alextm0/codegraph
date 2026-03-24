@@ -20,6 +20,8 @@ class AblationConfig:
             use all four (CONTAINS, CALLS, IMPORTS, INHERITS_FROM).
         orientation: GDS projection orientation — "UNDIRECTED", "NATURAL", or "REVERSE".
         apply_idf: When False, skip IDF weight recomputation before projection.
+        expand_neighbors: When False, skip SpIDER-inspired structural neighborhood
+            expansion after PPR (useful for isolating its contribution).
         ppr_config: PPRConfig override (damping_factor, top_k, etc.).
     """
 
@@ -27,6 +29,7 @@ class AblationConfig:
     relationship_types: list[str] | None = None
     orientation: str = "UNDIRECTED"
     apply_idf: bool = True
+    expand_neighbors: bool = True
     ppr_config: PPRConfig = field(default_factory=PPRConfig)
 
 
@@ -76,4 +79,7 @@ ABLATIONS: list[AblationConfig] = [
     AblationConfig(name="top_k_5",  ppr_config=PPRConfig(top_k=5)),
     AblationConfig(name="top_k_10", ppr_config=PPRConfig(top_k=10)),
     AblationConfig(name="top_k_50", ppr_config=PPRConfig(top_k=50)),
+
+    # Structural expansion ablations — isolate SpIDER-inspired neighborhood expansion
+    AblationConfig(name="no_structural_expansion", expand_neighbors=False),
 ]

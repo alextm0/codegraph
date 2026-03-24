@@ -38,6 +38,11 @@ from codegraph.core.graph.ppr import create_gds_client, run_ppr_from_node_ids, d
 from codegraph.core.graph.connection import create_driver, load_config
 from codegraph.core.parser.python_parser import create_parser, parse_directory
 from codegraph.core.retrieval.pipeline import ensure_graph_ready
+from codegraph.core.retrieval.post_processing import (
+    apply_directory_colocation_bonus,
+    apply_idf_weights,
+    expand_structural_neighbors,
+)
 from codegraph.core.retrieval.seed_selection import extract_entity_names, extract_seeds, prepare_bm25_index
 
 from evaluation.ablations import ABLATIONS, AblationConfig
@@ -217,6 +222,14 @@ def run_instance_query(
                 return _zero_result(instance_id, instance["repo"], gold_files, total_nodes, elapsed)
 
             ppr_results = run_ppr_from_node_ids(gds, driver, seeds.seeds, ablation.ppr_config)
+
+            # Structural neighborhood expansion (SpIDER-inspired, enabled by default)
+            if ablation.expand_neighbors and ppr_results:
+                ppr_results = expand_structural_neighbors(
+                    driver, ppr_results, problem_statement,
+                    bm25_index=bm25_index, searchable_nodes=searchable_nodes,
+                )
+                ppr_results = apply_directory_colocation_bonus(ppr_results)
 
             # predicted_files = ALL top-k PPR results ranked by score, deduplicated by file.
             predicted_files = list(dict.fromkeys(

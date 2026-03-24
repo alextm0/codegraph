@@ -1,12 +1,15 @@
 """IDF weights and result formatting."""
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import tiktoken
+from neo4j import Driver
+from rank_bm25 import BM25Okapi
 
 from codegraph.core.graph.ppr import PPRResult
+from codegraph.core.retrieval.seed_selection import tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -159,8 +162,219 @@ def count_tokens(text: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Structural neighborhood expansion (SpIDER-inspired)
+# ---------------------------------------------------------------------------
+
+def expand_structural_neighbors(
+    driver: Driver,
+    ppr_results: list[PPRResult],
+    task_description: str,
+    bm25_index: BM25Okapi | None = None,
+    searchable_nodes: list[dict] | None = None,
+    n_centers: int = 5,
+    max_depth: int = 2,
+    decay: float = 0.5,
+) -> list[PPRResult]:
+    """Expand PPR results with structurally adjacent nodes (SpIDER-inspired).
+
+    Takes the top n_centers PPR results as seed centers and finds nodes connected
+    via CONTAINS edges within max_depth hops. These structural neighbors (co-located
+    code in the same file or class) are often relevant even if they didn't score
+    highly individually.
+
+    New neighbors are scored at center_score * decay and appended after all
+    original results. If a BM25 index is provided, only neighbors with a positive
+    BM25 score against the task description are included as a semantic filter.
+
+    Based on SpIDER (arXiv:2512.16956) Proposition 4.2: if relevant functions
+    cluster spatially and at least one seed lands nearby, structural expansion
+    improves recall.
+
+    Args:
+        driver: Active Neo4j driver.
+        ppr_results: Ranked PPR results (highest score first).
+        task_description: Free-form task text for optional BM25 semantic filtering.
+        bm25_index: Optional pre-built BM25 index for filtering neighbors.
+        searchable_nodes: Nodes corresponding to bm25_index rows (parallel list).
+        n_centers: Number of top PPR results to expand from (SpIDER optimal: 5).
+        max_depth: BFS depth along CONTAINS edges (2 = same-file siblings/methods).
+        decay: Score factor for expanded neighbors (default 0.5 = half center score).
+
+    Returns:
+        Original results with new structural neighbors appended at the end.
+        May be longer than input — callers should trim to desired top_k.
+    """
+    if not ppr_results:
+        return ppr_results
+
+    centers = ppr_results[:n_centers]
+    existing_qnames = {r.qualified_name for r in ppr_results}
+
+    # Build set of BM25-relevant node IDs for semantic filtering (optional)
+    relevant_node_ids: set[int] | None = None
+    if bm25_index is not None and searchable_nodes is not None:
+        query_tokens = tokenize(task_description)
+        if query_tokens:
+            scores = bm25_index.get_scores(query_tokens)
+            relevant_node_ids = {
+                row["node_id"]
+                for score, row in zip(scores, searchable_nodes)
+                if score > 0.0
+            }
+
+    # Fetch structural neighbors for all centers from Neo4j
+    center_qnames = [c.qualified_name for c in centers]
+    center_score_map = {c.qualified_name: c.score for c in centers}
+    neighbors_by_center = _fetch_contains_neighbors(
+        driver, center_qnames, max_depth, existing_qnames
+    )
+
+    # Build new PPRResult objects for qualifying neighbors
+    seen_new: set[str] = set()
+    new_results: list[PPRResult] = []
+    for center_qname, records in neighbors_by_center.items():
+        center_score = center_score_map.get(center_qname, 0.0)
+        for rec in records:
+            qname = rec["qualified_name"]
+            if qname in seen_new:
+                continue
+            # Semantic filter: skip nodes BM25 considers unrelated to the task
+            if relevant_node_ids is not None and rec["node_id"] not in relevant_node_ids:
+                continue
+            seen_new.add(qname)
+            new_results.append(PPRResult(
+                qualified_name=qname,
+                name=rec["name"],
+                label=rec["label"],
+                file_path=rec["file_path"],
+                score=center_score * decay,
+                line_start=rec.get("line_start", 0),
+                line_end=rec.get("line_end", 0),
+            ))
+
+    logger.info(
+        "expand_structural_neighbors: %d centers -> %d new neighbors",
+        len(centers),
+        len(new_results),
+    )
+    return ppr_results + new_results
+
+
+def apply_directory_colocation_bonus(
+    ppr_results: list[PPRResult],
+    depth: int = 2,
+    min_cluster_size: int = 2,
+    bonus: float = 1.2,
+) -> list[PPRResult]:
+    """Boost results that cluster in the same directory (spatial proximity signal).
+
+    If 2+ results share the same top-level directory path (default: first 2
+    path segments), all results in that directory receive a score boost. This
+    captures the intuition that if PPR already found several files in
+    'django/db/models/', other files there are likely relevant too.
+
+    Args:
+        ppr_results: Ranked PPR results to re-score.
+        depth: Number of path segments to use as the directory key.
+        min_cluster_size: Minimum results in a directory to trigger the bonus.
+        bonus: Score multiplier for clustered results (default 1.2 = +20%).
+
+    Returns:
+        Results re-sorted by boosted scores (stable sort, original order preserved
+        within ties).
+    """
+    if len(ppr_results) < min_cluster_size:
+        return ppr_results
+
+    # Count results per directory prefix
+    dir_counts: dict[str, int] = {}
+    for ppr in ppr_results:
+        if ppr.file_path:
+            dir_key = _directory_key(ppr.file_path, depth)
+            dir_counts[dir_key] = dir_counts.get(dir_key, 0) + 1
+
+    # Find directories with enough results to qualify for the bonus
+    clustered_dirs = {d for d, count in dir_counts.items() if count >= min_cluster_size}
+    if not clustered_dirs:
+        return ppr_results
+
+    # Apply bonus and re-sort (stable: preserves original order within equal scores)
+    boosted: list[PPRResult] = []
+    for ppr in ppr_results:
+        dir_key = _directory_key(ppr.file_path, depth) if ppr.file_path else ""
+        if dir_key in clustered_dirs:
+            ppr = replace(ppr, score=ppr.score * bonus)
+        boosted.append(ppr)
+
+    boosted.sort(key=lambda r: r.score, reverse=True)
+    logger.debug(
+        "apply_directory_colocation_bonus: %d clustered dirs, %d results re-sorted",
+        len(clustered_dirs),
+        len(boosted),
+    )
+    return boosted
+
+
+# ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+def _fetch_contains_neighbors(
+    driver: Driver,
+    center_qnames: list[str],
+    max_depth: int,
+    exclude_qnames: set[str],
+) -> dict[str, list[dict]]:
+    """Fetch nodes connected to centers via CONTAINS edges via BFS.
+
+    Returns a dict mapping each center's qualified_name to a list of neighbor
+    property dicts (node_id, qualified_name, name, label, file_path, line_start,
+    line_end). Excludes nodes already in exclude_qnames.
+    """
+    if not center_qnames:
+        return {}
+
+    with driver.session() as session:
+        result = session.run(
+            """
+            UNWIND $center_qnames AS cqn
+            MATCH (center {qualified_name: cqn})-[:CONTAINS*1..%(depth)s]-(neighbor)
+            WHERE neighbor.qualified_name IS NOT NULL
+              AND NOT neighbor.qualified_name IN $exclude_qnames
+            RETURN cqn AS center_qname,
+                   id(neighbor) AS node_id,
+                   neighbor.qualified_name AS qualified_name,
+                   coalesce(neighbor.name, "") AS name,
+                   labels(neighbor)[0] AS label,
+                   coalesce(neighbor.file_path, "") AS file_path,
+                   coalesce(neighbor.line_start, 0) AS line_start,
+                   coalesce(neighbor.line_end, 0) AS line_end
+            """ % {"depth": max_depth},
+            center_qnames=center_qnames,
+            exclude_qnames=list(exclude_qnames),
+        )
+        neighbors: dict[str, list[dict]] = {}
+        for record in result:
+            cqn = record["center_qname"]
+            if cqn not in neighbors:
+                neighbors[cqn] = []
+            neighbors[cqn].append({
+                "node_id": record["node_id"],
+                "qualified_name": record["qualified_name"],
+                "name": record["name"],
+                "label": record["label"],
+                "file_path": record["file_path"],
+                "line_start": record["line_start"],
+                "line_end": record["line_end"],
+            })
+    return neighbors
+
+
+def _directory_key(file_path: str, depth: int) -> str:
+    """Return the first `depth` path segments of file_path as a directory key."""
+    parts = file_path.replace("\\", "/").split("/")
+    return "/".join(parts[:depth])
+
 
 def _deduplicate_file_entities(ppr_results: list[PPRResult]) -> list[PPRResult]:
     """Drop File results whose content is already covered by 2+ sub-entity results.
