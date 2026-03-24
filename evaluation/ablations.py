@@ -82,4 +82,28 @@ ABLATIONS: list[AblationConfig] = [
 
     # Structural expansion ablations — isolate SpIDER-inspired neighborhood expansion
     AblationConfig(name="no_structural_expansion", expand_neighbors=False),
+
+    # Uniform PPR parameter sweep — combined configurations for further tuning
+    # Uniform PPR + damping factor sweep — find optimal alpha for uniform mode
+    AblationConfig(
+        name="uniform_alpha_050",
+        ppr_config=PPRConfig(retrieval_mode="uniform", damping_factor=0.50),
+    ),
+    AblationConfig(
+        name="uniform_alpha_070",
+        ppr_config=PPRConfig(retrieval_mode="uniform", damping_factor=0.70),
+    ),
+
+    # Uniform PPR without IDF — test if IDF still has no effect with uniform mode
+    AblationConfig(
+        name="uniform_no_idf",
+        apply_idf=False,
+        ppr_config=PPRConfig(retrieval_mode="uniform"),
+    ),
+
+    # Uniform PPR with larger top-k — test if more results improve recall
+    AblationConfig(
+        name="uniform_top_k_30",
+        ppr_config=PPRConfig(retrieval_mode="uniform", top_k=30),
+    ),
 ]

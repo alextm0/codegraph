@@ -216,6 +216,9 @@ def run_instance_query(
             )
 
             n_seeds = len(seeds.seeds)
+            # Collect file paths of seed nodes for error analysis
+            seed_node_ids = list(seeds.seeds.keys())
+            seed_files = _fetch_node_file_paths(driver, seed_node_ids)
             if not seeds.seeds:
                 logger.warning("No seeds found for %s", instance_id)
                 elapsed = time.monotonic() - t0
@@ -239,6 +242,7 @@ def run_instance_query(
             from evaluation.baselines import BM25Baseline, OneHopBaseline, RandomBaseline
 
             n_seeds = 0
+            seed_files = []
             baseline_k = 300  # large k so recall@10 has enough candidates
             if retriever == "random":
                 predicted_files = RandomBaseline().run(driver, problem_statement, k=baseline_k)
@@ -263,6 +267,7 @@ def run_instance_query(
             "recall_at_10": r10,
             "mrr": mrr_val,
             "n_seeds": n_seeds,
+            "seed_files": seed_files,
             "total_nodes": total_nodes,
             "elapsed_seconds": round(elapsed, 2),
             "error": None,
@@ -336,6 +341,7 @@ def _zero_result(
         "recall_at_10": 0.0,
         "mrr": 0.0,
         "n_seeds": 0,
+        "seed_files": [],
         "total_nodes": total_nodes,
         "elapsed_seconds": round(elapsed, 2),
         "error": error,
@@ -612,6 +618,26 @@ def main() -> None:
         )
     finally:
         driver.close()
+
+
+def _fetch_node_file_paths(driver, node_ids: list[int]) -> list[str]:
+    """Return unique file_path values for a list of Neo4j node IDs.
+
+    Used to record which files seed nodes belong to, for post-run error
+    analysis. Returns an empty list if node_ids is empty or driver is None.
+    """
+    if not node_ids or driver is None:
+        return []
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (n)
+            WHERE id(n) IN $node_ids AND n.file_path IS NOT NULL
+            RETURN DISTINCT n.file_path AS file_path
+            """,
+            node_ids=node_ids,
+        )
+        return [r["file_path"] for r in result]
 
 
 if __name__ == "__main__":
