@@ -50,5 +50,5 @@ asyncio_mode = "auto"
 norecursedirs = ["tests/fixtures"]
 
 [tool.setuptools.packages.find]
-where = ["src"]
-include = ["codegraph*", "src*"]
+where = ["src", "."]
+include = ["codegraph*", "src*", "evaluation*"]
