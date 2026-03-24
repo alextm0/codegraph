@@ -6,7 +6,13 @@ import json
 import sqlite3
 from pathlib import Path
 
+from evaluation.dashboard.config import normalize_and_validate_config
 from evaluation.dashboard.models import RunConfig, RunRecord
+
+_MIGRATION_COLUMNS: dict[str, str] = {
+    "last_error_summary": "TEXT",
+    "last_command": "TEXT",
+}
 
 
 def get_db_path() -> Path:
@@ -34,13 +40,27 @@ def init_db(db_path: Path) -> None:
                 finished_at TEXT,
                 config_json TEXT,
                 pid INTEGER,
-                exit_code INTEGER
+                exit_code INTEGER,
+                last_error_summary TEXT,
+                last_command TEXT
             )
             """
         )
+        _ensure_schema(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """Add newly introduced columns when opening older DB files."""
+    columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(runs)")
+    }
+    for column_name, column_type in _MIGRATION_COLUMNS.items():
+        if column_name not in columns:
+            conn.execute(f"ALTER TABLE runs ADD COLUMN {column_name} {column_type}")
 
 
 def upsert_run(record: RunRecord, db_path: Path | None = None) -> None:
@@ -59,8 +79,8 @@ def upsert_run(record: RunRecord, db_path: Path | None = None) -> None:
         conn.execute(
             """
             INSERT OR REPLACE INTO runs
-            (id, output_dir, status, started_at, finished_at, config_json, pid, exit_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, output_dir, status, started_at, finished_at, config_json, pid, exit_code, last_error_summary, last_command)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.id,
@@ -71,6 +91,8 @@ def upsert_run(record: RunRecord, db_path: Path | None = None) -> None:
                 config_json,
                 record.pid,
                 record.exit_code,
+                record.last_error_summary,
+                record.last_command,
             ),
         )
         conn.commit()
@@ -85,13 +107,14 @@ def get_run(run_id: str, db_path: Path | None = None) -> RunRecord | None:
 
     if not db_path.exists():
         return None
+    init_db(db_path)
 
     conn = sqlite3.connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
         cursor = conn.execute(
             """
-            SELECT id, output_dir, status, started_at, finished_at, config_json, pid, exit_code
+            SELECT id, output_dir, status, started_at, finished_at, config_json, pid, exit_code, last_error_summary, last_command
             FROM runs
             WHERE id = ?
             """,
@@ -103,8 +126,11 @@ def get_run(run_id: str, db_path: Path | None = None) -> RunRecord | None:
 
         config = None
         if row["config_json"] is not None:
-            config_dict = json.loads(row["config_json"])
-            config = RunConfig(**config_dict)
+            try:
+                config_dict = json.loads(row["config_json"])
+                config = RunConfig(**config_dict)
+            except (json.JSONDecodeError, TypeError):
+                config = None
 
         return RunRecord(
             id=row["id"],
@@ -115,6 +141,8 @@ def get_run(run_id: str, db_path: Path | None = None) -> RunRecord | None:
             config=config,
             pid=row["pid"],
             exit_code=row["exit_code"],
+            last_error_summary=row["last_error_summary"],
+            last_command=row["last_command"],
         )
     finally:
         conn.close()
@@ -127,13 +155,14 @@ def list_runs(db_path: Path | None = None) -> list[RunRecord]:
 
     if not db_path.exists():
         return []
+    init_db(db_path)
 
     conn = sqlite3.connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
         cursor = conn.execute(
             """
-            SELECT id, output_dir, status, started_at, finished_at, config_json, pid, exit_code
+            SELECT id, output_dir, status, started_at, finished_at, config_json, pid, exit_code, last_error_summary, last_command
             FROM runs
             ORDER BY started_at DESC NULLS LAST
             """
@@ -144,8 +173,11 @@ def list_runs(db_path: Path | None = None) -> list[RunRecord]:
         for row in rows:
             config = None
             if row["config_json"] is not None:
-                config_dict = json.loads(row["config_json"])
-                config = RunConfig(**config_dict)
+                try:
+                    config_dict = json.loads(row["config_json"])
+                    config = RunConfig(**config_dict)
+                except (json.JSONDecodeError, TypeError):
+                    config = None
 
             runs.append(
                 RunRecord(
@@ -157,6 +189,8 @@ def list_runs(db_path: Path | None = None) -> list[RunRecord]:
                     config=config,
                     pid=row["pid"],
                     exit_code=row["exit_code"],
+                    last_error_summary=row["last_error_summary"],
+                    last_command=row["last_command"],
                 )
             )
 
@@ -227,7 +261,9 @@ def discover_existing_runs(results_root: Path, db_path: Path | None = None) -> i
                     "cache_dir": summary_data.get("cache_dir", ""),
                     "retry_errors": summary_data.get("retry_errors", False),
                 }
-                config = RunConfig(**config_dict)
+                raw_config = RunConfig(**config_dict)
+                checked = normalize_and_validate_config(raw_config)
+                config = checked.config
             except (json.JSONDecodeError, TypeError, KeyError):
                 # If we can't parse or reconstruct config, leave it as None
                 pass

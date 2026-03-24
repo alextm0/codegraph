@@ -30,6 +30,8 @@ class RunRecord:
     config: RunConfig | None = None
     pid: int | None = None
     exit_code: int | None = None
+    last_error_summary: str | None = None
+    last_command: str | None = None
 
 
 @dataclass

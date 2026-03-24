@@ -140,3 +140,37 @@ def read_log_tail(log_path: Path, n_lines: int = 100) -> list[str]:
         return []
 
     return list(lines)
+
+
+def summarize_failure(log_path: Path, exit_code: int | None, *, n_lines: int = 200) -> str:
+    """Build a short actionable error summary from the end of run.log."""
+    lines = read_log_tail(log_path, n_lines=n_lines)
+    if not lines:
+        if exit_code is None:
+            return "Run failed with no log output."
+        return f"Process exited with code {exit_code} (no log output)."
+
+    interesting: list[str] = []
+    for line in reversed(lines):
+        text = line.strip()
+        if not text:
+            continue
+        lowered = text.lower()
+        if (
+            "error:" in lowered
+            or lowered.startswith("traceback")
+            or "exception" in lowered
+            or "failed" in lowered
+            or "invalid choice" in lowered
+        ):
+            interesting.append(text)
+        if len(interesting) >= 3:
+            break
+
+    if interesting:
+        summary = " | ".join(reversed(interesting))
+    else:
+        summary = lines[-1].strip() or "Run failed (see log)."
+
+    prefix = f"exit={exit_code}: " if exit_code is not None else ""
+    return f"{prefix}{summary}"[:500]
