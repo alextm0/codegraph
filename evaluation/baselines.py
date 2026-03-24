@@ -2,9 +2,10 @@
 
 import logging
 import random
-import re
 from neo4j import Driver
 from rank_bm25 import BM25Okapi
+
+from codegraph.core.retrieval.seed_selection import tokenize as _tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +15,6 @@ def _fetch_all_files(driver: Driver) -> list[str]:
     with driver.session() as session:
         result = session.run("MATCH (f:File) RETURN f.file_path AS path")
         return [r["path"] for r in result if r["path"]]
-
-
-def _tokenize(text: str) -> list[str]:
-    """Simple whitespace + punctuation tokenizer."""
-    return [tok for tok in re.split(r"[^a-z0-9_]+", text.lower()) if tok]
 
 
 class RandomBaseline:

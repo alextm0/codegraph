@@ -1,6 +1,7 @@
 """Seed selection logic."""
 
 import logging
+import math
 import re
 from dataclasses import dataclass
 from neo4j import Driver
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_ENTITY_MATCH_WEIGHT: float = 0.6
 _DEFAULT_BM25_WEIGHT: float = 0.3
 _DEFAULT_CURRENT_FILE_WEIGHT: float = 0.1
-_DEFAULT_BM25_TOP_N: int = 5
+_DEFAULT_BM25_TOP_N: int = 10
 
 
 @dataclass(frozen=True)
@@ -109,9 +110,17 @@ def extract_seeds(
 def extract_entity_names(text: str) -> list[str]:
     """Extract likely code identifiers from free-form text.
 
-    Finds CamelCase class names (two or more words joined) and snake_case
-    function/variable names (at least one underscore separator). Common
-    English words are not matched — only patterns that look like code.
+    Finds CamelCase class names, snake_case function names, backtick-quoted
+    identifiers, and dotted module paths. Common English words are not
+    matched — only patterns that look like code identifiers.
+
+    Patterns matched:
+    - Multi-segment CamelCase: AuthService, BlogPost (2+ capitalized words)
+    - Single-word CamelCase with internal uppercase: QuerySet, HTMLParser
+    - All-caps prefix + title-case: SQLCompiler, HTTPSConnection
+    - snake_case: auth_service, validate_email (at least one underscore)
+    - Backtick-quoted: `models.QuerySet`, `validate_email`
+    - Dotted paths: models.queryset, sql.compiler (lowercase, 2-5 segments)
 
     Args:
         text: Any free-form text, e.g. a task description or issue body.
@@ -119,11 +128,23 @@ def extract_entity_names(text: str) -> list[str]:
     Returns:
         Deduplicated list preserving first-occurrence order.
     """
-    camel = re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b", text)
+    # Multi-segment CamelCase: "AuthService", "BlogPost"
+    camel_multi = re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b", text)
+    # Single-word CamelCase with internal uppercase transition: "QuerySet", "HTMLParser"
+    # Requires a lowercase->uppercase transition (not just "Fix" or "The")
+    camel_single = re.findall(r"\b[A-Z][a-z]+[A-Z]\w+\b", text)
+    # All-caps prefix followed by title-case word: "SQLCompiler", "HTTPSConnection"
+    camel_allcaps = re.findall(r"\b[A-Z]{2,}[A-Z][a-z]\w*\b", text)
+    # snake_case: at least one underscore separating lowercase segments
     snake = re.findall(r"\b[a-z][a-z0-9]*(?:_[a-z][a-z0-9]*)+\b", text)
+    # Backtick-quoted identifiers (common in GitHub issue descriptions)
+    backtick = re.findall(r"`([A-Za-z_][A-Za-z0-9_.]+)`", text)
+    # Dotted module paths: "models.queryset", "sql.compiler" (lowercase, 2-5 segments)
+    dotted = re.findall(r"\b[a-z][a-z0-9]*(?:\.[a-z][a-z0-9_]*){1,4}\b", text)
+
     seen: set[str] = set()
     result: list[str] = []
-    for name in camel + snake:
+    for name in camel_multi + camel_single + camel_allcaps + snake + backtick + dotted:
         if name not in seen:
             seen.add(name)
             result.append(name)
@@ -138,8 +159,14 @@ def prepare_bm25_index(
     if not rows:
         return None, None
 
-    # Build corpus: each doc is the tokenized signature + docstring for one node.
-    corpus_tokens = [tokenize(row["signature"] + " " + row["docstring"]) for row in rows]
+    # Build corpus: each doc is the tokenized name + file_path + signature + docstring.
+    corpus_tokens = [
+        tokenize(
+            row["name"] + " " + row["file_path"] + " " +
+            row["signature"] + " " + row["docstring"]
+        )
+        for row in rows
+    ]
     return BM25Okapi(corpus_tokens), rows
 
 
@@ -153,8 +180,17 @@ def _match_entities(
     base_weight: float,
     project_scope: str | None = None,
 ) -> list[SeedNode]:
-    """Match entity names against graph nodes by name or qualified_name."""
-    seeds: list[SeedNode] = []
+    """Match entity names against graph nodes, weighted by inverse match frequency.
+
+    Unique entity names (1 match) get full base_weight. Ambiguous names
+    (many matches, e.g. "fit" in sklearn) get reduced weight per match:
+    weight = base_weight / log2(n_matches + 1).
+
+    This prevents common method names from drowning the personalization
+    signal when multiple unrelated nodes match the same entity name.
+    """
+    # Collect all matches per entity name before assigning weights
+    matches_by_entity: dict[str, list[tuple[int, str]]] = {}
     with driver.session() as session:
         for entity in mentioned_entities:
             result = session.run(
@@ -169,17 +205,33 @@ def _match_entities(
                 name=entity,
                 scope=project_scope,
             )
-            for record in result:
-                seeds.append(
-                    SeedNode(
-                        node_id=record["nid"],
-                        qualified_name=record["qname"] or entity,
-                        weight=base_weight,
-                        source="entity_match",
-                    )
+            records = [(r["nid"], r["qname"] or entity) for r in result]
+            if records:
+                matches_by_entity[entity] = records
+
+    # Assign weights: rare names get full weight, common names get reduced weight
+    seeds: list[SeedNode] = []
+    for entity, records in matches_by_entity.items():
+        n_matches = len(records)
+        # 1 match -> 1.0, 2 matches -> 0.63, 10 matches -> 0.29, 30 matches -> 0.20
+        weight_scale = 1.0 / math.log2(n_matches + 1)
+        per_node_weight = base_weight * weight_scale
+        for nid, qname in records:
+            seeds.append(
+                SeedNode(
+                    node_id=nid,
+                    qualified_name=qname,
+                    weight=per_node_weight,
+                    source="entity_match",
                 )
+            )
+
     if not seeds:
         logger.debug("Entity match: no nodes found for %s", mentioned_entities)
+    else:
+        logger.debug(
+            "Entity match: %d seeds from %d entities", len(seeds), len(matches_by_entity)
+        )
     return seeds
 
 
@@ -192,10 +244,11 @@ def _bm25_search(
     bm25_index: BM25Okapi | None = None,
     searchable_nodes: list[dict] | None = None,
 ) -> list[SeedNode]:
-    """Score Function/Method nodes against task_description using BM25.
+    """Score graph nodes against task_description using BM25.
 
-    Fetches all Function and Method nodes with their signature and docstring,
-    builds an in-memory BM25 index, and returns the top_n matches.
+    Fetches all Function, Method, Class, and File nodes with their name,
+    file_path, signature, and docstring, builds an in-memory BM25 index,
+    and returns the top_n matches.
     """
     if bm25_index is not None and searchable_nodes is not None:
         bm25 = bm25_index
@@ -203,9 +256,15 @@ def _bm25_search(
     else:
         rows = fetch_searchable_nodes(driver, project_scope)
         if not rows:
-            logger.debug("BM25: no Function/Method nodes in graph")
+            logger.debug("BM25: no nodes in graph")
             return []
-        corpus_tokens = [tokenize(row["signature"] + " " + row["docstring"]) for row in rows]
+        corpus_tokens = [
+            tokenize(
+                row["name"] + " " + row["file_path"] + " " +
+                row["signature"] + " " + row["docstring"]
+            )
+            for row in rows
+        ]
         bm25 = BM25Okapi(corpus_tokens)
 
     query_tokens = tokenize(task_description)
@@ -295,18 +354,26 @@ def fetch_searchable_nodes(
     driver: Driver,
     project_scope: str | None = None,
 ) -> list[dict]:
-    """Fetch all Function and Method nodes with their text fields for BM25 indexing."""
+    """Fetch all searchable nodes with their text fields for BM25 indexing.
+
+    Includes Function, Method, Class, and File nodes. File paths and node
+    names are included so BM25 can match bug reports that reference module
+    paths or class names, not just function signatures and docstrings.
+    """
     rows: list[dict] = []
     with driver.session() as session:
         result = session.run(
             """
             MATCH (n)
-            WHERE (n:Function OR n:Method)
+            WHERE (n:Function OR n:Method OR n:Class OR n:File)
               AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
             RETURN id(n) AS node_id,
                    n.qualified_name AS qualified_name,
+                   coalesce(n.name, "") AS name,
+                   coalesce(n.file_path, "") AS file_path,
                    coalesce(n.signature, "") AS signature,
-                   coalesce(n.docstring, "") AS docstring
+                   coalesce(n.docstring, "") AS docstring,
+                   labels(n)[0] AS label
             """,
             scope=project_scope,
         )
@@ -315,16 +382,32 @@ def fetch_searchable_nodes(
                 {
                     "node_id": record["node_id"],
                     "qualified_name": record["qualified_name"] or "",
+                    "name": record["name"] or "",
+                    "file_path": record["file_path"] or "",
                     "signature": record["signature"] or "",
                     "docstring": record["docstring"] or "",
+                    "label": record["label"] or "",
                 }
             )
     return rows
 
 
 def tokenize(text: str) -> list[str]:
-    """Simple whitespace + punctuation tokenizer for BM25."""
-    return [tok for tok in re.split(r"[^a-z0-9_]+", text.lower()) if tok]
+    """Tokenize text for BM25 with compound identifier splitting.
+
+    Splits CamelCase identifiers ("SQLCompiler" -> "sql compiler") and
+    snake_case ("handle_subquery" -> "handle subquery") so BM25 can match
+    partial identifier tokens against bug report terms.
+
+    Returns:
+        List of lowercase tokens with length > 1 (filters single chars).
+    """
+    # Split CamelCase: "SQLCompiler" -> "SQL Compiler", "handleSubQuery" -> "handle Sub Query"
+    text = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', text)
+    text = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1 \2', text)
+    # Split on all non-alphanumeric (underscores split too, unlike before)
+    tokens = re.split(r"[^a-z0-9]+", text.lower())
+    return [tok for tok in tokens if len(tok) > 1]
 
 
 def _resolve_signal_weights(signal_weights: dict[str, float] | None) -> dict:

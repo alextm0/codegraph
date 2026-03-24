@@ -2,7 +2,7 @@
 
 import pytest
 
-from codegraph.core.retrieval.seed_selection import extract_entity_names
+from codegraph.core.retrieval.seed_selection import extract_entity_names, tokenize
 
 
 class TestExtractEntityNames:
@@ -61,3 +61,63 @@ class TestExtractEntityNames:
         assert "AuthService" in names
         assert "validate_username" in names
         assert "validate_password" in names
+
+
+class TestExtractEntityNamesEnhanced:
+    """Tests for the extended entity extraction patterns."""
+
+    def test_single_camel_with_internal_upper(self):
+        """Single-word CamelCase with internal uppercase should be extracted."""
+        names = extract_entity_names("QuerySet is broken")
+        assert "QuerySet" in names
+
+    def test_backtick_quoted_identifier(self):
+        """Backtick-quoted identifiers from GitHub markdown should be extracted."""
+        names = extract_entity_names("check `models.QuerySet` behavior")
+        assert "models.QuerySet" in names
+
+    def test_dotted_path(self):
+        """Dotted module paths should be extracted."""
+        names = extract_entity_names("the sql.compiler module has a bug")
+        assert "sql.compiler" in names
+
+    def test_all_caps_still_not_extracted(self):
+        """ALL_CAPS identifiers must remain excluded."""
+        names = extract_entity_names("check TIMEOUT_MS constant")
+        assert "TIMEOUT_MS" not in names
+
+    def test_sql_compiler_camel(self):
+        """SQLCompiler should be extracted as a single-CamelCase identifier."""
+        names = extract_entity_names("SQLCompiler is broken")
+        assert "SQLCompiler" in names
+
+
+class TestTokenize:
+    """Tests for the compound-splitting tokenizer."""
+
+    def test_camel_case_split(self):
+        """CamelCase identifiers should split into lowercase tokens."""
+        assert tokenize("SQLCompiler") == ["sql", "compiler"]
+
+    def test_pascal_case_split(self):
+        """PascalCase identifiers should split into lowercase tokens."""
+        assert tokenize("HandleSubQuery") == ["handle", "sub", "query"]
+
+    def test_snake_case_split(self):
+        """snake_case identifiers should split on underscores."""
+        assert tokenize("handle_subquery") == ["handle", "subquery"]
+
+    def test_https_connection(self):
+        """Consecutive uppercase runs followed by title case should split correctly."""
+        assert tokenize("HTTPSConnection") == ["https", "connection"]
+
+    def test_single_char_filtered(self):
+        """Single-character tokens should be filtered out."""
+        assert "a" not in tokenize("a b c word")
+
+    def test_plain_text_tokens(self):
+        """Plain English words should be tokenized normally."""
+        tokens = tokenize("fix the auth timeout bug")
+        assert "fix" in tokens
+        assert "auth" in tokens
+        assert "timeout" in tokens
