@@ -209,3 +209,17 @@ def test_run_ppr_weighted_seeds_produce_results(projected, neo4j_driver):
     assert isinstance(results, list)
     assert all(isinstance(r, PPRResult) for r in results)
     assert all(r.score >= 0.0 for r in results)
+
+
+@neo4j_required
+def test_run_ppr_weighted_mode(projected, neo4j_driver):
+    """Weighted PPR (per-seed linear combination) produces valid PPRResult objects."""
+    seed_ids = _resolve_seed_ids(neo4j_driver, ["AuthService.register"])
+    if not seed_ids:
+        pytest.skip("Seed node not found")
+    seed_weights = {nid: 1.0 / len(seed_ids) for nid in seed_ids}
+    config = PPRConfig(top_k=5, retrieval_mode="weighted")
+    results = run_ppr_from_node_ids(projected, neo4j_driver, seed_weights, config)
+    assert isinstance(results, list)
+    assert all(isinstance(r, PPRResult) for r in results)
+    assert all(r.score >= 0.0 for r in results)

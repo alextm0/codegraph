@@ -41,6 +41,21 @@ def clear_database(driver: Driver) -> int:
         return count
 
 
+def ensure_constraints(driver: Driver) -> None:
+    """Create uniqueness constraints/indexes for fast MERGE."""
+    labels = ["File", "Function", "Class", "Method"]
+    with driver.session() as session:
+        for label in labels:
+            try:
+                session.run(
+                    f"CREATE CONSTRAINT unique_{label.lower()}_qname "
+                    f"IF NOT EXISTS FOR (n:{label}) REQUIRE n.qualified_name IS UNIQUE"
+                )
+            except Exception as e:
+                logger.warning("Failed to create constraint for %s: %s", label, e)
+    logger.info("Constraints ensured.")
+
+
 def build_graph(
     driver: Driver,
     all_entities: list[FileEntities],
@@ -66,6 +81,8 @@ def build_graph(
     all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
     counts: dict[str, int] = {"File": 0, "Function": 0, "Class": 0, "Method": 0,
                                "CONTAINS": 0, "CALLS": 0, "IMPORTS": 0, "INHERITS_FROM": 0}
+
+    ensure_constraints(driver)
 
     with driver.session() as session:
         # --- Nodes ---
