@@ -61,6 +61,9 @@ ABLATIONS: list[AblationConfig] = [
     # IDF weighting ablation
     AblationConfig(name="no_idf", apply_idf=False),
 
+    # Weighted vs uniform PPR (isolates seed relevance scoring contribution)
+    AblationConfig(name="ppr_uniform", ppr_config=PPRConfig(retrieval_mode="uniform")),
+
     # Damping factor sweep
     AblationConfig(name="alpha_010", ppr_config=PPRConfig(damping_factor=0.10)),
     AblationConfig(name="alpha_015", ppr_config=PPRConfig(damping_factor=0.15)),

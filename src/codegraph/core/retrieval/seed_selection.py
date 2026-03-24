@@ -49,6 +49,8 @@ def extract_seeds(
     current_file: str | None = None,
     signal_weights: dict[str, float] | None = None,
     project_scope: str | None = None,
+    bm25_index: BM25Okapi | None = None,
+    searchable_nodes: list[dict] | None = None,
 ) -> PersonalizationVector:
     """Build a personalization vector from multiple task signals.
 
@@ -61,6 +63,8 @@ def extract_seeds(
         project_scope: Optional file path prefix. When set, only nodes whose
             file_path starts with this prefix are considered. Use to prevent
             cross-project contamination when multiple repos share one Neo4j DB.
+        bm25_index: Optional pre-built BM25Okapi index for performance.
+        searchable_nodes: Optional list of nodes corresponding to the bm25_index.
 
     Returns:
         A PersonalizationVector whose seeds sum to 1.0.
@@ -77,7 +81,13 @@ def extract_seeds(
         logger.debug("Entity match seeds: %d", len(entity_seeds))
 
     bm25_seeds = _bm25_search(
-        driver, task_description, weights["bm25"], weights["bm25_top_n"], project_scope
+        driver,
+        task_description,
+        weights["bm25"],
+        weights["bm25_top_n"],
+        project_scope,
+        bm25_index,
+        searchable_nodes,
     )
     all_seeds.extend(bm25_seeds)
     logger.debug("BM25 seeds: %d", len(bm25_seeds))
@@ -118,6 +128,19 @@ def extract_entity_names(text: str) -> list[str]:
             seen.add(name)
             result.append(name)
     return result
+
+
+def prepare_bm25_index(
+    driver: Driver, project_scope: str | None = None
+) -> tuple[BM25Okapi | None, list[dict] | None]:
+    """Fetch nodes and build a BM25 index once (for reuse across instances)."""
+    rows = fetch_searchable_nodes(driver, project_scope)
+    if not rows:
+        return None, None
+
+    # Build corpus: each doc is the tokenized signature + docstring for one node.
+    corpus_tokens = [tokenize(row["signature"] + " " + row["docstring"]) for row in rows]
+    return BM25Okapi(corpus_tokens), rows
 
 
 # ---------------------------------------------------------------------------
@@ -166,26 +189,30 @@ def _bm25_search(
     base_weight: float,
     top_n: int,
     project_scope: str | None = None,
+    bm25_index: BM25Okapi | None = None,
+    searchable_nodes: list[dict] | None = None,
 ) -> list[SeedNode]:
     """Score Function/Method nodes against task_description using BM25.
 
     Fetches all Function and Method nodes with their signature and docstring,
     builds an in-memory BM25 index, and returns the top_n matches.
     """
-    rows = _fetch_searchable_nodes(driver, project_scope)
-    if not rows:
-        logger.debug("BM25: no Function/Method nodes in graph")
-        return []
+    if bm25_index is not None and searchable_nodes is not None:
+        bm25 = bm25_index
+        rows = searchable_nodes
+    else:
+        rows = fetch_searchable_nodes(driver, project_scope)
+        if not rows:
+            logger.debug("BM25: no Function/Method nodes in graph")
+            return []
+        corpus_tokens = [tokenize(row["signature"] + " " + row["docstring"]) for row in rows]
+        bm25 = BM25Okapi(corpus_tokens)
 
-    # Build corpus: each doc is the tokenized signature + docstring for one node.
-    corpus_tokens = [_tokenize(row["signature"] + " " + row["docstring"]) for row in rows]
-    query_tokens = _tokenize(task_description)
-
+    query_tokens = tokenize(task_description)
     if not any(query_tokens):
         logger.debug("BM25: empty query tokens from task description")
         return []
 
-    bm25 = BM25Okapi(corpus_tokens)
     scores = bm25.get_scores(query_tokens)
 
     # Pair rows with scores, sort descending, take top_n
@@ -264,7 +291,7 @@ def _normalize_seeds(all_seeds: list[SeedNode]) -> PersonalizationVector:
     return PersonalizationVector(seeds=normalized)
 
 
-def _fetch_searchable_nodes(
+def fetch_searchable_nodes(
     driver: Driver,
     project_scope: str | None = None,
 ) -> list[dict]:
@@ -295,7 +322,7 @@ def _fetch_searchable_nodes(
     return rows
 
 
-def _tokenize(text: str) -> list[str]:
+def tokenize(text: str) -> list[str]:
     """Simple whitespace + punctuation tokenizer for BM25."""
     return [tok for tok in re.split(r"[^a-z0-9_]+", text.lower()) if tok]
 

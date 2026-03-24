@@ -21,7 +21,8 @@ def extract_gold_files(patch: str) -> list[str]:
 
     for line in patch.splitlines():
         # Match "--- a/path/to/file.py" or "+++ b/path/to/file.py"
-        m = re.match(r"^(?:---|\+\+\+) (?:a|b)/(.+)$", line)
+        # Handles spaces in paths and trailing info (like timestamps) by stopping at tab.
+        m = re.match(r"^(?:---|\+\+\+) [ab]/(.+?)(?:\t|$)", line)
         if not m:
             continue
         path = m.group(1).strip()

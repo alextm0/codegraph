@@ -34,11 +34,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from codegraph.core.graph.graph_builder import build_graph, clear_database
-from codegraph.core.graph.ppr import create_gds_client, run_ppr_from_node_ids
+from codegraph.core.graph.ppr import create_gds_client, run_ppr_from_node_ids, drop_projection
 from codegraph.core.graph.connection import create_driver, load_config
 from codegraph.core.parser.python_parser import create_parser, parse_directory
 from codegraph.core.retrieval.pipeline import ensure_graph_ready
-from codegraph.core.retrieval.seed_selection import extract_entity_names, extract_seeds
+from codegraph.core.retrieval.seed_selection import extract_entity_names, extract_seeds, prepare_bm25_index
 
 from evaluation.ablations import ABLATIONS, AblationConfig
 from evaluation.gold_patch_parser import extract_gold_files
@@ -133,14 +133,17 @@ def setup_group(
     cache_dir: str,
     ablation: AblationConfig,
     retriever: str,
-) -> tuple[int, str]:
+) -> tuple[int, str, any, any]:
     """Clone/cache, checkout, parse, build graph for a (repo, base_commit) group.
 
-    Returns (total_nodes, repo_path).
+    Returns (total_nodes, repo_path, bm25_index, searchable_nodes).
     Raises on any failure — caller is responsible for error handling.
     """
     repo, base_commit = group_key
     repo_url = f"https://github.com/{repo}"
+
+    # Ensure any stale projections are cleared before setup
+    drop_projection(gds)
 
     repo_path = clone_or_cache(repo_url, cache_dir)
     checkout_commit(repo_path, base_commit)
@@ -152,6 +155,9 @@ def setup_group(
     counts = build_graph(driver, entities)
     total_nodes = sum(counts.values())
 
+    bm25_index = None
+    searchable_nodes = None
+
     if retriever == "ppr":
         ensure_graph_ready(
             driver,
@@ -160,8 +166,10 @@ def setup_group(
             orientation=ablation.orientation,
             apply_idf=ablation.apply_idf,
         )
+        # Pre-build BM25 index once per group to speed up retrieval
+        bm25_index, searchable_nodes = prepare_bm25_index(driver)
 
-    return total_nodes, repo_path
+    return total_nodes, repo_path, bm25_index, searchable_nodes
 
 
 # ── Per-instance query ────────────────────────────────────────────────────────
@@ -173,6 +181,8 @@ def run_instance_query(
     total_nodes: int,
     ablation: AblationConfig,
     retriever: str,
+    bm25_index: any = None,
+    searchable_nodes: any = None,
 ) -> dict:
     """Run the retrieval query for one instance against an already-built graph.
 
@@ -196,6 +206,8 @@ def run_instance_query(
                 driver,
                 task_description=problem_statement,
                 mentioned_entities=auto_entities or None,
+                bm25_index=bm25_index,
+                searchable_nodes=searchable_nodes,
             )
 
             n_seeds = len(seeds.seeds)
@@ -280,7 +292,7 @@ def run_instance(
 
     try:
         group_key: GroupKey = (instance["repo"], instance["base_commit"])
-        total_nodes, _repo_path = setup_group(
+        total_nodes, _repo_path, bm25_index, searchable_nodes = setup_group(
             group_key, driver, gds, parser, cache_dir, ablation, retriever
         )
     except Exception as exc:
@@ -288,7 +300,9 @@ def run_instance(
         logger.error("Setup failed for %s: %s", instance_id, exc, exc_info=True)
         return _zero_result(instance_id, instance.get("repo", ""), gold_files, 0, elapsed, str(exc))
 
-    return run_instance_query(instance, driver, gds, total_nodes, ablation, retriever)
+    return run_instance_query(
+        instance, driver, gds, total_nodes, ablation, retriever, bm25_index, searchable_nodes
+    )
 
 
 def _zero_result(
@@ -380,7 +394,7 @@ def _run_grouped(
         )
 
         try:
-            total_nodes, _repo_path = setup_group(
+            total_nodes, _repo_path, bm25_index, searchable_nodes = setup_group(
                 group.key, driver, gds, parser, args.cache_dir, ablation, args.retriever
             )
             consecutive_setup_failures = 0
@@ -410,7 +424,9 @@ def _run_grouped(
             logger.info(
                 "  [%d/%d] %s", i_idx, len(group.instances), inst["instance_id"]
             )
-            result = run_instance_query(inst, driver, gds, total_nodes, ablation, args.retriever)
+            result = run_instance_query(
+                inst, driver, gds, total_nodes, ablation, args.retriever, bm25_index, searchable_nodes
+            )
             results_buffer[idx] = result
 
         next_flush_idx = _flush_ordered(results_buffer, next_flush_idx, fh)

@@ -38,10 +38,11 @@ def aggregate_metrics(instance_results: list[dict]) -> dict:
 
     Args:
         instance_results: List of per-instance result dicts, each containing
-            at minimum: recall_at_5, recall_at_10, mrr.
+            at minimum: recall_at_5, recall_at_10, mrr, error.
 
     Returns:
         Summary dict with mean and median for each metric, plus zero-recall count.
+        Includes a 'success_only' section for metrics excluding errored instances.
     """
     if not instance_results:
         return {
@@ -53,20 +54,32 @@ def aggregate_metrics(instance_results: list[dict]) -> dict:
             "mean_mrr": 0.0,
             "median_mrr": 0.0,
             "instances_with_zero_recall": 0,
+            "success_only": None,
         }
 
-    r5 = [r["recall_at_5"] for r in instance_results]
-    r10 = [r["recall_at_10"] for r in instance_results]
-    mrr_vals = [r["mrr"] for r in instance_results]
-    zero_recall = sum(1 for v in r10 if v == 0.0)
+    def _calc(results: list[dict]) -> dict:
+        r5 = [r["recall_at_5"] for r in results]
+        r10 = [r["recall_at_10"] for r in results]
+        mrr_vals = [r["mrr"] for r in results]
+        zero_recall = sum(1 for v in r10 if v == 0.0)
 
-    return {
-        "n_instances": len(instance_results),
-        "mean_recall_at_5": statistics.mean(r5),
-        "median_recall_at_5": statistics.median(r5),
-        "mean_recall_at_10": statistics.mean(r10),
-        "median_recall_at_10": statistics.median(r10),
-        "mean_mrr": statistics.mean(mrr_vals),
-        "median_mrr": statistics.median(mrr_vals),
-        "instances_with_zero_recall": zero_recall,
-    }
+        return {
+            "n_instances": len(results),
+            "mean_recall_at_5": statistics.mean(r5) if r5 else 0.0,
+            "median_recall_at_5": statistics.median(r5) if r5 else 0.0,
+            "mean_recall_at_10": statistics.mean(r10) if r10 else 0.0,
+            "median_recall_at_10": statistics.median(r10) if r10 else 0.0,
+            "mean_mrr": statistics.mean(mrr_vals) if mrr_vals else 0.0,
+            "median_mrr": statistics.median(mrr_vals) if mrr_vals else 0.0,
+            "instances_with_zero_recall": zero_recall,
+        }
+
+    summary = _calc(instance_results)
+
+    success_results = [r for r in instance_results if not r.get("error")]
+    if len(success_results) < len(instance_results):
+        summary["success_only"] = _calc(success_results)
+    else:
+        summary["success_only"] = None
+
+    return summary
