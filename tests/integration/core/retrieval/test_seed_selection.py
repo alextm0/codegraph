@@ -26,7 +26,7 @@ class TestResolveSignalWeights:
         assert weights["entity_match"] == 0.6
         assert weights["bm25"] == 0.3
         assert weights["current_file"] == 0.1
-        assert weights["bm25_top_n"] == 5
+        assert weights["bm25_top_n"] == 10
 
     def test_caller_values_override_defaults(self):
         weights = _resolve_signal_weights({"entity_match": 0.8, "bm25": 0.1})
@@ -50,7 +50,7 @@ class TestResolveSignalWeights:
 
     def test_invalid_bm25_top_n_clamped_to_default(self):
         weights = _resolve_signal_weights({"bm25_top_n": 0})
-        assert weights["bm25_top_n"] == 5  # default
+        assert weights["bm25_top_n"] == 10  # default
 
 FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 USER_AUTH = str(FIXTURES_DIR / "user_auth")

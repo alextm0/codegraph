@@ -42,6 +42,7 @@ from codegraph.core.retrieval.post_processing import (
     apply_directory_colocation_bonus,
     apply_idf_weights,
     expand_structural_neighbors,
+    inject_directory_neighbors,
 )
 from codegraph.core.retrieval.seed_selection import extract_entity_names, extract_seeds, prepare_bm25_index
 
@@ -157,7 +158,7 @@ def setup_group(
 
     clear_database(driver)
     _verify_db_empty(driver)
-    counts = build_graph(driver, entities)
+    counts = build_graph(driver, entities, create_colocation_edges=ablation.create_colocation_edges)
     total_nodes = sum(counts.values())
 
     bm25_index = None
@@ -226,13 +227,21 @@ def run_instance_query(
 
             ppr_results = run_ppr_from_node_ids(gds, driver, seeds.seeds, ablation.ppr_config)
 
-            # Structural neighborhood expansion (SpIDER-inspired, enabled by default)
+            # Structural neighborhood expansion (SpIDER-inspired, disabled by default)
             if ablation.expand_neighbors and ppr_results:
                 ppr_results = expand_structural_neighbors(
                     driver, ppr_results, problem_statement,
                     bm25_index=bm25_index, searchable_nodes=searchable_nodes,
                 )
                 ppr_results = apply_directory_colocation_bonus(ppr_results)
+
+            # Directory-based file injection — catch files PPR misses due to missing
+            # graph edges between sibling files. See DEC-021.
+            if ablation.inject_directory_files and ppr_results:
+                ppr_results = inject_directory_neighbors(
+                    driver, ppr_results, problem_statement,
+                    bm25_index=bm25_index, searchable_nodes=searchable_nodes,
+                )
 
             # predicted_files = ALL top-k PPR results ranked by score, deduplicated by file.
             predicted_files = list(dict.fromkeys(
@@ -369,6 +378,7 @@ def _remove_errored_lines(jsonl_path: Path, errored_ids: set[str]) -> None:
 def _run_grouped(
     pending: list[dict],
     all_instances: list[dict],
+    completed_ids: set[str],
     driver,
     gds,
     parser,
@@ -441,7 +451,10 @@ def _run_grouped(
 
         for i_idx, (idx, inst) in enumerate(group.instances, start=1):
             logger.info(
-                "  [%d/%d] %s", i_idx, len(group.instances), inst["instance_id"]
+                "  [%d/%d] %s (progress: %d/%d total)",
+                i_idx, len(group.instances), inst["instance_id"],
+                len(completed_ids or []) + i_idx + sum(len(g.instances) for g in groups[:g_idx-1]),
+                len(all_instances)
             )
             result = run_instance_query(
                 inst, driver, gds, total_nodes, ablation, args.retriever, bm25_index, searchable_nodes
@@ -466,7 +479,18 @@ def _run_grouped(
 
 def main() -> None:
     """CLI entry point for the benchmark runner."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    # Suppress Hugging Face Hub unauthenticated warning to avoid PowerShell "NativeCommandError" noise
+    import os
+    os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+    os.environ["HUGGINGFACE_HUB_VERBOSITY"] = "error"
+    
+    # Configure root logger to WARNING to avoid noise from external libraries (like httpx/datasets)
+    # which can cause PowerShell to report "NativeCommandError" on INFO logs.
+    logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
+    
+    # Set INFO level for our own modules
+    logging.getLogger("evaluation").setLevel(logging.INFO)
+    logging.getLogger("codegraph").setLevel(logging.INFO)
 
     parser = argparse.ArgumentParser(description="Run CodeGraph on SWE-bench Lite")
     parser.add_argument("--cache-dir", default=".codegraph_cache/repos", help="Repo clone cache")
@@ -570,6 +594,7 @@ def main() -> None:
                 grouping_diagnostics = _run_grouped(
                     pending,
                     instances,
+                    completed_ids,
                     driver,
                     gds,
                     file_parser,
@@ -580,7 +605,7 @@ def main() -> None:
             else:
                 # --no-grouping: process each instance independently.
                 for i, inst in enumerate(pending, start=1):
-                    logger.info("[%d/%d] %s", i, len(pending), inst["instance_id"])
+                    logger.info("[%d/%d] %s (progress: %d/%d total)", i, len(pending), inst["instance_id"], len(completed_ids) + i, len(instances))
                     result = run_instance(
                         inst, driver, gds, file_parser, args.cache_dir, ablation, args.retriever
                     )

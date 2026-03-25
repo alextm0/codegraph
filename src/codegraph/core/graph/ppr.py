@@ -27,10 +27,10 @@ class PPRConfig:
             "weighted" runs PPR per seed and combines by weight (retained for ablation).
     """
 
-    damping_factor: float = 0.85
+    damping_factor: float = 0.70
     max_iterations: int = 20
     tolerance: float = 1e-7
-    top_k: int = 20
+    top_k: int = 30
     retrieval_mode: Literal["weighted", "uniform"] = "uniform"
 
 
@@ -54,7 +54,7 @@ def create_gds_client(driver: Driver) -> GraphDataScience:
     return gds
 
 
-_ALL_RELATIONSHIP_TYPES = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM"]
+_ALL_RELATIONSHIP_TYPES = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM", "CO_LOCATED"]
 
 
 def project_graph(

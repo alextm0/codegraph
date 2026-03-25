@@ -153,9 +153,9 @@ def test_output_order_preserved_end_to_end(monkeypatch) -> None:
     call_order: list[str] = []
 
     def fake_setup(group_key, driver, gds, parser, cache_dir, ablation, retriever):
-        return 10, "/fake/path"
+        return 10, "/fake/path", None, None
 
-    def fake_query(instance, driver, gds, total_nodes, ablation, retriever):
+    def fake_query(instance, *a, **kw):
         iid = instance["instance_id"]
         call_order.append(iid)
         return {
@@ -183,7 +183,7 @@ def test_output_order_preserved_end_to_end(monkeypatch) -> None:
 
     with patch("evaluation.swe_bench_runner.setup_group", side_effect=fake_setup), \
          patch("evaluation.swe_bench_runner.run_instance_query", side_effect=fake_query):
-        _run_grouped(pending, all_instances, None, None, None, args, ablation, out)
+        _run_grouped(pending, all_instances, None, None, None, None, args, ablation, out)
 
     lines = [l for l in out.getvalue().splitlines() if l]
     written_ids = [json.loads(l)["instance_id"] for l in lines]

@@ -71,14 +71,14 @@ def test_setup_group_called_once_per_group() -> None:
 
     def fake_setup(group_key, driver, gds, parser, cache_dir, ablation, retriever):
         setup_calls.append(group_key)
-        return 10, "/fake"
+        return 10, "/fake", None, None
 
-    def fake_query(instance, driver, gds, total_nodes, ablation, retriever):
+    def fake_query(instance, *a, **kw):
         return _fake_query_result(instance)
 
     with patch("evaluation.swe_bench_runner.setup_group", side_effect=fake_setup), \
          patch("evaluation.swe_bench_runner.run_instance_query", side_effect=fake_query):
-        _run_grouped(pending, all_instances, None, None, None, args, ablation, out)
+        _run_grouped(pending, all_instances, None, None, None, None, args, ablation, out)
 
     # setup_group should have been called exactly twice (once per group key).
     assert len(setup_calls) == 2
@@ -102,14 +102,14 @@ def test_group_setup_failure_error_results_other_groups_unaffected() -> None:
     def fake_setup(group_key, driver, gds, parser, cache_dir, ablation, retriever):
         if group_key[0] == "owner/repoA":
             raise RuntimeError("clone failed")
-        return 10, "/fake"
+        return 10, "/fake", None, None
 
-    def fake_query(instance, driver, gds, total_nodes, ablation, retriever):
+    def fake_query(instance, *a, **kw):
         return _fake_query_result(instance)
 
     with patch("evaluation.swe_bench_runner.setup_group", side_effect=fake_setup), \
          patch("evaluation.swe_bench_runner.run_instance_query", side_effect=fake_query):
-        _run_grouped(pending, all_instances, None, None, None, args, ablation, out)
+        _run_grouped(pending, all_instances, None, None, None, None, args, ablation, out)
 
     lines = [l for l in out.getvalue().splitlines() if l]
     results = {json.loads(l)["instance_id"]: json.loads(l) for l in lines}
@@ -138,14 +138,14 @@ def test_no_grouping_vs_grouped_identical_metrics() -> None:
     out_grouped = io.StringIO()
 
     def fake_setup(group_key, *a, **kw):
-        return 42, "/fake"
+        return 42, "/fake", None, None
 
     def fake_query(instance, *a, **kw):
         return _fake_query_result(instance, total_nodes=42)
 
     with patch("evaluation.swe_bench_runner.setup_group", side_effect=fake_setup), \
          patch("evaluation.swe_bench_runner.run_instance_query", side_effect=fake_query):
-        _run_grouped(pending, all_instances, None, None, None, args, ablation, out_grouped)
+        _run_grouped(pending, all_instances, None, None, None, None, args, ablation, out_grouped)
 
     grouped_lines = [l for l in out_grouped.getvalue().splitlines() if l]
     grouped_results = sorted(
@@ -196,7 +196,7 @@ def test_circuit_breaker_triggers_after_consecutive_failures() -> None:
 
     with patch("evaluation.swe_bench_runner.setup_group", side_effect=fake_setup), \
          patch("evaluation.swe_bench_runner.run_instance_query", side_effect=fake_query):
-        _run_grouped(pending, all_instances, None, None, None, args, ablation, out)
+        _run_grouped(pending, all_instances, None, None, None, None, args, ablation, out)
 
     # Should have stopped after 3 consecutive failures.
     assert setup_call_count == 3
@@ -218,7 +218,7 @@ def test_circuit_breaker_resets_on_success() -> None:
 
     def fake_setup(group_key, *a, **kw):
         if group_key[0] == "owner/repoOK":
-            return 10, "/fake"
+            return 10, "/fake", None, None
         raise RuntimeError("setup failed")
 
     def fake_query(instance, *a, **kw):
@@ -226,7 +226,7 @@ def test_circuit_breaker_resets_on_success() -> None:
 
     with patch("evaluation.swe_bench_runner.setup_group", side_effect=fake_setup), \
          patch("evaluation.swe_bench_runner.run_instance_query", side_effect=fake_query):
-        _run_grouped(pending, all_instances, None, None, None, args, ablation, out)
+        _run_grouped(pending, all_instances, None, None, None, None, args, ablation, out)
 
     lines = [l for l in out.getvalue().splitlines() if l]
     results = {json.loads(l)["instance_id"]: json.loads(l) for l in lines}

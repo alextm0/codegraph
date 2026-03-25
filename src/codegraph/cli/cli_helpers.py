@@ -93,7 +93,12 @@ def rebuild_helper(config_path: Path) -> None:
         def graph_progress(stage: str, count: int) -> None:
             console.print(f"  {stage}: [bold]{count}[/bold]")
 
-        counts = build_graph(driver, all_entities, progress_callback=graph_progress)
+        create_colocation = raw_config.get("graph", {}).get("create_colocation_edges", False)
+        counts = build_graph(
+            driver, all_entities,
+            progress_callback=graph_progress,
+            create_colocation_edges=create_colocation,
+        )
 
         total_nodes = sum(v for k, v in counts.items() if k in ("File", "Function", "Class", "Method"))
         total_edges = sum(v for k, v in counts.items() if k in ("CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM"))

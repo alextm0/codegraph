@@ -28,6 +28,7 @@ EDGE_WEIGHTS: dict[str, float] = {
     "CALLS": 1.0,
     "IMPORTS": 1.0,
     "CONTAINS": 1.0,
+    "CO_LOCATED": 0.3,
 }
 
 
@@ -60,6 +61,7 @@ def build_graph(
     driver: Driver,
     all_entities: list[FileEntities],
     progress_callback: Callable[[str, int], None] | None = None,
+    create_colocation_edges: bool = False,
 ) -> dict[str, int]:
     """Build the full code graph from parsed entities.
 
@@ -68,6 +70,9 @@ def build_graph(
         all_entities: Parsed entities from parse_directory().
         progress_callback: Optional callable(stage_name, count) invoked after each
             write stage completes. stage_name is e.g. "File nodes", "CALLS edges".
+        create_colocation_edges: When True, create File→File CO_LOCATED edges for
+            files in the same directory (weight 0.3). Disabled by default — iteration 3
+            benchmarks showed neutral/negative effect on R@10. See DEC-020.
 
     Returns:
         Dict with creation counts keyed by node/edge type.
@@ -80,7 +85,8 @@ def build_graph(
     lookup = _build_entity_lookup(all_entities)
     all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
     counts: dict[str, int] = {"File": 0, "Function": 0, "Class": 0, "Method": 0,
-                               "CONTAINS": 0, "CALLS": 0, "IMPORTS": 0, "INHERITS_FROM": 0}
+                               "CONTAINS": 0, "CALLS": 0, "IMPORTS": 0, "INHERITS_FROM": 0,
+                               "CO_LOCATED": 0}
 
     ensure_constraints(driver)
 
@@ -110,6 +116,9 @@ def build_graph(
         _report("CALLS edges", counts["CALLS"])
         counts["IMPORTS"] = session.execute_write(_create_imports_edges, all_entities)
         _report("IMPORTS edges", counts["IMPORTS"])
+        if create_colocation_edges:
+            counts["CO_LOCATED"] = session.execute_write(_create_colocation_edges, all_entities)
+            _report("CO_LOCATED edges", counts["CO_LOCATED"])
 
     logger.info("Graph built: %s", counts)
     return counts
@@ -413,6 +422,57 @@ def _create_imports_edges(tx: ManagedTransaction, all_entities: list[FileEntitie
         MATCH (dst:File {qualified_name: e.dst})
         MERGE (src)-[r:IMPORTS]->(dst)
         SET r.weight = e.weight
+        RETURN count(r) AS created
+        """,
+        edges=edges,
+    )
+    record = result.single()
+    return record["created"] if record else 0
+
+
+def _create_colocation_edges(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+    """File -[CO_LOCATED]-> File edges between files in the same directory.
+
+    Directories with >50 files are skipped to avoid O(n^2) edge explosion in
+    large repositories (e.g. django has directories with 100+ migration files).
+    The CO_LOCATED weight (0.3) is intentionally lower than CALLS/IMPORTS (1.0)
+    so co-location is a hint, not a dominant signal. See DEC-020.
+    """
+    _MAX_DIR_SIZE = 50
+
+    # Group file paths by directory
+    from posixpath import dirname
+    dirs: dict[str, list[str]] = {}
+    for fe in all_entities:
+        fp = normalize_path(fe.file_path)
+        directory = dirname(fp)
+        dirs.setdefault(directory, []).append(fp)
+
+    edges = []
+    for directory, file_paths in dirs.items():
+        if len(file_paths) > _MAX_DIR_SIZE:
+            logger.debug(
+                "CO_LOCATED: skipping directory '%s' (%d files > max %d)",
+                directory, len(file_paths), _MAX_DIR_SIZE,
+            )
+            continue
+        if len(file_paths) < 2:
+            continue
+        # Create directed edges between all ordered pairs (a→b and b→a via MERGE)
+        weight = EDGE_WEIGHTS["CO_LOCATED"]
+        for i, src in enumerate(file_paths):
+            for dst in file_paths[i + 1:]:
+                edges.append({"src": src, "dst": dst, "weight": weight})
+
+    if not edges:
+        return 0
+    result = tx.run(
+        """
+        UNWIND $edges AS edge
+        MATCH (a:File {file_path: edge.src})
+        MATCH (b:File {file_path: edge.dst})
+        MERGE (a)-[r:CO_LOCATED]->(b)
+        SET r.weight = edge.weight
         RETURN count(r) AS created
         """,
         edges=edges,

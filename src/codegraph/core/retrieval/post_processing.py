@@ -100,7 +100,7 @@ def format_context(
 
         line_start, line_end = _get_node_lines(ppr)
         source_code = _read_source_lines(root, ppr.file_path, line_start, line_end)
-        if source_code is None:
+        if not source_code:
             continue
 
         # file_path is already relative (stored as relative by parse_directory).
@@ -313,6 +313,140 @@ def apply_directory_colocation_bonus(
         len(boosted),
     )
     return boosted
+
+
+def inject_directory_neighbors(
+    driver: Driver,
+    ppr_results: list[PPRResult],
+    task_description: str,
+    bm25_index: BM25Okapi | None = None,
+    searchable_nodes: list[dict] | None = None,
+    n_top_dirs: int = 3,
+    max_inject: int = 10,
+    decay: float = 0.3,
+) -> list[PPRResult]:
+    """Inject sibling File nodes from the top directories in the PPR results.
+
+    After PPR, the top-k may miss gold files that share a directory with
+    high-ranking results but have no explicit import/call edges connecting them.
+    This function queries File nodes by path prefix (directory co-location)
+    and appends candidates that score positively on BM25 against the task.
+
+    Unlike expand_structural_neighbors (which traverses CONTAINS edges and
+    stays within a single file), this function queries by file path prefix,
+    finding sibling files in the same directory. See DEC-021.
+
+    Args:
+        driver: Active Neo4j driver.
+        ppr_results: Current ranked results (highest score first).
+        task_description: Task text for BM25 semantic filtering.
+        bm25_index: Optional pre-built BM25 index for filtering.
+        searchable_nodes: Nodes corresponding to bm25_index rows.
+        n_top_dirs: Number of most-represented directories to expand.
+        max_inject: Maximum number of new files to inject.
+        decay: Score assigned to injected files as a fraction of the average
+            directory score (e.g., 0.3 = 30% of avg dir PPR score).
+
+    Returns:
+        Original results with injected directory neighbors appended.
+    """
+    if not ppr_results:
+        return ppr_results
+
+    # Count PPR score totals per directory to find the most relevant directories
+    dir_scores: dict[str, list[float]] = {}
+    for r in ppr_results:
+        if r.file_path and r.label == "File":
+            dir_key = _directory_key(r.file_path, depth=len(r.file_path.replace("\\", "/").split("/")) - 1)
+            dir_scores.setdefault(dir_key, []).append(r.score)
+
+    # Fall back to all node types if no File nodes in results
+    if not dir_scores:
+        for r in ppr_results:
+            if r.file_path:
+                parts = r.file_path.replace("\\", "/").split("/")
+                if len(parts) > 1:
+                    dir_key = "/".join(parts[:-1])
+                    dir_scores.setdefault(dir_key, []).append(r.score)
+
+    if not dir_scores:
+        return ppr_results
+
+    # Pick top n_top_dirs by total score
+    top_dirs = sorted(dir_scores, key=lambda d: sum(dir_scores[d]), reverse=True)[:n_top_dirs]
+
+    existing_file_paths = {r.file_path for r in ppr_results if r.file_path}
+
+    # Query Neo4j for all File nodes in those directories
+    candidates: list[dict] = []
+    with driver.session() as session:
+        for dir_prefix in top_dirs:
+            result = session.run(
+                """
+                MATCH (f:File)
+                WHERE f.file_path STARTS WITH $prefix
+                  AND NOT f.file_path IN $existing
+                RETURN id(f) AS node_id,
+                       f.qualified_name AS qualified_name,
+                       f.name AS name,
+                       f.file_path AS file_path
+                """,
+                prefix=dir_prefix + "/",
+                existing=list(existing_file_paths),
+            )
+            for record in result:
+                candidates.append({
+                    "node_id": record["node_id"],
+                    "qualified_name": record["qualified_name"] or "",
+                    "name": record["name"] or "",
+                    "file_path": record["file_path"] or "",
+                    "dir": dir_prefix,
+                })
+
+    if not candidates:
+        return ppr_results
+
+    # BM25 semantic filter: keep only candidates with positive relevance score
+    if bm25_index is not None and searchable_nodes is not None:
+        query_tokens = tokenize(task_description)
+        if query_tokens:
+            candidate_node_ids = {c["node_id"] for c in candidates}
+            # Map node_id -> BM25 score from the pre-built index
+            scores_map: dict[int, float] = {}
+            bm25_scores = bm25_index.get_scores(query_tokens)
+            for score, row in zip(bm25_scores, searchable_nodes):
+                if row.get("node_id") in candidate_node_ids and score > 0.0:
+                    scores_map[row["node_id"]] = score
+            candidates = [c for c in candidates if c["node_id"] in scores_map]
+
+    if not candidates:
+        return ppr_results
+
+    # Assign injected score: avg PPR score of the source directory × decay
+    injected: list[PPRResult] = []
+    seen_fps: set[str] = set()
+    for candidate in candidates[:max_inject]:
+        fp = candidate["file_path"]
+        if fp in seen_fps:
+            continue
+        seen_fps.add(fp)
+        dir_avg = sum(dir_scores.get(candidate["dir"], [0.0])) / max(
+            len(dir_scores.get(candidate["dir"], [1])), 1
+        )
+        injected.append(PPRResult(
+            qualified_name=candidate["qualified_name"],
+            name=candidate["name"],
+            label="File",
+            file_path=fp,
+            score=dir_avg * decay,
+        ))
+
+    logger.info(
+        "inject_directory_neighbors: %d candidates queried, %d injected",
+        len(candidates),
+        len(injected),
+    )
+    return ppr_results + injected
 
 
 # ---------------------------------------------------------------------------

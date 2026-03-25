@@ -62,10 +62,10 @@ def projected(populated_db, gds_client):
 def test_ppr_config_defaults():
     """Default PPRConfig values match the spec."""
     cfg = PPRConfig()
-    assert cfg.damping_factor == 0.85
+    assert cfg.damping_factor == 0.70
     assert cfg.max_iterations == 20
     assert cfg.tolerance == 1e-7
-    assert cfg.top_k == 20
+    assert cfg.top_k == 30
 
 
 def test_ppr_config_is_frozen():

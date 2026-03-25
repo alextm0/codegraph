@@ -30,7 +30,7 @@ def user_auth_entities(parser):
 
 def test_edge_weights_contains_all_types():
     """EDGE_WEIGHTS must define weights for all four relationship types."""
-    assert set(EDGE_WEIGHTS.keys()) == {"INHERITS_FROM", "CALLS", "IMPORTS", "CONTAINS"}
+    assert set(EDGE_WEIGHTS.keys()) == {"INHERITS_FROM", "CALLS", "IMPORTS", "CONTAINS", "CO_LOCATED"}
 
 
 def test_edge_weights_values_are_floats_in_range():

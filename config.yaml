@@ -14,11 +14,18 @@ neo4j:
   # password: removed (must be in .env or environment)
 
 ppr:
-  damping_factor: 0.85
+  damping_factor: 0.70
   max_iterations: 20
   tolerance: 1.0e-7
-  top_k: 20
+  top_k: 30
   retrieval_mode: "uniform"
+
+graph:
+  create_colocation_edges: false
+
+retrieval:
+  expand_neighbors: false
+  inject_directory_files: false
 
 seed_selection:
   entity_match_weight: 0.6
