@@ -14,11 +14,12 @@ from pathlib import Path
 # Setup logging so the demo prints INFO messages to stdout
 # ---------------------------------------------------------------------------
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(levelname)-8s %(name)s: %(message)s",
     stream=sys.stdout,
 )
 logger = logging.getLogger("demo_neo4j")
+logging.getLogger("codegraph").setLevel(logging.INFO)
 
 # ---------------------------------------------------------------------------
 # Paths

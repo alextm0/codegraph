@@ -5,11 +5,6 @@ import sys
 from pathlib import Path
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)-8s %(name)s: %(message)s",
-    stream=sys.stdout,
-)
 logger = logging.getLogger("rebuild_graph")
 
 REPO_ROOT = Path(__file__).parent.parent

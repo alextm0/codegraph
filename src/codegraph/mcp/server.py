@@ -185,10 +185,11 @@ def main() -> None:
         os.environ["CODEGRAPH_CONFIG"] = str(Path(args.config).resolve())
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING,
         format="%(levelname)-8s %(name)s: %(message)s",
         stream=sys.stderr,
     )
+    logging.getLogger("codegraph").setLevel(logging.INFO)
     mcp.run()
 
 if __name__ == "__main__":
