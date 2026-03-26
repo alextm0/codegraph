@@ -13,6 +13,8 @@ from codegraph.cli.cli_helpers import (
     stats_helper,
     doctor_helper,
     query_helper,
+    explain_helper,
+    visualize_helper,
     find_name_helper,
     find_pattern_helper,
     _initialize_db
@@ -90,6 +92,37 @@ def query(
     config_path = get_config_path(ctx)
     _initialize_db(config_path)
     query_helper(config_path, task, entities, file, top_k, budget)
+
+@app.command()
+def explain(
+    ctx: typer.Context,
+    task: str = typer.Argument(..., help="Task description to explain retrieval for"),
+    top_k: int = typer.Option(10, "--top-k", "-k", help="Number of files to explain"),
+) -> None:
+    """
+    Explain why PPR returned specific files for a task — shows seeds and reasoning paths.
+    """
+    config_path = get_config_path(ctx)
+    _initialize_db(config_path)
+    explain_helper(config_path, task, top_k)
+
+
+@app.command()
+def visualize(
+    ctx: typer.Context,
+    port: int = typer.Option(8474, "--port", "-p", help="Port to listen on"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser automatically"),
+) -> None:
+    """
+    Start the interactive CodeGraph visualizer in your browser.
+
+    Shows a D3 force graph with PPR heat scores, seed nodes, reasoning paths,
+    and a side-by-side comparison with BM25 results.
+    """
+    config_path = get_config_path(ctx)
+    _initialize_db(config_path)
+    visualize_helper(config_path, port, no_browser)
+
 
 @app.command()
 def serve(

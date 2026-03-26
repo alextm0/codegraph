@@ -39,6 +39,7 @@ def run_retrieval_pipeline(
     apply_idf: bool = True,
     expand_neighbors: bool = False,
     inject_directory_files: bool = False,
+    exclude_seed_paths: list[str] | None = None,
 ) -> list[ContextResult]:
     """Run the full retrieval pipeline and return context results."""
     if ppr_config is None:
@@ -52,7 +53,7 @@ def run_retrieval_pipeline(
     ]
 
     # Pre-build BM25 index once for reuse in seed selection and directory injection.
-    bm25_index, searchable_nodes = prepare_bm25_index(driver)
+    bm25_index, searchable_nodes = prepare_bm25_index(driver, exclude_paths=exclude_seed_paths)
 
     # Step 1: Extract seeds from the task description.
     seeds = extract_seeds(
@@ -63,6 +64,7 @@ def run_retrieval_pipeline(
         signal_weights=signal_weights,
         bm25_index=bm25_index,
         searchable_nodes=searchable_nodes,
+        exclude_paths=exclude_seed_paths,
     )
     if not seeds.seeds:
         logger.warning("Pipeline: no seeds found — returning empty context")

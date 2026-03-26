@@ -52,6 +52,7 @@ def extract_seeds(
     project_scope: str | None = None,
     bm25_index: BM25Okapi | None = None,
     searchable_nodes: list[dict] | None = None,
+    exclude_paths: list[str] | None = None,
 ) -> PersonalizationVector:
     """Build a personalization vector from multiple task signals.
 
@@ -66,6 +67,9 @@ def extract_seeds(
             cross-project contamination when multiple repos share one Neo4j DB.
         bm25_index: Optional pre-built BM25Okapi index for performance.
         searchable_nodes: Optional list of nodes corresponding to the bm25_index.
+        exclude_paths: Path substrings that disqualify a node from being a seed
+            (e.g. ["tests/", "test_"]). Excluded nodes remain in the graph and
+            can still receive PPR score via edges; they are only skipped as seeds.
 
     Returns:
         A PersonalizationVector whose seeds sum to 1.0.
@@ -89,6 +93,7 @@ def extract_seeds(
         project_scope,
         bm25_index,
         searchable_nodes,
+        exclude_paths,
     )
     all_seeds.extend(bm25_seeds)
     logger.debug("BM25 seeds: %d", len(bm25_seeds))
@@ -152,10 +157,12 @@ def extract_entity_names(text: str) -> list[str]:
 
 
 def prepare_bm25_index(
-    driver: Driver, project_scope: str | None = None
+    driver: Driver,
+    project_scope: str | None = None,
+    exclude_paths: list[str] | None = None,
 ) -> tuple[BM25Okapi | None, list[dict] | None]:
     """Fetch nodes and build a BM25 index once (for reuse across instances)."""
-    rows = fetch_searchable_nodes(driver, project_scope)
+    rows = fetch_searchable_nodes(driver, project_scope, exclude_paths)
     if not rows:
         return None, None
 
@@ -243,6 +250,7 @@ def _bm25_search(
     project_scope: str | None = None,
     bm25_index: BM25Okapi | None = None,
     searchable_nodes: list[dict] | None = None,
+    exclude_paths: list[str] | None = None,
 ) -> list[SeedNode]:
     """Score graph nodes against task_description using BM25.
 
@@ -254,7 +262,7 @@ def _bm25_search(
         bm25 = bm25_index
         rows = searchable_nodes
     else:
-        rows = fetch_searchable_nodes(driver, project_scope)
+        rows = fetch_searchable_nodes(driver, project_scope, exclude_paths)
         if not rows:
             logger.debug("BM25: no nodes in graph")
             return []
@@ -353,12 +361,17 @@ def _normalize_seeds(all_seeds: list[SeedNode]) -> PersonalizationVector:
 def fetch_searchable_nodes(
     driver: Driver,
     project_scope: str | None = None,
+    exclude_paths: list[str] | None = None,
 ) -> list[dict]:
     """Fetch all searchable nodes with their text fields for BM25 indexing.
 
     Includes Function, Method, Class, and File nodes. File paths and node
     names are included so BM25 can match bug reports that reference module
     paths or class names, not just function signatures and docstrings.
+
+    Args:
+        exclude_paths: Path substrings to exclude from results (e.g. ["tests/", "test_"]).
+            Any node whose file_path contains one of these substrings is omitted.
     """
     rows: list[dict] = []
     with driver.session() as session:
@@ -367,6 +380,8 @@ def fetch_searchable_nodes(
             MATCH (n)
             WHERE (n:Function OR n:Method OR n:Class OR n:File)
               AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
+              AND ($exclude_paths IS NULL OR
+                   NOT any(pattern IN $exclude_paths WHERE n.file_path CONTAINS pattern))
             RETURN id(n) AS node_id,
                    n.qualified_name AS qualified_name,
                    coalesce(n.name, "") AS name,
@@ -376,6 +391,7 @@ def fetch_searchable_nodes(
                    labels(n)[0] AS label
             """,
             scope=project_scope,
+            exclude_paths=exclude_paths or [],
         )
         for record in result:
             rows.append(

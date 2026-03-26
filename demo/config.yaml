@@ -1,17 +1,23 @@
-project_root: "."
+# Demo config for psf/requests v2.31.0
+# Usage:
+#   codegraph --config demo/config.yaml rebuild
+#   codegraph --config demo/config.yaml query "how does session cookie handling work"
+#   codegraph --config demo/config.yaml visualize
+
+project_root: "requests/requests"
+
 exclude_patterns:
   - "__pycache__"
   - ".venv"
   - ".git"
   - "*.pyc"
   - ".pytest_cache"
+  - "tests"
+  - "docs"
 
 neo4j:
-  # Connection settings can be provided here or via environment variables:
-  # NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
   uri: "neo4j://localhost:7687"
   username: "neo4j"
-  # password: removed (must be in .env or environment)
 
 ppr:
   damping_factor: 0.70
@@ -32,13 +38,7 @@ seed_selection:
   bm25_weight: 0.3
   current_file_weight: 0.1
   bm25_top_n: 10
-  # Path substrings that exclude nodes from seed selection.
-  # Test files match algorithm queries too literally (e.g. test_ppr_config_defaults
-  # beats ppr.py for "how does PPR work"). They stay in the graph and can still
-  # receive PPR score via edges — they're only skipped as seed candidates.
-  exclude_seed_paths:
-    - "tests/"
-    - "test_"
+  exclude_seed_paths: []
 
 mcp:
   server_name: "codegraph"

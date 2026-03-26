@@ -30,6 +30,9 @@ logs/
 .codegraph_cache/
 evaluation/results/
 
+# Demo project repos (cloned externally, not part of this codebase)
+demo/requests/
+
 # IDEs
 .vscode/
 .idea/
