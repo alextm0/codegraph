@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CodeGraph Visualizer</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a;
+      --border: rgba(255,255,255,0.08); --border-hover: rgba(255,255,255,0.18);
+      --text: #e2e8f0; --text-dim: #64748b;
+      --accent: #6366f1; --accent2: #818cf8;
+      --green: #22c55e; --yellow: #facc15; --red: #f87171;
+      --radius-lg: 12px; --radius-md: 8px; --radius-sm: 4px;
+      --shadow: 0 1px 2px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3);
+      --font: 'Inter', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    }
+    html, body, #root { height: 100%; background: var(--bg); color: var(--text);
+      font-family: var(--font); font-size: 13px; -webkit-font-smoothing: antialiased;
+      overflow: hidden; }
+
+    /* ── Layout: flex row, no fixed right column ──────────────────────────── */
+    .layout { display: flex; height: 100vh; overflow: hidden; user-select: none; }
+
+    .sidebar-left {
+      flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 12px;
+      overflow-y: auto; overflow-x: hidden;
+      border-right: 1px solid var(--border);
+      min-width: 200px; max-width: 520px;
+    }
+    /* custom scrollbar */
+    .sidebar-left::-webkit-scrollbar { width: 4px; }
+    .sidebar-left::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-left::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+    .resize-handle {
+      width: 4px; flex-shrink: 0; cursor: col-resize;
+      background: var(--border); transition: background 150ms ease;
+    }
+    .resize-handle:hover, .resize-handle.dragging { background: var(--accent); }
+
+    .graph-wrapper {
+      flex: 1; position: relative; overflow: hidden; min-width: 0; height: 100%;
+    }
+
+    /* right panel overlays the graph */
+    .right-panel {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 300px;
+      background: var(--surface); border-left: 1px solid var(--border);
+      padding: 16px; overflow-y: auto; z-index: 10;
+      transform: translateX(100%);
+      transition: transform 200ms cubic-bezier(0,0,0.2,1);
+      box-shadow: var(--shadow);
+    }
+    .right-panel.open { transform: translateX(0); }
+
+    /* ── Cards ──────────────────────────────────────────────────────────── */
+    .card { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 12px;
+      flex-shrink: 0; }
+
+    .card-title { font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px;
+      text-wrap: balance; }
+
+    /* ── Query panel ──────────────────────────────────────────────────────── */
+    textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius-md); color: var(--text); font-family: var(--font);
+      font-size: 13px; padding: 8px; resize: none; min-height: 72px; outline: none;
+      transition: border-color 180ms ease; }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--text-dim); }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center;
+      height: 34px; padding: 0 16px; background: var(--accent); color: #fff;
+      border: none; border-radius: var(--radius-md); font-family: var(--font);
+      font-size: 13px; font-weight: 500; cursor: pointer; min-width: 44px;
+      transition: opacity 150ms, transform 120ms; }
+    .btn:hover { opacity: 0.88; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    details summary { cursor: pointer; color: var(--text-dim); font-size: 11px;
+      font-weight: 500; letter-spacing: 0.05em; list-style: none; margin-top: 8px; }
+    details summary::-webkit-details-marker { display: none; }
+    .slider-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .slider-row label { color: var(--text-dim); flex: 1; font-size: 11px; }
+    .slider-row input[type=range] { flex: 2; accent-color: var(--accent); }
+    .slider-row span { font-variant-numeric: tabular-nums; font-family: var(--mono);
+      color: var(--text-dim); width: 24px; text-align: right; font-size: 11px; }
+
+    /* ── Seeds ────────────────────────────────────────────────────────────── */
+    .seed-list { display: flex; flex-direction: column; gap: 3px; }
+    .seed-row { display: flex; align-items: center; gap: 6px; padding: 3px 6px;
+      border-radius: var(--radius-sm); background: var(--surface2); min-width: 0; }
+    .seed-name { font-family: var(--mono); font-size: 10px; color: var(--text);
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .badge { font-size: 9px; font-weight: 600; padding: 1px 4px; border-radius: 3px;
+      text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; }
+    .badge-entity { background: rgba(99,102,241,0.2); color: var(--accent2); }
+    .badge-bm25 { background: rgba(100,116,139,0.15); color: var(--text-dim); }
+    .seed-weight { font-family: var(--mono); font-size: 10px; font-variant-numeric: tabular-nums slashed-zero;
+      color: var(--text-dim); flex-shrink: 0; }
+
+    /* ── Comparison: stacked rows, not 2-column grid ─────────────────────── */
+    .cmp-header { display: grid; grid-template-columns: 20px 1fr 1fr; gap: 4px;
+      padding: 0 4px 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+    .cmp-header span { font-size: 9px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-dim); }
+    .cmp-row { display: grid; grid-template-columns: 20px 1fr 1fr; gap: 4px;
+      align-items: center; padding: 2px 4px; border-radius: 3px; }
+    .cmp-row.win  { background: rgba(250,204,21,0.08); }
+    .cmp-row.miss { background: rgba(248,113,113,0.06); }
+    .cmp-rank { font-family: var(--mono); font-size: 9px; font-variant-numeric: tabular-nums;
+      color: var(--text-dim); text-align: right; }
+    .cmp-file { font-family: var(--mono); font-size: 10px; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .cmp-file.win-cell  { color: var(--yellow); }
+    .cmp-file.miss-cell { color: var(--red); }
+    .cmp-file.empty { color: var(--border); }
+    .cmp-scroll { max-height: 280px; overflow-y: auto; overflow-x: hidden; }
+    .cmp-scroll::-webkit-scrollbar { width: 3px; }
+    .cmp-scroll::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+    /* ── Skeleton ─────────────────────────────────────────────────────────── */
+    @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+    .skeleton { background: linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size: 800px 100%; animation: shimmer 1.4s infinite; border-radius: var(--radius-sm); }
+    .sk-line { height: 10px; margin-bottom: 5px; }
+    .sk-circle { border-radius: 50%; }
+
+    /* ── Empty / error ────────────────────────────────────────────────────── */
+    .empty-state { display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; gap: 16px; color: var(--text-dim); }
+    .empty-icon { font-size: 40px; opacity: 0.2; }
+    .error-banner { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3);
+      border-radius: var(--radius-md); padding: 8px 12px; color: var(--red);
+      font-size: 11px; margin-top: 6px; word-break: break-word; }
+
+    /* ── Tooltip ──────────────────────────────────────────────────────────── */
+    .tooltip { position: fixed; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 8px 10px; pointer-events: none;
+      z-index: 999; max-width: 260px; box-shadow: var(--shadow); font-size: 11px; }
+    .tt-name { font-family: var(--mono); font-weight: 600; color: var(--text);
+      margin-bottom: 2px; word-break: break-all; }
+    .tt-file { font-family: var(--mono); color: var(--text-dim); font-size: 10px;
+      margin-bottom: 4px; word-break: break-all; }
+    .tt-score { font-variant-numeric: tabular-nums slashed-zero; font-family: var(--mono); font-size: 10px; }
+    .hot{color:#f87171;} .warm{color:#fb923c;} .cool{color:#60a5fa;}
+
+    /* ── Legend ───────────────────────────────────────────────────────────── */
+    .legend { position: absolute; bottom: 12px; left: 12px;
+      background: rgba(15,17,23,0.9); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 10px 14px; font-size: 10px;
+      backdrop-filter: blur(8px); pointer-events: none; }
+    .legend-title { color: var(--text-dim); font-weight: 600; margin-bottom: 4px;
+      text-transform: uppercase; letter-spacing: 0.06em; }
+    .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; color: var(--text-dim); }
+    .lg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .lg-line { width: 20px; height: 2px; flex-shrink: 0; }
+
+    /* ── Reasoning panel ──────────────────────────────────────────────────── */
+    .rp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .close-btn { background: none; border: none; color: var(--text-dim); cursor: pointer;
+      font-size: 18px; line-height: 1; padding: 4px; border-radius: 4px; min-width: 28px;
+      min-height: 28px; display: flex; align-items: center; justify-content: center;
+      transition: color 150ms; }
+    .close-btn:hover { color: var(--text); }
+    .detail-box { background: var(--surface2); border-radius: var(--radius-sm);
+      padding: 8px; margin-bottom: 8px; }
+    .detail-lbl { font-size: 9px; color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 2px; }
+    .detail-val { font-family: var(--mono); font-size: 11px; color: var(--text); word-break: break-all; }
+    .path-chain { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+    .hop-node { background: var(--surface2); border-radius: 3px; padding: 3px 8px;
+      font-family: var(--mono); font-size: 10px; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hop-node.seed-node { border: 1px solid #d4af37; color: #d4af37; }
+    .hop-rel { font-size: 10px; color: var(--text-dim); padding-left: 4px; }
+
+    /* ── Graph loading skeleton ───────────────────────────────────────────── */
+    .graph-skeleton { display: flex; flex-wrap: wrap; gap: 24px; padding: 40px;
+      align-content: center; justify-content: center; height: 100%; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const EDGE_COLORS = { CALLS:'#22c55e', IMPORTS:'#3b82f6', CONTAINS:'#475569', INHERITS_FROM:'#f97316' };
+
+function nodeColor(score, isSeed) {
+  if (isSeed) return '#d4af37';
+  if (score <= 0) return '#2d3748';
+  return d3.interpolateRdYlBu(1 - Math.min(score / 0.4, 1));
+}
+
+function scoreClass(s) { return s > 0.3 ? 'hot' : s > 0.1 ? 'warm' : 'cool'; }
+
+function parsePath(str) {
+  if (!str || str === 'direct seed' || str.startsWith('(')) return [{type:'simple', text: str || '—'}];
+  const parts = str.split(/(\s*-\[[\w_]+\]->\s*)/);
+  return parts.filter(Boolean).map(p => {
+    const m = p.trim().match(/^-\[([\w_]+)\]->$/);
+    return m ? {type:'rel', text:m[1]} : {type:'node', text:p.trim()};
+  });
+}
+
+/* ── Tooltip (DOM-managed) ──────────────────────────────────────────────── */
+let _tt = null;
+function getTT() {
+  if (!_tt) { _tt = document.createElement('div'); _tt.className = 'tooltip'; _tt.style.display='none'; document.body.appendChild(_tt); }
+  return _tt;
+}
+function showTT(e, d) {
+  const tt = getTT();
+  const sc = d.ppr_score > 0 ? d.ppr_score.toFixed(4) : '—';
+  tt.innerHTML = `<div class="tt-name">${d.name}</div><div class="tt-file">${d.file_path||''}</div>`+
+    `<div class="tt-score ${scoreClass(d.ppr_score)}">PPR: ${sc}${d.is_seed ? ' · seed '+d.seed_weight.toFixed(3):''}</div>`;
+  tt.style.display='block'; moveTT(e);
+}
+function moveTT(e) { const tt=getTT(); tt.style.left=(e.clientX+14)+'px'; tt.style.top=(e.clientY-28)+'px'; }
+function hideTT() { getTT().style.display='none'; }
+
+/* ── D3 Graph ────────────────────────────────────────────────────────────── */
+function GraphPanel({ data, onNodeClick, loading, sidebarWidth }) {
+  const svgRef = useRef(null);
+  const simRef = useRef(null);
+  const [graphSize, setGraphSize] = React.useState({ w: 0, h: 0 });
+
+  // ResizeObserver: update graphSize whenever the wrapper div changes dimensions
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const parent = el.parentElement;
+    const ro = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      setGraphSize({ w: Math.floor(width), h: Math.floor(height) });
+    });
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    d3.select(el).selectAll('*').remove();
+    if (simRef.current) { simRef.current.stop(); simRef.current = null; }
+    if (!data || !data.nodes.length) return;
+
+    // Use dimensions from ResizeObserver; fall back to getBoundingClientRect on parent div
+    const parent = el.parentElement;
+    const rect = parent.getBoundingClientRect();
+    const W = graphSize.w || rect.width || 800;
+    const H = graphSize.h || rect.height || 600;
+
+    // Don't set width/height attrs — CSS (width/height 100%) owns the element size.
+    // Setting them would create a coordinate-system mismatch with the CSS viewport.
+    const svg = d3.select(el);
+
+    // Arrowheads
+    const defs = svg.append('defs');
+    Object.entries(EDGE_COLORS).forEach(([rel, color]) => {
+      defs.append('marker').attr('id','arr-'+rel).attr('viewBox','0 -4 8 8')
+        .attr('refX',20).attr('refY',0).attr('markerWidth',5).attr('markerHeight',5).attr('orient','auto')
+        .append('path').attr('d','M0,-4L8,0L0,4').attr('fill',color);
+    });
+
+    const g = svg.append('g');
+
+    // Zoom
+    svg.call(d3.zoom().scaleExtent([0.15,5]).on('zoom', e => g.attr('transform', e.transform)));
+
+    // Build id→node map and resolve edge references BEFORE creating selections
+    const nodeById = {};
+    data.nodes.forEach(n => { nodeById[n.id] = n; });
+
+    // Resolved edges: source/target are node objects (D3 mutates these further)
+    const links = data.edges
+      .map(e => ({ source: nodeById[e.source] || e.source, target: nodeById[e.target] || e.target, type: e.type }))
+      .filter(e => e.source && e.target && typeof e.source === 'object' && typeof e.target === 'object');
+
+    // Link lines — bound to resolved `links` array so tick can read .source.x etc.
+    const linkSel = g.append('g').attr('stroke-opacity', 0.55)
+      .selectAll('line').data(links).join('line')
+        .attr('stroke', d => EDGE_COLORS[d.type] || '#475569')
+        .attr('stroke-width', 1.5)
+        .attr('marker-end', d => `url(#arr-${d.type})`);
+
+    const nodeR = d => d.is_seed ? 11 : Math.max(5, 4 + d.ppr_score * 28);
+
+    // Hit area (invisible, larger target)
+    const hitSel = g.append('g').selectAll('circle').data(data.nodes).join('circle')
+      .attr('r', d => nodeR(d) + 9).attr('fill','transparent').attr('cursor','pointer')
+      .on('click', (e,d) => { e.stopPropagation(); onNodeClick(d); })
+      .on('mouseover', showTT).on('mousemove', moveTT).on('mouseout', hideTT);
+
+    // Visible node circles
+    const nodeSel = g.append('g').selectAll('circle').data(data.nodes).join('circle')
+      .attr('r', nodeR)
+      .attr('fill', d => nodeColor(d.ppr_score, d.is_seed))
+      .attr('stroke', d => d.is_seed ? '#d4af37' : 'rgba(255,255,255,0.12)')
+      .attr('stroke-width', d => d.is_seed ? 2.5 : 1)
+      .attr('cursor','pointer')
+      .on('click', (e,d) => { e.stopPropagation(); onNodeClick(d); })
+      .on('mouseover', showTT).on('mousemove', moveTT).on('mouseout', hideTT);
+
+    // Labels for top-PPR + seed nodes only
+    const topIds = new Set([
+      ...data.nodes.filter(d => d.is_seed).map(d => d.id),
+      ...[...data.nodes].sort((a,b) => b.ppr_score - a.ppr_score).slice(0,6).map(d => d.id),
+    ]);
+    const labelSel = g.append('g').selectAll('text')
+      .data(data.nodes.filter(d => topIds.has(d.id))).join('text')
+        .text(d => d.name.length > 22 ? d.name.slice(0,20)+'…' : d.name)
+        .attr('font-size', 9).attr('fill', '#94a3b8')
+        .attr('text-anchor','middle').attr('dy', d => nodeR(d) + 11)
+        .attr('pointer-events','none');
+
+    // Drag
+    nodeSel.call(d3.drag()
+      .on('start', (e,d) => { if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag',  (e,d) => { d.fx=e.x; d.fy=e.y; })
+      .on('end',   (e,d) => { if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+    // Simulation — no CSS transitions on tick (high-frequency)
+    const sim = d3.forceSimulation(data.nodes)
+      .force('link', d3.forceLink(links).id(d => d.id).distance(100).strength(0.35))
+      .force('charge', d3.forceManyBody().strength(-250))
+      .force('center', d3.forceCenter(W/2, H/2))
+      .force('collision', d3.forceCollide().radius(d => nodeR(d) + 12))
+      .on('tick', () => {
+        linkSel
+          .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        nodeSel.attr('cx', d => d.x).attr('cy', d => d.y);
+        hitSel.attr('cx', d => d.x).attr('cy', d => d.y);
+        labelSel.attr('x', d => d.x).attr('y', d => d.y);
+      });
+
+    simRef.current = sim;
+    return () => { sim.stop(); hideTT(); };
+  }, [data, sidebarWidth, graphSize]);
+
+  return (
+    <div className="graph-wrapper">
+      {loading && (
+        <div className="graph-skeleton">
+          {[40,60,50,70,45,55,35,65,48,58].map((s,i) => (
+            <div key={i} className="skeleton sk-circle" style={{width:s,height:s}} />
+          ))}
+        </div>
+      )}
+      {!loading && (!data || !data.nodes.length) && (
+        <div className="empty-state">
+          <div className="empty-icon">⬡</div>
+          <div style={{fontSize:13}}>Enter a task description and click Run</div>
+        </div>
+      )}
+      <svg ref={svgRef}
+        style={{width:'100%',height:'100%',display:(loading||!data||!data.nodes.length)?'none':'block'}} />
+      {data && data.nodes.length > 0 && !loading && <GraphLegend />}
+    </div>
+  );
+}
+
+function GraphLegend() {
+  return (
+    <div className="legend">
+      <div className="legend-title">Nodes</div>
+      {[['#d4af37','Seed'],['#f87171','High PPR'],['#60a5fa','Low PPR'],['#2d3748','Graph entity']].map(([c,l])=>(
+        <div key={l} className="legend-row"><div className="lg-dot" style={{background:c}}/>{l}</div>
+      ))}
+      <div className="legend-title" style={{marginTop:8}}>Edges</div>
+      {Object.entries(EDGE_COLORS).map(([rel,c])=>(
+        <div key={rel} className="legend-row"><div className="lg-line" style={{background:c}}/>{rel}</div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Right panel ─────────────────────────────────────────────────────────── */
+function ReasoningPanel({ node, pprResults, onClose }) {
+  if (!node) return null;
+  const result = pprResults.find(r => r.file_path === node.file_path);
+  const pathStr = result ? result.path : (node.is_seed ? 'direct seed' : '(no path traced)');
+  const hops = parsePath(pathStr);
+  return (
+    <>
+      <div className="rp-header">
+        <span className="card-title" style={{marginBottom:0}}>Reasoning Path</span>
+        <button className="close-btn" onClick={onClose}>×</button>
+      </div>
+      {[['Entity', node.name],['File', node.file_path||'—']].map(([lbl,val])=>(
+        <div key={lbl} className="detail-box">
+          <div className="detail-lbl">{lbl}</div>
+          <div className="detail-val">{val}</div>
+        </div>
+      ))}
+      <div className="detail-box">
+        <div className="detail-lbl">Type · PPR Score</div>
+        <div className="detail-val">
+          <span style={{color:'var(--text-dim)'}}>{node.label}</span>
+          {node.ppr_score > 0 && <span className={scoreClass(node.ppr_score)}> · {node.ppr_score.toFixed(5)}</span>}
+          {node.is_seed && <span style={{color:'#d4af37'}}> · seed {node.seed_weight.toFixed(3)}</span>}
+        </div>
+      </div>
+      <div className="card-title" style={{marginTop:12}}>Path from nearest seed</div>
+      {pathStr === 'direct seed'
+        ? <div style={{color:'#d4af37',fontFamily:'var(--mono)',fontSize:11,marginTop:6}}>⬡ Direct seed node</div>
+        : <div className="path-chain">
+            {hops.map((h,i) => h.type==='rel'
+              ? <div key={i} className="hop-rel">↓ [{h.text}]</div>
+              : <div key={i} className={`hop-node${h.text===node.name?' seed-node':''}`}>{h.text}</div>
+            )}
+          </div>
+      }
+      {result && (
+        <div style={{marginTop:12}}>
+          <div className="card-title">Rank in Results</div>
+          <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text-dim)',marginTop:4}}>
+            #{result.rank} · score {result.score.toFixed(5)}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ── Seeds panel ─────────────────────────────────────────────────────────── */
+function SeedsPanel({ seeds, loading }) {
+  return (
+    <div className="card">
+      <div className="card-title">Seeds ({loading ? '…' : seeds.length})</div>
+      {loading ? <ListSkeleton rows={4}/> : !seeds.length
+        ? <div style={{color:'var(--text-dim)',fontSize:11}}>No seeds yet.</div>
+        : <div className="seed-list">
+            {seeds.map((s,i) => (
+              <div key={i} className="seed-row">
+                <span className={`badge badge-${s.signal}`}>{s.signal}</span>
+                <span className="seed-name" title={s.name}>{s.name}</span>
+                <span className="seed-weight">{s.weight.toFixed(3)}</span>
+              </div>
+            ))}
+          </div>
+      }
+    </div>
+  );
+}
+
+/* ── Comparison panel ────────────────────────────────────────────────────── */
+function ComparisonPanel({ pprResults, bm25Results, loading }) {
+  const pprMap = Object.fromEntries(pprResults.map(r=>[r.file_path,r.rank]));
+  const bm25Map = Object.fromEntries(bm25Results.map(r=>[r.file_path,r.rank]));
+  const allFiles = [...new Set([...pprResults.map(r=>r.file_path),...bm25Results.map(r=>r.file_path)])];
+
+  return (
+    <div className="card" style={{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+      <div className="card-title">BM25 vs CodeGraph</div>
+      {loading ? <ListSkeleton rows={7}/> : !allFiles.length
+        ? <div style={{color:'var(--text-dim)',fontSize:11}}>Run a query to compare.</div>
+        : <>
+            <div className="cmp-header">
+              <span></span>
+              <span>CodeGraph</span>
+              <span>BM25</span>
+            </div>
+            <div className="cmp-scroll">
+              {allFiles.slice(0,20).map(fp => {
+                const inPpr = fp in pprMap, inBm25 = fp in bm25Map;
+                const isWin = inPpr && !inBm25;
+                const short = fp.split('/').slice(-1)[0];
+                return (
+                  <div key={fp} className={`cmp-row ${isWin?'win':(!inPpr&&inBm25)?'miss':''}`} title={fp}>
+                    <span className="cmp-rank">{isWin ? '★' : ''}</span>
+                    {inPpr
+                      ? <span className={`cmp-file${isWin?' win-cell':''}`}>#{pprMap[fp]} {short}</span>
+                      : <span className="cmp-file empty">—</span>}
+                    {inBm25
+                      ? <span className={`cmp-file${!inPpr?' miss-cell':''}`}>#{bm25Map[fp]} {short}</span>
+                      : <span className="cmp-file empty">—</span>}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{fontSize:9,color:'var(--text-dim)',marginTop:6}}>
+              ★ = PPR win (not in BM25)
+            </div>
+          </>
+      }
+    </div>
+  );
+}
+
+function ListSkeleton({ rows=5 }) {
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:5,marginTop:4}}>
+      {Array.from({length:rows}).map((_,i) => (
+        <div key={i} className="skeleton sk-line" style={{width:`${50+(i%3)*18}%`}}/>
+      ))}
+    </div>
+  );
+}
+
+/* ── App ─────────────────────────────────────────────────────────────────── */
+function App() {
+  const [task, setTask]       = useState('');
+  const [topK, setTopK]       = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+  const [seeds, setSeeds]     = useState([]);
+  const [pprResults, setPpr]  = useState([]);
+  const [bm25Results, setBm25]= useState([]);
+  const [graphData, setGraph] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [isDragging, setIsDragging] = useState(false);
+  const isResizing = useRef(false);
+
+  // Resize handle
+  const onResizeStart = useCallback(e => {
+    isResizing.current = true; setIsDragging(true); e.preventDefault();
+  }, []);
+
+  useEffect(() => {
+    const onMove = e => {
+      if (!isResizing.current) return;
+      setSidebarWidth(Math.max(200, Math.min(520, e.clientX)));
+    };
+    const onUp = () => { isResizing.current = false; setIsDragging(false); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
+
+  const runQuery = useCallback(async () => {
+    if (!task.trim()) return;
+    setLoading(true); setError(null); setSelected(null);
+    try {
+      const res = await fetch('/api/query', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({task: task.trim(), top_k: topK}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({detail: res.statusText}));
+        const d = err.detail;
+        const msg = Array.isArray(d)
+          ? d.map(x => `${(x.loc||[]).slice(-1)[0]||''}: ${x.msg}`).join(', ')
+          : (typeof d === 'string' ? d : res.statusText);
+        throw new Error(msg || 'Query failed');
+      }
+      const data = await res.json();
+      setSeeds(data.seeds||[]); setPpr(data.ppr_results||[]);
+      setBm25(data.bm25_results||[]); setGraph(data.graph||null);
+    } catch(e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, [task, topK]);
+
+  return (
+    <div className="layout">
+      {/* Left sidebar */}
+      <div className="sidebar-left" style={{width: sidebarWidth}}>
+        <div className="card">
+          <div className="card-title">Query</div>
+          <textarea value={task} onChange={e=>setTask(e.target.value)}
+            onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')runQuery();}}
+            placeholder="Describe the task… (Ctrl+Enter)" rows={4}/>
+          {error && <div className="error-banner">{error}</div>}
+          <div style={{display:'flex',gap:8,marginTop:8,alignItems:'center'}}>
+            <button className="btn" onClick={runQuery} disabled={loading||!task.trim()}>
+              {loading ? '⟳' : 'Run'}
+            </button>
+          </div>
+          <details>
+            <summary>▸ Advanced</summary>
+            <div className="slider-row">
+              <label>top_k</label>
+              <input type="range" min={5} max={30} step={1} value={topK} onChange={e=>setTopK(+e.target.value)}/>
+              <span>{topK}</span>
+            </div>
+          </details>
+        </div>
+        <SeedsPanel seeds={seeds} loading={loading}/>
+        <ComparisonPanel pprResults={pprResults} bm25Results={bm25Results} loading={loading}/>
+      </div>
+
+      {/* Resize handle */}
+      <div className={`resize-handle${isDragging?' dragging':''}`} onMouseDown={onResizeStart}/>
+
+      {/* Graph + right overlay */}
+      <div style={{flex:1, display:'flex', flexDirection:'column', position:'relative', overflow:'hidden', minWidth:0}}>
+        <GraphPanel data={graphData} onNodeClick={setSelected} loading={loading} sidebarWidth={sidebarWidth}/>
+        <div className={`right-panel${selected?' open':''}`}>
+          <ReasoningPanel node={selected} pprResults={pprResults} onClose={()=>setSelected(null)}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

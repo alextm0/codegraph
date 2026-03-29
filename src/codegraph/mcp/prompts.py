@@ -25,7 +25,7 @@ You are an expert AI pair programmer. Your primary goal is to help a developer u
 
 | Tool Name                    | Purpose & When to Use                                                                                                                                 |
 | :--------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| **`get_relevant_context`** | **Your primary search tool.** Use this first to find structurally relevant code for a task using graph-based ranking.          |
+| **`get_relevant_context`** | **Your primary search tool.** Use this first to find structurally relevant code for a task using graph-based ranking. Returns a `summary` object (result_count, total_tokens, token_budget) plus a `results` list with entity_type, relative file_path, lines [start, end], and source_code. |
 | **`query_dependencies`** | **Your deep analysis tool.** Use this to explore callers and callees for a specific code entity.      |
 | **`find_dead_code`** | **Your maintenance tool.** Use this to find functions and methods that are never called.                               |
 | **`get_graph_stats`** | **Your overview tool.** Use this to get statistics about the code dependency graph.                                                                    |
@@ -37,11 +37,11 @@ You are an expert AI pair programmer. Your primary goal is to help a developer u
 ### Nodes & Properties
 * **`File`**
     * `qualified_name` (string)
-    * `file_path` (string, absolute path)
+    * `file_path` (string, relative path from project root)
 * **`Function`**
     * `name` (string)
     * `qualified_name` (string)
-    * `file_path` (string, absolute path)
+    * `file_path` (string, relative path from project root)
     * `line_number` (int)
     * `end_line` (int)
     * `signature` (string)
@@ -49,7 +49,7 @@ You are an expert AI pair programmer. Your primary goal is to help a developer u
 * **`Class`**
     * `name` (string)
     * `qualified_name` (string)
-    * `file_path` (string, absolute path)
+    * `file_path` (string, relative path from project root)
     * `line_number` (int)
     * `end_line` (int)
     * `bases` (list)
@@ -57,7 +57,7 @@ You are an expert AI pair programmer. Your primary goal is to help a developer u
     * `name` (string)
     * `class_name` (string)
     * `qualified_name` (string)
-    * `file_path` (string, absolute path)
+    * `file_path` (string, relative path from project root)
     * `line_number` (int)
     * `end_line` (int)
     * `signature` (string)

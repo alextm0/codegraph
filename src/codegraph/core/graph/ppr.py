@@ -2,6 +2,7 @@
 
 import logging
 from dataclasses import dataclass
+from typing import Literal
 
 from neo4j import Driver
 from graphdatascience import GraphDataScience
@@ -22,12 +23,15 @@ class PPRConfig:
         max_iterations: Upper bound on the number of convergence iterations.
         tolerance: Convergence threshold — iteration stops when score delta falls below this.
         top_k: Maximum number of ranked results to return.
+        retrieval_mode: "uniform" uses a single GDS call with equal restart probability (default).
+            "weighted" runs PPR per seed and combines by weight (retained for ablation).
     """
 
-    damping_factor: float = 0.85
+    damping_factor: float = 0.70
     max_iterations: int = 20
     tolerance: float = 1e-7
-    top_k: int = 20
+    top_k: int = 30
+    retrieval_mode: Literal["weighted", "uniform"] = "uniform"
 
 
 @dataclass(frozen=True)
@@ -50,18 +54,30 @@ def create_gds_client(driver: Driver) -> GraphDataScience:
     return gds
 
 
-def project_graph(gds: GraphDataScience) -> Graph:
+_ALL_RELATIONSHIP_TYPES = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM", "CO_LOCATED"]
+
+
+def project_graph(
+    gds: GraphDataScience,
+    relationship_types: list[str] | None = None,
+    orientation: str = "UNDIRECTED",
+) -> Graph:
     """Create an in-memory GDS projection covering all node/edge types.
 
-    Uses UNDIRECTED orientation with relationship weight property.
+    Args:
+        gds: GDS client.
+        relationship_types: Edge types to include (default: all four). Useful for
+            ablation studies that drop individual edge types.
+        orientation: GDS orientation applied to all relationship types.
+            One of "UNDIRECTED", "NATURAL", or "REVERSE".
+
     Returns the GDS Graph object (supports node_count(), relationship_count()).
     """
     node_spec = ["File", "Function", "Class", "Method"]
+    rel_types = relationship_types or _ALL_RELATIONSHIP_TYPES
     relationship_spec = {
-        "CONTAINS": {"orientation": "UNDIRECTED", "properties": "weight"},
-        "CALLS": {"orientation": "UNDIRECTED", "properties": "weight"},
-        "IMPORTS": {"orientation": "UNDIRECTED", "properties": "weight"},
-        "INHERITS_FROM": {"orientation": "UNDIRECTED", "properties": "weight"},
+        rel_type: {"orientation": orientation, "properties": "weight"}
+        for rel_type in rel_types
     }
 
     # Drop any existing projection with the same name
@@ -108,6 +124,7 @@ def run_ppr(
 
     Returns top-k results sorted by descending score.
     The driver is used for Cypher lookups (seed node IDs and result properties).
+    Uses uniform weights across all seed nodes.
     """
     if config is None:
         config = PPRConfig()
@@ -117,35 +134,100 @@ def run_ppr(
         logger.warning("PPR: no seed nodes found for names %s", seed_names)
         return []
 
-    return run_ppr_from_node_ids(gds, driver, seed_ids, config)
+    uniform_weight = 1.0 / len(seed_ids)
+    seed_weights = {nid: uniform_weight for nid in seed_ids}
+    return run_ppr_from_node_ids(gds, driver, seed_weights, config)
 
 
 def run_ppr_from_node_ids(
     gds: GraphDataScience,
     driver: Driver,
-    seed_ids: list[int],
+    seed_weights: dict[int, float],
     config: PPRConfig,
 ) -> list[PPRResult]:
-    """Run PPR from explicit internal node IDs and return ranked PPRResult list.
+    """Run PPR from a weighted dict of {node_id: weight} and return ranked PPRResult list.
 
-    seed_ids are Neo4j internal integer IDs (from id(n)), which GDS requires for
-    sourceNodes. GDS stream results also return integer nodeIds mapped to id(n).
+    seed_weights maps Neo4j internal integer IDs (from id(n)) to personalization
+    weights. Delegates to weighted (per-seed linear combination) or uniform
+    (single GDS call) based on config.retrieval_mode. See DEC-008.
     """
-    projection = gds.graph.get(_PROJECTION_NAME)
+    if not seed_weights:
+        logger.warning("PPR: empty seed_weights — returning empty results")
+        return []
 
+    if config.retrieval_mode == "weighted":
+        return run_ppr_weighted(gds, driver, seed_weights, config)
+    return _run_ppr_uniform(gds, driver, seed_weights, config)
+
+
+def run_ppr_weighted(
+    gds: GraphDataScience,
+    driver: Driver,
+    seed_weights: dict[int, float],
+    config: PPRConfig,
+) -> list[PPRResult]:
+    """Weighted PPR via per-seed linear combination.
+
+    PPR is linear in the personalization vector, so:
+        PPR_weighted = sum_i(weight_i * PPR(seed_i))
+
+    This is mathematically exact, not an approximation.
+    Complexity: O(k) PPR runs, k = len(seed_weights), typically 3-6.
+    """
+    if not seed_weights:
+        raise ValueError("seed_weights must be non-empty")
+
+    total = sum(seed_weights.values())
+    if total <= 0:
+        raise ValueError("seed_weights must have positive total weight")
+    normalized = {nid: w / total for nid, w in seed_weights.items()}
+
+    combined: dict[int, float] = {}
+    for seed_id, weight in normalized.items():
+        single_scores = _run_ppr_single_seed(gds, seed_id, config)
+        for node_id, score in single_scores.items():
+            combined[node_id] = combined.get(node_id, 0.0) + weight * score
+
+    top_ids = sorted(combined, key=combined.get, reverse=True)[:config.top_k]
+    props_by_id = _fetch_all_node_properties(driver, top_ids)
+
+    results: list[PPRResult] = []
+    for nid in top_ids:
+        props = props_by_id.get(nid)
+        if props:
+            results.append(PPRResult(
+                qualified_name=props.get("qualified_name", ""),
+                name=props.get("name", ""),
+                label=props.get("label", ""),
+                file_path=props.get("file_path", ""),
+                score=combined[nid],
+                line_start=props.get("line_start", 0),
+                line_end=props.get("line_end", 0),
+            ))
+
+    logger.info("PPR (weighted, %d seeds) returned %d results (top_k=%d)",
+                len(seed_weights), len(results), config.top_k)
+    return results
+
+
+def _run_ppr_uniform(
+    gds: GraphDataScience,
+    driver: Driver,
+    seed_weights: dict[int, float],
+    config: PPRConfig,
+) -> list[PPRResult]:
+    """Single GDS call with uniform restart probability across all seeds."""
+    projection = gds.graph.get(_PROJECTION_NAME)
     result_df = gds.pageRank.stream(
         projection,
         maxIterations=config.max_iterations,
         dampingFactor=config.damping_factor,
         tolerance=config.tolerance,
-        sourceNodes=seed_ids,
+        sourceNodes=list(seed_weights.keys()),
         relationshipWeightProperty="weight",
     )
 
-    # result_df has columns: nodeId, score
     top_rows = result_df.sort_values("score", ascending=False).head(config.top_k)
-
-    # Batch-fetch all node properties in one query instead of N individual round-trips.
     node_ids = [int(row["nodeId"]) for _, row in top_rows.iterrows()]
     scores = {int(row["nodeId"]): float(row["score"]) for _, row in top_rows.iterrows()}
     props_by_id = _fetch_all_node_properties(driver, node_ids)
@@ -154,25 +236,46 @@ def run_ppr_from_node_ids(
     for node_id in node_ids:
         props = props_by_id.get(node_id)
         if props:
-            results.append(
-                PPRResult(
-                    qualified_name=props.get("qualified_name", ""),
-                    name=props.get("name", ""),
-                    label=props.get("label", ""),
-                    file_path=props.get("file_path", ""),
-                    score=scores[node_id],
-                    line_start=props.get("line_start", 0),
-                    line_end=props.get("line_end", 0),
-                )
-            )
+            results.append(PPRResult(
+                qualified_name=props.get("qualified_name", ""),
+                name=props.get("name", ""),
+                label=props.get("label", ""),
+                file_path=props.get("file_path", ""),
+                score=scores[node_id],
+                line_start=props.get("line_start", 0),
+                line_end=props.get("line_end", 0),
+            ))
 
-    logger.info("PPR returned %d results (top_k=%d)", len(results), config.top_k)
+    logger.info("PPR (uniform, %d seeds) returned %d results (top_k=%d)",
+                len(seed_weights), len(results), config.top_k)
     return results
 
 
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+def _run_ppr_single_seed(
+    gds: GraphDataScience,
+    seed_node_id: int,
+    config: PPRConfig,
+) -> dict[int, float]:
+    """Run PPR from a single seed node. Returns {nodeId: score}.
+
+    Building block for the weighted linear combination in run_ppr_weighted().
+    The GDS projection must already exist.
+    """
+    projection = gds.graph.get(_PROJECTION_NAME)
+    result_df = gds.pageRank.stream(
+        projection,
+        maxIterations=config.max_iterations,
+        dampingFactor=config.damping_factor,
+        tolerance=config.tolerance,
+        sourceNodes=[seed_node_id],
+        relationshipWeightProperty="weight",
+    )
+    return {int(row["nodeId"]): float(row["score"]) for _, row in result_df.iterrows()}
+
 
 def _resolve_seed_ids(driver: Driver, seed_names: list[str]) -> list[int]:
     """Query Neo4j for the internal node IDs of all nodes matching seed_names.

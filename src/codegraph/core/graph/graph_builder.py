@@ -1,6 +1,5 @@
 """Batch graph creation: write nodes and edges into Neo4j via UNWIND."""
 
-import builtins
 import logging
 from collections.abc import Callable
 
@@ -8,22 +7,28 @@ from neo4j import Driver, ManagedTransaction
 
 from codegraph.core.parser.models import FileEntities
 from codegraph.core.graph.utils import normalize_path
+from codegraph.core.graph.resolution import (
+    _PYTHON_BUILTINS,
+    _build_entity_lookup,
+    _build_import_map,
+    _resolve_caller,
+    _resolve_callee,
+    _resolve_base_class,
+    _resolve_import_to_file_path,
+)
 
 logger = logging.getLogger(__name__)
 
-# All names exported by the Python builtins module: built-in functions (len,
-# print, range, …), built-in types (list, dict, int, …), built-in exceptions
-# (ValueError, TypeError, …), and constants (True, False, None, …).
-# Calls to any of these are intentionally excluded from CALLS edges because
-# they refer to language primitives that are not part of the project graph.
-_PYTHON_BUILTINS: frozenset[str] = frozenset(dir(builtins))
-
-# Edge weights by relationship type
+# Base edge weights by relationship type.
+# All values are intentionally 1.0 (uniform). IDF reweighting via apply_idf_weights()
+# overwrites these before each GDS projection, so per-type differentiation here
+# would be overwritten anyway. See DEC-007.
 EDGE_WEIGHTS: dict[str, float] = {
     "INHERITS_FROM": 1.0,
     "CALLS": 1.0,
     "IMPORTS": 1.0,
     "CONTAINS": 1.0,
+    "CO_LOCATED": 0.3,
 }
 
 
@@ -37,10 +42,26 @@ def clear_database(driver: Driver) -> int:
         return count
 
 
+def ensure_constraints(driver: Driver) -> None:
+    """Create uniqueness constraints/indexes for fast MERGE."""
+    labels = ["File", "Function", "Class", "Method"]
+    with driver.session() as session:
+        for label in labels:
+            try:
+                session.run(
+                    f"CREATE CONSTRAINT unique_{label.lower()}_qname "
+                    f"IF NOT EXISTS FOR (n:{label}) REQUIRE n.qualified_name IS UNIQUE"
+                )
+            except Exception as e:
+                logger.warning("Failed to create constraint for %s: %s", label, e)
+    logger.info("Constraints ensured.")
+
+
 def build_graph(
     driver: Driver,
     all_entities: list[FileEntities],
     progress_callback: Callable[[str, int], None] | None = None,
+    create_colocation_edges: bool = False,
 ) -> dict[str, int]:
     """Build the full code graph from parsed entities.
 
@@ -49,6 +70,9 @@ def build_graph(
         all_entities: Parsed entities from parse_directory().
         progress_callback: Optional callable(stage_name, count) invoked after each
             write stage completes. stage_name is e.g. "File nodes", "CALLS edges".
+        create_colocation_edges: When True, create File→File CO_LOCATED edges for
+            files in the same directory (weight 0.3). Disabled by default — iteration 3
+            benchmarks showed neutral/negative effect on R@10. See DEC-020.
 
     Returns:
         Dict with creation counts keyed by node/edge type.
@@ -61,7 +85,10 @@ def build_graph(
     lookup = _build_entity_lookup(all_entities)
     all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
     counts: dict[str, int] = {"File": 0, "Function": 0, "Class": 0, "Method": 0,
-                               "CONTAINS": 0, "CALLS": 0, "IMPORTS": 0, "INHERITS_FROM": 0}
+                               "CONTAINS": 0, "CALLS": 0, "IMPORTS": 0, "INHERITS_FROM": 0,
+                               "CO_LOCATED": 0}
+
+    ensure_constraints(driver)
 
     with driver.session() as session:
         # --- Nodes ---
@@ -89,6 +116,9 @@ def build_graph(
         _report("CALLS edges", counts["CALLS"])
         counts["IMPORTS"] = session.execute_write(_create_imports_edges, all_entities)
         _report("IMPORTS edges", counts["IMPORTS"])
+        if create_colocation_edges:
+            counts["CO_LOCATED"] = session.execute_write(_create_colocation_edges, all_entities)
+            _report("CO_LOCATED edges", counts["CO_LOCATED"])
 
     logger.info("Graph built: %s", counts)
     return counts
@@ -400,159 +430,54 @@ def _create_imports_edges(tx: ManagedTransaction, all_entities: list[FileEntitie
     return record["created"] if record else 0
 
 
-# ---------------------------------------------------------------------------
-# Private: resolution helpers
-# ---------------------------------------------------------------------------
+def _create_colocation_edges(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+    """File -[CO_LOCATED]-> File edges between files in the same directory.
 
-def _build_entity_lookup(all_entities: list[FileEntities]) -> dict[str, list[str]]:
-    """Map simple name -> list of qualified_names for all classes, functions, and methods."""
-    lookup: dict[str, list[str]] = {}
+    Directories with >50 files are skipped to avoid O(n^2) edge explosion in
+    large repositories (e.g. django has directories with 100+ migration files).
+    The CO_LOCATED weight (0.3) is intentionally lower than CALLS/IMPORTS (1.0)
+    so co-location is a hint, not a dominant signal. See DEC-020.
+    """
+    _MAX_DIR_SIZE = 50
+
+    # Group file paths by directory
+    from posixpath import dirname
+    dirs: dict[str, list[str]] = {}
     for fe in all_entities:
-        for fn in fe.functions:
-            qname = f"{normalize_path(fn.file_path)}::{fn.name}"
-            lookup.setdefault(fn.name, []).append(qname)
-        for cls in fe.classes:
-            qname = f"{normalize_path(cls.file_path)}::{cls.name}"
-            lookup.setdefault(cls.name, []).append(qname)
-        for m in fe.methods:
-            dotted = f"{m.class_name}.{m.name}"
-            qname = f"{normalize_path(m.file_path)}::{dotted}"
-            lookup.setdefault(dotted, []).append(qname)
-            lookup.setdefault(m.name, []).append(qname)
-    return lookup
+        fp = normalize_path(fe.file_path)
+        directory = dirname(fp)
+        dirs.setdefault(directory, []).append(fp)
 
-
-def _build_import_map(fe: FileEntities, all_file_paths: list[str]) -> dict[str, str]:
-    """Map imported names -> resolved file path for a single file's imports.
-
-    E.g. if auth_service.py has `from src.utils.crypto import hash_password`,
-    returns {"hash_password": "src/utils/crypto.py"}.
-    """
-    import_map: dict[str, str] = {}
-    for imp in fe.imports:
-        resolved_path = _resolve_import_to_file_path(imp.module_path, all_file_paths)
-        if not resolved_path:
+    edges = []
+    for directory, file_paths in dirs.items():
+        if len(file_paths) > _MAX_DIR_SIZE:
+            logger.debug(
+                "CO_LOCATED: skipping directory '%s' (%d files > max %d)",
+                directory, len(file_paths), _MAX_DIR_SIZE,
+            )
             continue
-        if imp.imported_names:
-            for name in imp.imported_names:
-                import_map[name] = resolved_path
-        else:
-            # `import foo.bar` — the module itself (no specific names)
-            last_segment = imp.module_path.rsplit(".", 1)[-1]
-            import_map[last_segment] = resolved_path
-    return import_map
+        if len(file_paths) < 2:
+            continue
+        # Create directed edges between all ordered pairs (a→b and b→a via MERGE)
+        weight = EDGE_WEIGHTS["CO_LOCATED"]
+        for i, src in enumerate(file_paths):
+            for dst in file_paths[i + 1:]:
+                edges.append({"src": src, "dst": dst, "weight": weight})
 
-
-def _resolve_caller(caller_name: str, file_path: str) -> str | None:
-    """Resolve caller_name to a qualified_name using the file context."""
-    norm_fp = normalize_path(file_path)
-    if caller_name == "<module>":
-        return norm_fp  # File node
-    # Try "ClassName.method_name" pattern
-    if "." in caller_name:
-        class_name, method_name = caller_name.split(".", 1)
-        return f"{norm_fp}::{class_name}.{method_name}"
-    # Top-level function
-    return f"{norm_fp}::{caller_name}"
-
-
-def _resolve_callee(
-    callee_name: str,
-    lookup: dict[str, list[str]],
-    file_path: str,
-    import_map: dict[str, str],
-) -> str | None:
-    """Resolve callee_name to a qualified_name using import context and entity lookup.
-
-    Priority: imported definition > same-file definition > unique global match.
-    """
-    candidates = lookup.get(callee_name, [])
-    if not candidates:
-        return None
-
-    # 1. Was callee_name imported? Check the file's import map.
-    imported_file = import_map.get(callee_name)
-    if imported_file:
-        for qname in candidates:
-            if qname.startswith(imported_file + "::"):
-                return qname
-
-    # 2. Is callee_name defined in the same file?
-    norm_fp = normalize_path(file_path)
-    for qname in candidates:
-        if qname.startswith(norm_fp + "::"):
-            return qname
-
-    # 3. Only one candidate globally — safe to use.
-    if len(candidates) == 1:
-        return candidates[0]
-
-    # Ambiguous — log and skip rather than guess wrong.
-    logger.debug(
-        "Ambiguous callee '%s': %d candidates, skipping", callee_name, len(candidates),
+    if not edges:
+        return 0
+    result = tx.run(
+        """
+        UNWIND $edges AS edge
+        MATCH (a:File {file_path: edge.src})
+        MATCH (b:File {file_path: edge.dst})
+        MERGE (a)-[r:CO_LOCATED]->(b)
+        SET r.weight = edge.weight
+        RETURN count(r) AS created
+        """,
+        edges=edges,
     )
-    return None
+    record = result.single()
+    return record["created"] if record else 0
 
 
-def _resolve_base_class(
-    base_name: str,
-    lookup: dict[str, list[str]],
-    file_path: str,
-    import_map: dict[str, str],
-) -> str | None:
-    """Resolve a base class name using the same priority as _resolve_callee.
-
-    Priority: imported definition > same-file definition > unique global match.
-    """
-    candidates = lookup.get(base_name, [])
-    if not candidates:
-        return None
-
-    imported_file = import_map.get(base_name)
-    if imported_file:
-        for qname in candidates:
-            if qname.startswith(imported_file + "::"):
-                return qname
-
-    norm_fp = normalize_path(file_path)
-    for qname in candidates:
-        if qname.startswith(norm_fp + "::"):
-            return qname
-
-    if len(candidates) == 1:
-        return candidates[0]
-
-    logger.debug("Ambiguous base class '%s': %d candidates, skipping", base_name, len(candidates))
-    return None
-
-
-def _resolve_import_to_file_path(module_path: str, all_file_paths: list[str]) -> str | None:
-    """Find a known file path that corresponds to the given dotted module path.
-
-    Strategy: convert 'user_auth.models.user' to 'models/user.py' by progressively
-    stripping leading package segments and checking whether any normalized file path
-    ends with the resulting suffix. For example, given file paths like
-    ['user_auth/models/user.py'], the suffix 'models/user.py' will match.
-
-    Args:
-        module_path: Dotted module path, e.g. 'user_auth.services.auth_service'.
-        all_file_paths: Pre-normalized (forward-slash) file paths from the parsed repo.
-
-    Returns:
-        The matching file path, or None if no match is found.
-    """
-    if not module_path:
-        return None
-    parts = module_path.lstrip(".").split(".")
-    # Try progressively fewer leading segments stripped (handles different package depths)
-    for skip in range(1, len(parts)):
-        suffix = "/".join(parts[skip:]) + ".py"
-        for fp in all_file_paths:
-            if fp == suffix or fp.endswith("/" + suffix):
-                return fp
-    # Fallback: try matching the full module path as a suffix
-    suffix = "/".join(parts) + ".py"
-    for fp in all_file_paths:
-        if fp == suffix or fp.endswith("/" + suffix):
-            return fp
-    return None

@@ -14,11 +14,12 @@ from pathlib import Path
 # Setup logging so the demo prints INFO messages to stdout
 # ---------------------------------------------------------------------------
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(levelname)-8s %(name)s: %(message)s",
     stream=sys.stdout,
 )
 logger = logging.getLogger("demo_neo4j")
+logging.getLogger("codegraph").setLevel(logging.INFO)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -33,7 +34,7 @@ def main() -> None:
     # -----------------------------------------------------------------------
     logger.info("=== Step 1: Parse user_auth fixture with tree-sitter ===")
 
-    from src.parser.python_parser import create_parser, parse_directory
+    from codegraph.core.parser.python_parser import create_parser, parse_directory
 
     parser = create_parser()
     all_entities = parse_directory(str(USER_AUTH), parser)
@@ -56,8 +57,8 @@ def main() -> None:
     logger.info("")
     logger.info("=== Step 2: Connect to Neo4j ===")
 
-    from src.graph.connection import load_config, create_driver, verify_connectivity, close_driver
-    from src.graph.ppr import PPRConfig, create_gds_client, project_graph, drop_projection, run_ppr
+    from codegraph.core.graph.connection import load_config, create_driver, verify_connectivity, close_driver
+    from codegraph.core.graph.ppr import PPRConfig, create_gds_client, project_graph, drop_projection, run_ppr
 
     config = load_config(REPO_ROOT / "config.yaml")
     driver = create_driver(config)
@@ -79,7 +80,7 @@ def main() -> None:
         logger.info("")
         logger.info("=== Step 3: Clear database and build code graph ===")
 
-        from src.graph.graph_builder import clear_database, build_graph
+        from codegraph.core.graph.graph_builder import clear_database, build_graph
 
         cleared = clear_database(driver)
         logger.info("Cleared %d existing nodes", cleared)
@@ -95,7 +96,7 @@ def main() -> None:
         logger.info("")
         logger.info("=== Step 4: Read-only queries ===")
 
-        from src.graph.queries import (
+        from codegraph.core.graph.queries import (
             count_nodes_by_label,
             count_edges_by_type,
             get_neighbors,
@@ -105,7 +106,7 @@ def main() -> None:
             get_inheritance_chain,
             find_node_by_name,
         )
-        from src.graph.utils import normalize_path
+        from codegraph.core.graph.utils import normalize_path
 
         node_counts = count_nodes_by_label(driver)
         logger.info("Node counts by label:")
@@ -205,7 +206,7 @@ def main() -> None:
         logger.info("")
         logger.info("=== Step 6: Seed node selection ===")
 
-        from src.retrieval.seed_selection import extract_seeds
+        from codegraph.core.retrieval.seed_selection import extract_seeds
 
         task = "fix the user registration validation bug"
         logger.info("Task: '%s'", task)
@@ -235,7 +236,7 @@ def main() -> None:
         logger.info("")
         logger.info("=== Step 7: IDF edge reweighting + PPR from seed vector ===")
 
-        from src.retrieval.post_processing import apply_idf_weights
+        from codegraph.core.retrieval.post_processing import apply_idf_weights
 
         updated = apply_idf_weights(driver)
         logger.info("IDF weights applied to %d edges", updated)
@@ -245,10 +246,10 @@ def main() -> None:
         projection = project_graph(gds)
 
         if pv.seeds:
-            from src.graph.ppr import run_ppr_from_node_ids
+            from codegraph.core.graph.ppr import run_ppr_from_node_ids
 
             cfg = PPRConfig(top_k=10)
-            ppr_results = run_ppr_from_node_ids(gds, driver, list(pv.seeds.keys()), cfg)
+            ppr_results = run_ppr_from_node_ids(gds, driver, pv.seeds, cfg)
 
             logger.info("")
             logger.info("Top-%d PPR results from seed vector:", cfg.top_k)
@@ -269,7 +270,7 @@ def main() -> None:
             logger.info("")
             logger.info("=== Step 8: format_context (token budget=500) ===")
 
-            from src.retrieval.post_processing import format_context
+            from codegraph.core.retrieval.post_processing import format_context
 
             # File paths in the graph are absolute; pathlib discards project_root
             # when file_path is itself absolute, so any value works here.

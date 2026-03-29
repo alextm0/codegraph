@@ -20,6 +20,24 @@ class NodeInfo:
     file_path: str
 
 
+@dataclass(frozen=True)
+class NodeInfoWithRel(NodeInfo):
+    """NodeInfo extended with the relationship type connecting it to the queried entity."""
+
+    relationship_type: str = ""
+
+
+@dataclass(frozen=True)
+class DeadCodeNode:
+    """A Function or Method node with no incoming CALLS edges."""
+
+    qualified_name: str
+    name: str
+    label: str
+    file_path: str
+    line_number: int
+
+
 def count_nodes_by_label(driver: Driver | None = None) -> dict[str, int]:
     """Return a mapping of node label -> count."""
     if driver is None:
@@ -182,7 +200,7 @@ def query_entity_dependencies(
     entity_name: str = "",
     direction: str = "both",
     depth: int = 1,
-) -> list[NodeInfo]:
+) -> list[NodeInfoWithRel]:
     """Return dependency nodes for a code entity.
 
     Args:
@@ -192,7 +210,7 @@ def query_entity_dependencies(
         depth: How many hops to follow. 1 = direct only, 2 = include indirect.
 
     Returns:
-        Deduplicated list of NodeInfo for all found dependencies.
+        Deduplicated list of NodeInfoWithRel for all found dependencies.
     """
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -209,11 +227,11 @@ def query_entity_dependencies(
     else:  # "both"
         cypher = _both_directions_cypher(depth)
 
-    results: list[NodeInfo] = []
+    results: list[NodeInfoWithRel] = []
     with driver.session() as session:
         records = session.run(cypher, name=entity_name)
         for record in records:
-            results.append(_row_to_node_info(record))
+            results.append(_row_to_node_info_with_rel(record))
 
     logger.debug(
         "query_entity_dependencies: found %d nodes for '%s' (direction=%s, depth=%d)",
@@ -225,7 +243,7 @@ def query_entity_dependencies(
     return results
 
 
-def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[NodeInfo]:
+def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[DeadCodeNode]:
     """Return Function and Method nodes that have zero incoming CALLS edges.
 
     These are candidates for dead code — they are never called by any other
@@ -237,7 +255,7 @@ def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[NodeIn
         limit: Maximum number of results to return.
 
     Returns:
-        List of NodeInfo for uncalled Function/Method nodes, sorted by file.
+        List of DeadCodeNode for uncalled Function/Method nodes, sorted by file.
     """
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -250,13 +268,23 @@ def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[NodeIn
             RETURN n.qualified_name AS qualified_name,
                    n.name AS name,
                    labels(n)[0] AS label,
-                   n.file_path AS file_path
+                   n.file_path AS file_path,
+                   coalesce(n.line_number, 0) AS line_number
             ORDER BY file_path, qualified_name
             LIMIT $limit
             """,
             limit=limit,
         )
-        return [_row_to_node_info(r) for r in result]
+        return [
+            DeadCodeNode(
+                qualified_name=r["qualified_name"] or "",
+                name=r["name"] or "",
+                label=r["label"] or "",
+                file_path=r["file_path"] or "",
+                line_number=r["line_number"] or 0,
+            )
+            for r in result
+        ]
 
 
 def get_most_connected_files(driver: Driver | None = None, limit: int = 10) -> list[dict]:
@@ -306,13 +334,15 @@ def _downstream_cypher(depth: int) -> str:
     return f"""
     MATCH (entity)
     WHERE entity.name = $name OR entity.qualified_name = $name
-    MATCH (entity)-[:CALLS|IMPORTS*1..{depth}]->(dep)
+    MATCH p = (entity)-[:CALLS|IMPORTS*1..{depth}]->(dep)
     WHERE dep <> entity
-    RETURN DISTINCT
-        dep.qualified_name AS qualified_name,
-        dep.name           AS name,
-        labels(dep)[0]     AS label,
-        dep.file_path      AS file_path
+    WITH dep, relationships(p)[0] AS first_rel
+    RETURN
+        dep.qualified_name   AS qualified_name,
+        dep.name             AS name,
+        labels(dep)[0]       AS label,
+        dep.file_path        AS file_path,
+        type(first_rel)      AS relationship_type
     ORDER BY qualified_name
     """
 
@@ -322,13 +352,15 @@ def _upstream_cypher(depth: int) -> str:
     return f"""
     MATCH (entity)
     WHERE entity.name = $name OR entity.qualified_name = $name
-    MATCH (caller)-[:CALLS|IMPORTS*1..{depth}]->(entity)
+    MATCH p = (caller)-[:CALLS|IMPORTS*1..{depth}]->(entity)
     WHERE caller <> entity
-    RETURN DISTINCT
+    WITH caller, relationships(p)[0] AS first_rel
+    RETURN
         caller.qualified_name AS qualified_name,
         caller.name           AS name,
         labels(caller)[0]     AS label,
-        caller.file_path      AS file_path
+        caller.file_path      AS file_path,
+        type(first_rel)       AS relationship_type
     ORDER BY qualified_name
     """
 
@@ -338,13 +370,15 @@ def _both_directions_cypher(depth: int) -> str:
     return f"""
     MATCH (entity)
     WHERE entity.name = $name OR entity.qualified_name = $name
-    MATCH (neighbor)-[:CALLS|IMPORTS*1..{depth}]-(entity)
+    MATCH p = (neighbor)-[:CALLS|IMPORTS*1..{depth}]-(entity)
     WHERE neighbor <> entity
-    RETURN DISTINCT
+    WITH neighbor, relationships(p)[0] AS first_rel
+    RETURN
         neighbor.qualified_name AS qualified_name,
         neighbor.name           AS name,
         labels(neighbor)[0]     AS label,
-        neighbor.file_path      AS file_path
+        neighbor.file_path      AS file_path,
+        type(first_rel)         AS relationship_type
     ORDER BY qualified_name
     """
 
@@ -357,3 +391,146 @@ def _row_to_node_info(record: Any) -> NodeInfo:
         label=record["label"] or "",
         file_path=record["file_path"] or "",
     )
+
+
+def _row_to_node_info_with_rel(record: Any) -> NodeInfoWithRel:
+    """Convert a Neo4j record row (with relationship_type) to a NodeInfoWithRel."""
+    return NodeInfoWithRel(
+        qualified_name=record["qualified_name"] or "",
+        name=record["name"] or "",
+        label=record["label"] or "",
+        file_path=record["file_path"] or "",
+        relationship_type=record["relationship_type"] or "",
+    )
+
+
+def trace_path_to_seed(
+    driver: Driver,
+    seed_ids: list[int],
+    file_path: str,
+    max_hops: int = 6,
+) -> str:
+    """Find the shortest path from any seed node to the given file in the graph.
+
+    Returns a human-readable string like:
+      "DateField -[CONTAINS]-> fields.py"
+    or "(no path traced)" if unreachable within max_hops.
+    If the file_path IS a seed (direct match), returns "direct seed".
+    Returns "(trace error)" on any exception.
+    """
+    try:
+        return _run_trace_query(driver, seed_ids, file_path, max_hops)
+    except Exception as exc:
+        logger.debug("trace_path_to_seed failed for '%s': %s", file_path, exc)
+        return "(trace error)"
+
+
+def _run_trace_query(
+    driver: Driver,
+    seed_ids: list[int],
+    file_path: str,
+    max_hops: int,
+) -> str:
+    """Execute the shortest-path Cypher and format the result."""
+    # Check if the target file is itself a seed node
+    with driver.session() as session:
+        direct = session.run(
+            "MATCH (f:File {file_path: $fp}) WHERE id(f) IN $ids RETURN count(f) AS cnt",
+            fp=file_path,
+            ids=seed_ids,
+        ).single()
+        if direct and direct["cnt"] > 0:
+            return "direct seed"
+
+        result = session.run(
+            f"""
+            MATCH (seed) WHERE id(seed) IN $seed_ids
+            MATCH (target:File {{file_path: $file_path}})
+            MATCH p = shortestPath((seed)-[*..{max_hops}]-(target))
+            RETURN
+                [node IN nodes(p) | coalesce(node.name, node.file_path, '')] AS node_names,
+                [rel IN relationships(p) | type(rel)] AS rel_types,
+                length(p) AS path_length
+            ORDER BY path_length ASC
+            LIMIT 1
+            """,
+            seed_ids=seed_ids,
+            file_path=file_path,
+        ).single()
+
+    if not result:
+        return "(no path traced)"
+
+    return _format_path(result["node_names"], result["rel_types"])
+
+
+def get_subgraph_for_nodes(
+    driver: Driver,
+    qualified_names: list[str],
+) -> dict[str, list[dict]]:
+    """Return all nodes and direct edges between the given qualified names.
+
+    Designed for D3 force-graph visualization. Deduplicates nodes and returns
+    both source and target in every edge.
+    """
+    if not qualified_names:
+        return {"nodes": [], "edges": []}
+
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (a)-[r]-(b)
+            WHERE a.qualified_name IN $ids AND b.qualified_name IN $ids
+            RETURN
+                a.qualified_name AS src_id,
+                a.name           AS src_name,
+                labels(a)[0]     AS src_label,
+                a.file_path      AS src_file,
+                type(r)          AS rel_type,
+                b.qualified_name AS tgt_id,
+                b.name           AS tgt_name,
+                labels(b)[0]     AS tgt_label,
+                b.file_path      AS tgt_file
+            """,
+            ids=qualified_names,
+        )
+        rows = result.data()
+
+    nodes_by_id: dict[str, dict] = {}
+    edges: list[dict] = []
+    seen_edges: set[frozenset] = set()
+
+    for row in rows:
+        for prefix, qname in [("src", row["src_id"]), ("tgt", row["tgt_id"])]:
+            if qname not in nodes_by_id:
+                nodes_by_id[qname] = {
+                    "id": qname,
+                    "name": row[f"{prefix}_name"],
+                    "label": row[f"{prefix}_label"] or "Unknown",
+                    "file_path": row[f"{prefix}_file"] or "",
+                }
+
+        edge_key: frozenset = frozenset({row["src_id"], row["tgt_id"], row["rel_type"]})
+        if edge_key not in seen_edges:
+            seen_edges.add(edge_key)
+            edges.append(
+                {
+                    "source": row["src_id"],
+                    "target": row["tgt_id"],
+                    "type": row["rel_type"],
+                }
+            )
+
+    return {"nodes": list(nodes_by_id.values()), "edges": edges}
+
+
+def _format_path(node_names: list[str], rel_types: list[str]) -> str:
+    """Interleave node names and relationship types into a readable path string."""
+    _MAX_NODE_LEN = 30
+    parts: list[str] = []
+    for i, name in enumerate(node_names):
+        truncated = name[:_MAX_NODE_LEN] if len(name) > _MAX_NODE_LEN else name
+        parts.append(truncated)
+        if i < len(rel_types):
+            parts.append(f"-[{rel_types[i]}]->")
+    return " ".join(parts)

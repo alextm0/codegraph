@@ -5,9 +5,52 @@ from pathlib import Path
 import pytest
 
 from codegraph.core.graph.graph_builder import build_graph, clear_database
-from codegraph.core.retrieval.seed_selection import extract_seeds, PersonalizationVector
+from codegraph.core.retrieval.seed_selection import (
+    extract_seeds,
+    PersonalizationVector,
+    _resolve_signal_weights,
+)
 from codegraph.core.parser.python_parser import create_parser, parse_directory
 from tests.conftest import neo4j_required
+
+
+# ---------------------------------------------------------------------------
+# _resolve_signal_weights — pure function, no Neo4j required
+# ---------------------------------------------------------------------------
+
+class TestResolveSignalWeights:
+    """Unit tests for signal weight validation and merging."""
+
+    def test_defaults_returned_when_none(self):
+        weights = _resolve_signal_weights(None)
+        assert weights["entity_match"] == 0.6
+        assert weights["bm25"] == 0.3
+        assert weights["current_file"] == 0.1
+        assert weights["bm25_top_n"] == 10
+
+    def test_caller_values_override_defaults(self):
+        weights = _resolve_signal_weights({"entity_match": 0.8, "bm25": 0.1})
+        assert weights["entity_match"] == 0.8
+        assert weights["bm25"] == 0.1
+        # Unspecified keys stay at defaults
+        assert weights["current_file"] == 0.1
+
+    def test_negative_weight_clamped_to_default(self):
+        weights = _resolve_signal_weights({"entity_match": -0.5})
+        assert weights["entity_match"] == 0.6  # reverts to default
+
+    def test_zero_weight_accepted(self):
+        weights = _resolve_signal_weights({"bm25": 0.0})
+        assert weights["bm25"] == 0.0
+
+    def test_bm25_top_n_cast_to_int(self):
+        weights = _resolve_signal_weights({"bm25_top_n": 3})
+        assert weights["bm25_top_n"] == 3
+        assert isinstance(weights["bm25_top_n"], int)
+
+    def test_invalid_bm25_top_n_clamped_to_default(self):
+        weights = _resolve_signal_weights({"bm25_top_n": 0})
+        assert weights["bm25_top_n"] == 10  # default
 
 FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 USER_AUTH = str(FIXTURES_DIR / "user_auth")
@@ -155,3 +198,34 @@ class TestCurrentFileSeeds:
         )
         # Weights should be identical as if no file was provided
         assert pv_with_ghost_file.seeds == pv_only_task.seeds
+
+
+@neo4j_required
+class TestProjectScope:
+    """Tests for project_scope filtering (prevents cross-project contamination)."""
+
+    def test_matching_scope_returns_seeds(self, populated_db):
+        """A scope prefix that matches graph paths should still return seeds."""
+        pv = extract_seeds(
+            populated_db,
+            task_description="validate email and password",
+            project_scope="utils/",
+        )
+        # utils/ contains validate_* functions — BM25 should find them
+        assert len(pv.seeds) > 0, "Expected seeds within utils/ scope"
+
+    def test_nonmatching_scope_returns_empty(self, populated_db):
+        """A scope prefix that matches no file_path should produce no seeds."""
+        pv = extract_seeds(
+            populated_db,
+            task_description="validate email and password",
+            mentioned_entities=["validate_email"],
+            project_scope="nonexistent_prefix/",
+        )
+        assert len(pv.seeds) == 0, "Expected no seeds with a non-matching scope"
+
+    def test_none_scope_behaves_as_unfiltered(self, populated_db):
+        """project_scope=None (default) must behave identically to no filtering."""
+        pv_no_scope = extract_seeds(populated_db, "validate email")
+        pv_none_scope = extract_seeds(populated_db, "validate email", project_scope=None)
+        assert pv_no_scope.seeds == pv_none_scope.seeds

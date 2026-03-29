@@ -1,8 +1,9 @@
 """Main CLI implementation for CodeGraph."""
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Optional, List
 
 import typer
 from rich.console import Console
@@ -12,6 +13,8 @@ from codegraph.cli.cli_helpers import (
     stats_helper,
     doctor_helper,
     query_helper,
+    explain_helper,
+    visualize_helper,
     find_name_helper,
     find_pattern_helper,
     _initialize_db
@@ -78,8 +81,8 @@ def doctor(ctx: typer.Context):
 def query(
     ctx: typer.Context,
     task: str = typer.Argument(..., help="Task description to retrieve context for"),
-    entities: Optional[List[str]] = typer.Option(None, "--entity", "-e", help="Specific entity names to include as seeds"),
-    file: Optional[str] = typer.Option(None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"),
+    entities: list[str] | None = typer.Option(None, "--entity", "-e", help="Specific entity names to include as seeds"),
+    file: str | None = typer.Option(None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"),
     top_k: int = typer.Option(0, "--top-k", help="Max results (0 = use config default)"),
     budget: int = typer.Option(0, "--budget", help="Token budget (0 = use config default)"),
 ):
@@ -91,9 +94,40 @@ def query(
     query_helper(config_path, task, entities, file, top_k, budget)
 
 @app.command()
+def explain(
+    ctx: typer.Context,
+    task: str = typer.Argument(..., help="Task description to explain retrieval for"),
+    top_k: int = typer.Option(10, "--top-k", "-k", help="Number of files to explain"),
+) -> None:
+    """
+    Explain why PPR returned specific files for a task — shows seeds and reasoning paths.
+    """
+    config_path = get_config_path(ctx)
+    _initialize_db(config_path)
+    explain_helper(config_path, task, top_k)
+
+
+@app.command()
+def visualize(
+    ctx: typer.Context,
+    port: int = typer.Option(8474, "--port", "-p", help="Port to listen on"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser automatically"),
+) -> None:
+    """
+    Start the interactive CodeGraph visualizer in your browser.
+
+    Shows a D3 force graph with PPR heat scores, seed nodes, reasoning paths,
+    and a side-by-side comparison with BM25 results.
+    """
+    config_path = get_config_path(ctx)
+    _initialize_db(config_path)
+    visualize_helper(config_path, port, no_browser)
+
+
+@app.command()
 def serve(
     ctx: typer.Context,
-    config: Optional[str] = typer.Option(None, "--config", help="Config path passed to the MCP server")
+    config: str | None = typer.Option(None, "--config", help="Config path passed to the MCP server")
 ):
     """
     Start the CodeGraph MCP server.

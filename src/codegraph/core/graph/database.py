@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import logging
 import threading
-from typing import Optional
 
 from neo4j import GraphDatabase, Driver
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """Thread-safe singleton to manage Neo4j driver and connection pool."""
 
-    _instance: Optional["DatabaseManager"] = None
+    _instance: DatabaseManager | None = None
     _lock = threading.Lock()
 
     def __new__(cls):
@@ -36,10 +37,9 @@ class DatabaseManager:
     def get_driver(self) -> Driver:
         """Get or create the Neo4j driver instance."""
         if self._config is None:
-            # Fallback to default config if not initialized
-            from pathlib import Path
-            config_path = Path("config.yaml")
-            self.initialize(str(config_path))
+            raise RuntimeError(
+                "DatabaseManager not initialized. Call initialize(config_path) first."
+            )
 
         if self._driver is None:
             with self._driver_lock:

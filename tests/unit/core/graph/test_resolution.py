@@ -1,4 +1,4 @@
-"""Unit tests for graph_builder resolution helpers — no Neo4j required."""
+"""Unit tests for resolution helpers — no Neo4j required."""
 
 import pytest
 
@@ -10,7 +10,7 @@ from codegraph.core.parser.models import (
     ImportEntity,
     CallEntity,
 )
-from codegraph.core.graph.graph_builder import (
+from codegraph.core.graph.resolution import (
     _build_entity_lookup,
     _build_import_map,
     _resolve_caller,
@@ -262,3 +262,54 @@ class TestResolveBaseClass:
     def test_unknown_base_returns_none(self):
         result = _resolve_base_class("Unknown", {}, "main.py", {})
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Circular import handling
+# ---------------------------------------------------------------------------
+
+class TestCircularImports:
+    """Verify that circular imports between two files don't break resolution."""
+
+    def test_build_import_map_with_circular_imports(self):
+        """_build_import_map must not raise on mutually-importing files."""
+        all_paths = ["a.py", "b.py"]
+
+        fe_a = FileEntities(
+            file_path="a.py",
+            imports=[ImportEntity(module_path="b", imported_names=("bar",))],
+        )
+        fe_b = FileEntities(
+            file_path="b.py",
+            imports=[ImportEntity(module_path="a", imported_names=("foo",))],
+        )
+
+        map_a = _build_import_map(fe_a, all_paths)
+        map_b = _build_import_map(fe_b, all_paths)
+
+        assert map_a.get("bar") == "b.py"
+        assert map_b.get("foo") == "a.py"
+
+    def test_resolve_callee_with_circular_imports(self):
+        """_resolve_callee must resolve correctly even when both files import each other."""
+        all_paths = ["a.py", "b.py"]
+
+        fe_a = FileEntities(
+            file_path="a.py",
+            functions=[FunctionEntity(name="foo", file_path="a.py", line_number=1, end_line=5, signature="def foo()")],
+            imports=[ImportEntity(module_path="b", imported_names=("bar",))],
+        )
+        fe_b = FileEntities(
+            file_path="b.py",
+            functions=[FunctionEntity(name="bar", file_path="b.py", line_number=1, end_line=5, signature="def bar()")],
+            imports=[ImportEntity(module_path="a", imported_names=("foo",))],
+        )
+
+        lookup = _build_entity_lookup([fe_a, fe_b])
+        map_a = _build_import_map(fe_a, all_paths)
+        map_b = _build_import_map(fe_b, all_paths)
+
+        # From a.py, calling bar (imported from b) should resolve to b.py::bar
+        assert _resolve_callee("bar", lookup, "a.py", map_a) == "b.py::bar"
+        # From b.py, calling foo (imported from a) should resolve to a.py::foo
+        assert _resolve_callee("foo", lookup, "b.py", map_b) == "a.py::foo"

@@ -26,8 +26,14 @@ dist/
 data/
 logs/
 
+# Benchmark runner cache and results
+.codegraph_cache/
+evaluation/results/
+demo/requests/
+
 # IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
+.worktrees/
