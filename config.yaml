@@ -32,10 +32,7 @@ seed_selection:
   bm25_weight: 0.3
   current_file_weight: 0.1
   bm25_top_n: 10
-  # Path substrings that exclude nodes from seed selection.
-  # Test files match algorithm queries too literally (e.g. test_ppr_config_defaults
-  # beats ppr.py for "how does PPR work"). They stay in the graph and can still
-  # receive PPR score via edges — they're only skipped as seed candidates.
+
   exclude_seed_paths:
     - "tests/"
     - "test_"
