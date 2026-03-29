@@ -76,6 +76,11 @@ def extract_seeds(
     """
     weights = _resolve_signal_weights(signal_weights)
 
+    # Normalise project_scope to forward slashes once here so all downstream
+    # Cypher queries using STARTS WITH receive a consistent path regardless of OS.
+    if project_scope is not None:
+        project_scope = project_scope.replace("\\", "/")
+
     all_seeds: list[SeedNode] = []
 
     if mentioned_entities:
@@ -216,13 +221,14 @@ def _match_entities(
             if records:
                 matches_by_entity[entity] = records
 
-    # Assign weights: rare names get full weight, common names get reduced weight
+    # Assign weights: cap total mass per entity at base_weight, distributed evenly.
+    # This prevents common generic names (e.g. "fit" with 30 matches) from receiving
+    # more aggregate seed mass than rare, precise names. See fix for CR-17.
     seeds: list[SeedNode] = []
     for entity, records in matches_by_entity.items():
         n_matches = len(records)
-        # 1 match -> 1.0, 2 matches -> 0.63, 10 matches -> 0.29, 30 matches -> 0.20
-        weight_scale = 1.0 / math.log2(n_matches + 1)
-        per_node_weight = base_weight * weight_scale
+        # Total mass is always base_weight; split evenly across all matches.
+        per_node_weight = base_weight / n_matches
         for nid, qname in records:
             seeds.append(
                 SeedNode(

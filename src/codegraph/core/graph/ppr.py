@@ -74,7 +74,7 @@ def project_graph(
     Returns the GDS Graph object (supports node_count(), relationship_count()).
     """
     node_spec = ["File", "Function", "Class", "Method"]
-    rel_types = relationship_types or _ALL_RELATIONSHIP_TYPES
+    rel_types = relationship_types if relationship_types is not None else _ALL_RELATIONSHIP_TYPES
     relationship_spec = {
         rel_type: {"orientation": orientation, "properties": "weight"}
         for rel_type in rel_types

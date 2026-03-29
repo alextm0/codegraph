@@ -96,15 +96,23 @@ def _resolve_callee(
 
     # 2. Is callee_name defined in the same file?
     norm_fp = normalize_path(file_path)
-    for qname in candidates:
-        if qname.startswith(norm_fp + "::"):
-            return qname
+    same_file = [qname for qname in candidates if qname.startswith(norm_fp + "::")]
+    if len(same_file) == 1:
+        return same_file[0]
+    if len(same_file) > 1:
+        # Multiple same-file candidates (e.g. ClassA.fit and ClassB.fit) — ambiguous.
+        logger.debug(
+            "Ambiguous callee '%s' in same file: %d candidates, skipping",
+            callee_name,
+            len(same_file),
+        )
+        return None
 
     # 3. Only one candidate globally — safe to use.
     if len(candidates) == 1:
         return candidates[0]
 
-    # Ambiguous — log and skip rather than guess wrong.
+    # Ambiguous globally — log and skip rather than guess wrong.
     logger.debug(
         "Ambiguous callee '%s': %d candidates, skipping", callee_name, len(candidates),
     )
@@ -132,9 +140,16 @@ def _resolve_base_class(
                 return qname
 
     norm_fp = normalize_path(file_path)
-    for qname in candidates:
-        if qname.startswith(norm_fp + "::"):
-            return qname
+    same_file = [qname for qname in candidates if qname.startswith(norm_fp + "::")]
+    if len(same_file) == 1:
+        return same_file[0]
+    if len(same_file) > 1:
+        logger.debug(
+            "Ambiguous base class '%s' in same file: %d candidates, skipping",
+            base_name,
+            len(same_file),
+        )
+        return None
 
     if len(candidates) == 1:
         return candidates[0]

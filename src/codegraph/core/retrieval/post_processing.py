@@ -70,6 +70,33 @@ def apply_idf_weights(driver) -> int:
         return updated
 
 
+def reset_base_weights(driver) -> int:
+    """Reset all edge weights to their original base values (undoing IDF mutation).
+
+    CO_LOCATED edges are restored to 0.3; all other relationship types to 1.0.
+    Must be called BEFORE project_graph() when apply_idf=False so the GDS
+    projection is not built on stale IDF-mutated weights from a previous run.
+
+    Returns:
+        Number of edges reset.
+    """
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH ()-[r]->()
+            SET r.weight = CASE type(r)
+                WHEN 'CO_LOCATED' THEN 0.3
+                ELSE 1.0
+            END
+            RETURN count(r) AS updated
+            """
+        )
+        record = result.single()
+        updated = record["updated"] if record else 0
+        logger.info("reset_base_weights: reset %d edges to base weights", updated)
+        return updated
+
+
 def format_context(
     ppr_results: list[PPRResult],
     project_root: str,

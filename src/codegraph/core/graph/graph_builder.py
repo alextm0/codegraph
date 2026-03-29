@@ -471,9 +471,11 @@ def _create_colocation_edges(tx: ManagedTransaction, all_entities: list[FileEnti
         UNWIND $edges AS edge
         MATCH (a:File {file_path: edge.src})
         MATCH (b:File {file_path: edge.dst})
-        MERGE (a)-[r:CO_LOCATED]->(b)
-        SET r.weight = edge.weight
-        RETURN count(r) AS created
+        MERGE (a)-[r1:CO_LOCATED]->(b)
+        SET r1.weight = edge.weight
+        MERGE (b)-[r2:CO_LOCATED]->(a)
+        SET r2.weight = edge.weight
+        RETURN count(r1) AS created
         """,
         edges=edges,
     )

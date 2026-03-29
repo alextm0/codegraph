@@ -13,6 +13,7 @@ from codegraph.core.retrieval.post_processing import (
     expand_structural_neighbors,
     format_context,
     inject_directory_neighbors,
+    reset_base_weights,
 )
 from codegraph.core.retrieval.seed_selection import (
     PersonalizationVector,
@@ -132,6 +133,10 @@ def ensure_graph_ready(
         logger.info("Applying IDF edge weights...")
         edge_count = apply_idf_weights(driver)
         logger.info("IDF weights applied to %d edges", edge_count)
+    else:
+        logger.info("Resetting edge weights to base values (apply_idf=False)...")
+        edge_count = reset_base_weights(driver)
+        logger.info("Base weights restored to %d edges", edge_count)
 
     logger.info("Refreshing GDS projection with updated weights...")
     drop_projection(gds)
