@@ -38,11 +38,12 @@ def _initialize_db(config_path: Path):
     db_manager.initialize(str(config_path))
     return db_manager
 
-def visualize_helper(config_path: Path, port: int, no_browser: bool) -> None:
+def visualize_helper(config_path: Path, port: int, no_browser: bool, dev: bool = False) -> None:
     """Start the FastAPI visualizer server and (optionally) open the browser."""
     setup_logging(level=logging.WARNING)
 
     raw_config = load_raw_config(config_path)
+    project_root = resolve_project_root(raw_config, config_path)
     db_manager = _initialize_db(config_path)
     driver = db_manager.get_driver()
 
@@ -61,13 +62,19 @@ def visualize_helper(config_path: Path, port: int, no_browser: bool) -> None:
 
     from codegraph.visualizer.server import create_app
 
-    fastapi_app = create_app(driver, raw_config)
+    fastapi_app = create_app(driver, raw_config, project_root=str(project_root), dev_mode=dev)
     url = f"http://localhost:{port}"
 
-    if not no_browser:
-        import threading
-        import webbrowser
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    if dev:
+        console.print(
+            f"[yellow]Dev mode:[/yellow] API only on port {port}. "
+            "Run [bold]cd frontend && npm run dev[/bold] for the frontend."
+        )
+    else:
+        if not no_browser:
+            import threading
+            import webbrowser
+            threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
     console.print(f"[green]CodeGraph Visualizer[/green] running at [bold cyan]{url}[/bold cyan]")
     console.print("Press [bold]Ctrl+C[/bold] to stop.\n")

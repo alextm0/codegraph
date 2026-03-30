@@ -112,6 +112,7 @@ def visualize(
     ctx: typer.Context,
     port: int = typer.Option(8474, "--port", "-p", help="Port to listen on"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser automatically"),
+    dev: bool = typer.Option(False, "--dev", help="API-only mode for Vite dev server (run 'cd frontend && npm run dev' separately)"),
 ) -> None:
     """
     Start the interactive CodeGraph visualizer in your browser.
@@ -121,7 +122,7 @@ def visualize(
     """
     config_path = get_config_path(ctx)
     _initialize_db(config_path)
-    visualize_helper(config_path, port, no_browser)
+    visualize_helper(config_path, port, no_browser, dev=dev)
 
 
 @app.command()
