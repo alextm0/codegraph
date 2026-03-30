@@ -7,7 +7,7 @@ import { edgeColor } from './graphHelpers'
 interface GraphCanvasProps {
   nodes: D3Node[]
   edges: D3Edge[]
-  onNodeSelect: (node: GraphNode) => void
+  onNodeSelect: (node: GraphNode | null) => void
 }
 
 const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const

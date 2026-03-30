@@ -20,6 +20,9 @@ export default function Layout({
   queryResult,
   onQueryResult,
   onNodeSelect,
+  selectedNode: _selectedNode,
+  focusPath: _focusPath,
+  onFocusPath: _onFocusPath,
 }: LayoutProps) {
   const { width: sidebarWidth, handleMouseDown } = useResizablePanel(280)
   const { nodes, edges } = useGraphData(queryResult)
