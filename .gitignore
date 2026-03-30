@@ -22,6 +22,10 @@ build/
 dist/
 *.egg-info/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # Neo4j / Local Data (if applicable)
 data/
 logs/
@@ -37,3 +41,5 @@ demo/requests/
 *.swp
 *.swo
 .worktrees/
+
+.superpowers
