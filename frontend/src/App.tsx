@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import Layout from './components/layout/Layout'
-import { QueryResponse, GraphNode } from './types/api'
+import type { QueryResponse, GraphNode } from './types/api'
 
 export default function App() {
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null)

@@ -12,43 +12,51 @@ interface GraphCanvasProps {
 
 const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const
 
-// Tooltip singleton
-let _tooltip: HTMLDivElement | null = null
-function getTooltip(): HTMLDivElement {
-  if (!_tooltip) {
-    _tooltip = document.createElement('div')
-    _tooltip.style.cssText = [
-      'position:fixed', 'background:var(--surface2)', 'border:1px solid var(--border)',
-      'border-radius:var(--radius-md)', 'padding:8px 10px', 'pointer-events:none',
-      'z-index:999', 'max-width:260px', 'box-shadow:var(--shadow)',
-      'font-size:11px', 'display:none',
-    ].join(';')
-    document.body.appendChild(_tooltip)
-  }
-  return _tooltip
+function createTooltipEl(): HTMLDivElement {
+  const el = document.createElement('div')
+  el.style.cssText = [
+    'position:fixed', 'background:var(--surface2)', 'border:1px solid var(--border)',
+    'border-radius:var(--radius-md)', 'padding:8px 10px', 'pointer-events:none',
+    'z-index:999', 'max-width:260px', 'box-shadow:var(--shadow)',
+    'font-size:11px', 'display:none',
+  ].join(';')
+  document.body.appendChild(el)
+  return el
 }
 
-function showTooltip(e: MouseEvent, d: D3Node) {
-  const tt = getTooltip()
+function showTooltip(tt: HTMLDivElement, e: MouseEvent, d: D3Node) {
   const sc = d.ppr_score > 0 ? d.ppr_score.toFixed(4) : '—'
   const seedPart = d.is_seed ? ` · seed ${d.seed_weight.toFixed(3)}` : ''
-  tt.innerHTML =
-    `<div style="font-family:var(--mono);font-weight:600;color:var(--text);margin-bottom:2px;word-break:break-all">${d.name}</div>` +
-    `<div style="font-family:var(--mono);color:var(--text-dim);font-size:10px;margin-bottom:4px;word-break:break-all">${d.file_path ?? ''}</div>` +
-    `<div style="font-variant-numeric:tabular-nums slashed-zero;font-family:var(--mono);font-size:10px">PPR: ${sc}${seedPart}</div>`
+
+  tt.innerHTML = ''
+
+  const nameEl = document.createElement('div')
+  nameEl.style.cssText = 'font-family:var(--mono);font-weight:600;color:var(--text);margin-bottom:2px;word-break:break-all'
+  nameEl.textContent = d.name
+  tt.appendChild(nameEl)
+
+  const pathEl = document.createElement('div')
+  pathEl.style.cssText = 'font-family:var(--mono);color:var(--text-dim);font-size:10px;margin-bottom:4px;word-break:break-all'
+  pathEl.textContent = d.file_path ?? ''
+  tt.appendChild(pathEl)
+
+  const scoreEl = document.createElement('div')
+  scoreEl.style.cssText = 'font-variant-numeric:tabular-nums slashed-zero;font-family:var(--mono);font-size:10px'
+  scoreEl.textContent = `PPR: ${sc}${seedPart}`
+  tt.appendChild(scoreEl)
+
   tt.style.display = 'block'
   tt.style.left = `${e.clientX + 14}px`
   tt.style.top = `${e.clientY - 28}px`
 }
 
-function moveTooltip(e: MouseEvent) {
-  const tt = getTooltip()
+function moveTooltip(tt: HTMLDivElement, e: MouseEvent) {
   tt.style.left = `${e.clientX + 14}px`
   tt.style.top = `${e.clientY - 28}px`
 }
 
-function hideTooltip() {
-  getTooltip().style.display = 'none'
+function hideTooltip(tt: HTMLDivElement) {
+  tt.style.display = 'none'
 }
 
 function nodeRadius(d: D3Node): number {
@@ -67,6 +75,7 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
   const svgRef = useRef<SVGSVGElement>(null)
   const simRef = useRef<d3.Simulation<D3Node, D3Edge> | null>(null)
   const sizeRef = useRef({ w: 800, h: 600 })
+  const tooltipRef = useRef<HTMLDivElement | null>(null)
 
   // ResizeObserver to track container size
   useEffect(() => {
@@ -88,13 +97,22 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
     const svg = svgRef.current
     if (!svg) return
 
+    // Create tooltip for this mount
+    const tt = createTooltipEl()
+    tooltipRef.current = tt
+
     // Cleanup previous simulation
     d3.select(svg).selectAll('*').remove()
     if (simRef.current) {
       simRef.current.stop()
       simRef.current = null
     }
-    if (!nodes.length) return
+    if (!nodes.length) {
+      return () => {
+        tt.remove()
+        tooltipRef.current = null
+      }
+    }
 
     const parent = svg.parentElement
     const rect = parent?.getBoundingClientRect()
@@ -168,9 +186,9 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
       .attr('fill', 'transparent')
       .attr('cursor', 'pointer')
       .on('click', (_e, d) => { onNodeSelect(d) })
-      .on('mouseover', (_e, d) => showTooltip(_e as unknown as MouseEvent, d))
-      .on('mousemove', (e) => moveTooltip(e as unknown as MouseEvent))
-      .on('mouseout', hideTooltip)
+      .on('mouseover', (_e, d) => showTooltip(tt, _e as unknown as MouseEvent, d))
+      .on('mousemove', (e) => moveTooltip(tt, e as unknown as MouseEvent))
+      .on('mouseout', () => hideTooltip(tt))
 
     // Visible node circles
     const nodeSel = g
@@ -184,9 +202,9 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
       .attr('stroke-width', (d) => d.is_seed ? 2.5 : 1)
       .attr('cursor', 'pointer')
       .on('click', (_e, d) => { onNodeSelect(d) })
-      .on('mouseover', (_e, d) => showTooltip(_e as unknown as MouseEvent, d))
-      .on('mousemove', (e) => moveTooltip(e as unknown as MouseEvent))
-      .on('mouseout', hideTooltip)
+      .on('mouseover', (_e, d) => showTooltip(tt, _e as unknown as MouseEvent, d))
+      .on('mousemove', (e) => moveTooltip(tt, e as unknown as MouseEvent))
+      .on('mouseout', () => hideTooltip(tt))
 
     // Labels for seeds and top-PPR nodes only
     const topIds = new Set([
@@ -209,7 +227,25 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
       .attr('dy', (d) => nodeRadius(d) + 11)
       .attr('pointer-events', 'none')
 
-    // Drag behaviour
+    // Force simulation — declared BEFORE drag setup so drag callbacks can reference it
+    const sim = d3
+      .forceSimulation<D3Node, D3Edge>(nodes)
+      .force('link', d3.forceLink<D3Node, D3Edge>(links).id((d) => d.id).distance(100).strength(0.35))
+      .force('charge', d3.forceManyBody<D3Node>().strength(-250))
+      .force('center', d3.forceCenter(W / 2, H / 2))
+      .force('collision', d3.forceCollide<D3Node>().radius((d) => nodeRadius(d) + 12))
+      .on('tick', () => {
+        linkSel
+          .attr('x1', (d) => (d.source as D3Node).x ?? 0)
+          .attr('y1', (d) => (d.source as D3Node).y ?? 0)
+          .attr('x2', (d) => (d.target as D3Node).x ?? 0)
+          .attr('y2', (d) => (d.target as D3Node).y ?? 0)
+        nodeSel.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0)
+        hitSel.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0)
+        labelSel.attr('x', (d) => d.x ?? 0).attr('y', (d) => d.y ?? 0)
+      })
+
+    // Drag behaviour — attached AFTER sim declaration
     nodeSel.call(
       d3.drag<SVGCircleElement, D3Node>()
         .on('start', (e, d) => {
@@ -228,29 +264,13 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
         }),
     )
 
-    // Force simulation
-    const sim = d3
-      .forceSimulation<D3Node, D3Edge>(nodes)
-      .force('link', d3.forceLink<D3Node, D3Edge>(links).id((d) => d.id).distance(100).strength(0.35))
-      .force('charge', d3.forceManyBody<D3Node>().strength(-250))
-      .force('center', d3.forceCenter(W / 2, H / 2))
-      .force('collision', d3.forceCollide<D3Node>().radius((d) => nodeRadius(d) + 12))
-      .on('tick', () => {
-        linkSel
-          .attr('x1', (d) => (d.source as D3Node).x ?? 0)
-          .attr('y1', (d) => (d.source as D3Node).y ?? 0)
-          .attr('x2', (d) => (d.target as D3Node).x ?? 0)
-          .attr('y2', (d) => (d.target as D3Node).y ?? 0)
-        nodeSel.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0)
-        hitSel.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0)
-        labelSel.attr('x', (d) => d.x ?? 0).attr('y', (d) => d.y ?? 0)
-      })
-
     simRef.current = sim
 
     return () => {
       sim.stop()
-      hideTooltip()
+      hideTooltip(tt)
+      tt.remove()
+      tooltipRef.current = null
     }
   }, [nodes, edges, onNodeSelect])
 

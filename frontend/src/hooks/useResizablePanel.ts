@@ -12,16 +12,21 @@ export function useResizablePanel(
 ): UseResizablePanelReturn {
   const [width, setWidth] = useState(initialWidth)
   const isResizing = useRef(false)
+  const startX = useRef(0)
+  const startWidth = useRef(0)
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     isResizing.current = true
+    startX.current = e.clientX
+    startWidth.current = width
     e.preventDefault()
-  }, [])
+  }, [width])
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!isResizing.current) return
-      setWidth(Math.max(minWidth, Math.min(maxWidth, e.clientX)))
+      const delta = e.clientX - startX.current
+      setWidth(Math.max(minWidth, Math.min(maxWidth, startWidth.current + delta)))
     }
     const onUp = () => {
       isResizing.current = false
