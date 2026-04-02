@@ -1,4 +1,12 @@
-"""Seed selection logic."""
+"""Seed selection: score graph nodes as PPR starting points.
+
+Design notes:
+- Three signals combine to form the personalization vector: entity name match
+  (task description contains a known function/class name), BM25 document similarity,
+  and current-file proximity. Weights are configurable via config.yaml.
+- The resulting PersonalizationVector is normalized to sum to 1.0 before PPR.
+- Seed quality is the dominant factor in retrieval performance — see thesis findings.
+"""
 
 import logging
 import math
@@ -9,7 +17,11 @@ from rank_bm25 import BM25Okapi
 
 logger = logging.getLogger(__name__)
 
-# Default signal weights (overridden by config.yaml seed_selection section)
+# --- Default signal weights ---
+# These are overridden by the seed_selection section in config.yaml.
+# entity_match: reward for task description containing a known entity name (highest weight).
+# bm25: reward from BM25 document similarity score.
+# current_file: reward for entities in the currently open file.
 _DEFAULT_ENTITY_MATCH_WEIGHT: float = 0.6
 _DEFAULT_BM25_WEIGHT: float = 0.3
 _DEFAULT_CURRENT_FILE_WEIGHT: float = 0.1

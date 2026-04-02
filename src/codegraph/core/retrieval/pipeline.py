@@ -1,4 +1,11 @@
-"""Retrieval pipeline orchestration."""
+"""Retrieval pipeline orchestration.
+
+Design notes:
+- Thin orchestrator: seeds extraction → IDF reweighting → GDS projection → PPR → formatting.
+  All logic lives in seed_selection.py, post_processing.py, and ppr.py respectively.
+- ensure_graph_ready() is called on every invocation to reapply IDF weights and recreate
+  the GDS projection. Safe to call repeatedly — drop is a no-op if no projection exists.
+"""
 
 import logging
 from graphdatascience import GraphDataScience

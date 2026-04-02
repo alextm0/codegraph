@@ -1,4 +1,12 @@
-"""Data models for parsed Python entities."""
+"""Data models for parsed Python entities.
+
+Design notes:
+- All entity types (FunctionEntity, ClassEntity, etc.) are frozen dataclasses:
+  immutable after construction, safe to cache, and serializable via dataclasses.asdict().
+- FileEntities is the one mutable container: it is populated incrementally during parsing
+  and never shared across threads.
+- No business logic lives here — only data shape definitions.
+"""
 
 from dataclasses import dataclass, field
 

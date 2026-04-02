@@ -1,4 +1,15 @@
-"""Batch graph creation: write nodes and edges into Neo4j via UNWIND."""
+"""Batch graph creation: write nodes and edges into Neo4j via UNWIND.
+
+Design notes:
+- Two-pass construction: pass 1 writes all nodes and CONTAINS edges (intra-file structure);
+  pass 2 writes cross-file edges (CALLS, IMPORTS, INHERITS_FROM) after all definitions
+  are indexed so forward references resolve correctly.
+- All writes use UNWIND + MERGE for idempotent batched operations — never individual CREATEs.
+- Resolution helpers (resolve_caller, resolve_callee, etc.) live in resolution.py and have
+  no Neo4j dependency, so they can be tested without a running database.
+- Base edge weights are all 1.0 intentionally; apply_idf_weights() in post_processing.py
+  overwrites them at retrieval time, so per-type differentiation here would be discarded.
+"""
 
 import logging
 from collections.abc import Callable
@@ -22,7 +33,11 @@ logger = logging.getLogger(__name__)
 # Base edge weights by relationship type.
 # All values are intentionally 1.0 (uniform). IDF reweighting via apply_idf_weights()
 # overwrites these before each GDS projection, so per-type differentiation here
-# would be overwritten anyway. See DEC-007.
+# would be overwritten anyway.
+# To add a new edge type:
+# 1. Add its name and weight here.
+# 2. Add a _create_*_edges() function below and call it inside build_graph().
+# 3. Add the type to _ALL_RELATIONSHIP_TYPES in ppr.py so it is included in GDS projection.
 EDGE_WEIGHTS: dict[str, float] = {
     "INHERITS_FROM": 1.0,
     "CALLS": 1.0,
@@ -100,6 +115,8 @@ def build_graph(
 
     with driver.session() as session:
         # --- Nodes ---
+        # To add a new node label: add a _create_*_nodes() function, call it here,
+        # add its key to the counts dict above, and add a constraint in ensure_constraints().
         counts["File"] = session.execute_write(_create_file_nodes, all_entities)
         _report("File nodes", counts["File"])
         counts["Function"] = session.execute_write(_create_function_nodes, all_entities)

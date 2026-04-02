@@ -1,4 +1,12 @@
-"""IDF weights and result formatting."""
+"""IDF edge-weight rewriting and context result formatting.
+
+Design notes:
+- apply_idf_weights() overwrites every edge's weight property in Neo4j before each GDS
+  projection. This means EDGE_WEIGHTS base values in graph_builder.py are always overwritten
+  at retrieval time. IDF penalizes highly-connected "hub" nodes.
+- format_context() converts raw PPR results into a token-budgeted ContextResult for the MCP
+  tool response. Token counting uses cl100k_base (approximate for Claude).
+"""
 
 import logging
 from dataclasses import dataclass
