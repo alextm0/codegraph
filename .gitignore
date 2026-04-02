@@ -1,12 +1,13 @@
 # Documentation
 docs/
+site/
 
 # AI Agents
 .agents/
 .claude/
 AGENTS.md
 CLAUDE.md
-DECISIONS.md
+docs/DECISIONS.md
 TODO.md
 memory/
 
@@ -43,3 +44,5 @@ demo/requests/
 .worktrees/
 
 .superpowers
+out/
+skills-lock.json
