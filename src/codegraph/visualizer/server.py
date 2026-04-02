@@ -10,11 +10,17 @@ Start via: codegraph visualize
 
 import logging
 import sys
+import asyncio
+import threading
 from pathlib import Path
 from typing import Any
 
 from neo4j import Driver
 from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +59,50 @@ class QueryResponse(BaseModel):
     ppr_results: list[PPRFileResult]
     bm25_results: list[BM25FileResult]
     graph: dict[str, list[dict]]
+
+
+class FileEntry(BaseModel):
+    path: str
+    type: str  # "file" or "directory"
+
+
+class TreeResponse(BaseModel):
+    root: str
+    project_root: str
+    files: list[FileEntry]
+
+
+class StatsResponse(BaseModel):
+    node_count: int
+    edge_count: int
+    file_count: int
+    label_counts: dict[str, int]
+    edge_type_counts: dict[str, int]
+
+
+class NodeRelation(BaseModel):
+    qualified_name: str
+    name: str
+    label: str
+    file_path: str
+    relationship: str
+
+
+class NodeDetailResponse(BaseModel):
+    node: dict[str, Any]
+    incoming: list[NodeRelation]
+    outgoing: list[NodeRelation]
+    source_snippet: str | None = None
+
+
+class SubgraphResponse(BaseModel):
+    graph: dict[str, list[dict]]
+    focus_path: str
+
+
+class OpenFileRequest(BaseModel):
+    file_path: str
+    line_number: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -107,12 +157,15 @@ def _run_query(
     from codegraph.core.graph.queries import trace_path_to_seed, get_subgraph_for_nodes
 
     # Build seeds
-    bm25_index, searchable_nodes = prepare_bm25_index(driver)
+    seed_section = raw_config.get("seed_selection", {})
+    exclude_seed_paths = seed_section.get("exclude_seed_paths") or None
+    bm25_index, searchable_nodes = prepare_bm25_index(driver, exclude_paths=exclude_seed_paths)
     seeds = extract_seeds(
         driver,
         task_description=task,
         bm25_index=bm25_index,
         searchable_nodes=searchable_nodes,
+        exclude_paths=exclude_seed_paths,
     )
 
     seed_ids = list(seeds.seeds.keys())
@@ -200,46 +253,126 @@ def _run_query(
     )
 
 
+def _build_tree(project_root: str, raw_config: dict[str, Any]) -> TreeResponse:
+    """Walk project_root for .py files, return a flat FileEntry list with dirs."""
+    from codegraph.utils.ignore import load_ignore_patterns, is_ignored
+
+    root_path = Path(project_root)
+
+    config_patterns: list[str] = []
+    config_patterns += raw_config.get("parser", {}).get("exclude_patterns", [])
+    config_patterns += raw_config.get("exclude_patterns", [])
+
+    cgignore_patterns = load_ignore_patterns(root_path / ".cgignore")
+
+    def _is_excluded(rel: Path) -> bool:
+        rel_str = rel.as_posix()
+        if is_ignored(rel_str, cgignore_patterns):
+            return True
+        for part in rel.parts:
+            for pattern in config_patterns:
+                if part == pattern or part.startswith(pattern.rstrip("/")):
+                    return True
+        return False
+
+    seen_dirs: set[str] = set()
+    entries: list[FileEntry] = []
+
+    for py_file in sorted(root_path.rglob("*.py")):
+        rel = py_file.relative_to(root_path)
+        if _is_excluded(rel):
+            continue
+
+        # Add parent directories (deduplicated)
+        for parent in reversed(rel.parents):
+            if parent == Path("."):
+                continue
+            dir_str = parent.as_posix()
+            if dir_str not in seen_dirs:
+                seen_dirs.add(dir_str)
+                entries.append(FileEntry(path=dir_str, type="directory"))
+
+        entries.append(FileEntry(path=rel.as_posix(), type="file"))
+
+    return TreeResponse(
+        root=str(root_path.name),
+        project_root=project_root,
+        files=entries,
+    )
+
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
-def create_app(driver: Driver, raw_config: dict[str, Any]):
-    """Create and return the FastAPI application.
-
-    Args:
-        driver: Active Neo4j driver (from the CLI database manager).
-        raw_config: Raw YAML config dict (from load_raw_config).
-    """
-    try:
-        from fastapi import FastAPI, HTTPException
-        from fastapi.responses import FileResponse, JSONResponse
-        from fastapi.staticfiles import StaticFiles
-    except ImportError as e:
-        raise ImportError(
-            "FastAPI is required for the visualizer. "
-            "Install it with: pip install -e '.[visualizer]'"
-        ) from e
-
+def create_app(
+    driver: Driver,
+    raw_config: dict[str, Any],
+    project_root: str = "",
+    dev_mode: bool = False,
+    watch_mode: bool = False,
+):
+    """Create and return the FastAPI application."""
     app = FastAPI(
         title="CodeGraph Visualizer",
         description="Interactive graph visualization for CodeGraph retrieval results.",
         version="0.1.0",
     )
 
-    if STATIC_DIR.exists():
-        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-    @app.get("/", include_in_schema=False)
-    def index():
-        """Serve the single-page frontend."""
-        index_path = STATIC_DIR / "index.html"
-        if not index_path.exists():
-            return JSONResponse(
-                {"error": "Frontend not found. index.html is missing."},
-                status_code=404,
-            )
-        return FileResponse(str(index_path))
+    # Store connected clients for broadcasting
+    connected_clients: set[WebSocket] = set()
+
+    async def broadcast(message: dict):
+        if not connected_clients:
+            return
+        for client in list(connected_clients):
+            try:
+                await client.send_json(message)
+            except Exception:
+                connected_clients.remove(client)
+
+    if watch_mode and project_root:
+        from codegraph.watcher.file_watcher import CodeGraphWatcher
+        from codegraph.watcher.incremental import update_file_in_graph
+
+        def on_changes(paths: set[str]) -> None:
+            for p in paths:
+                try:
+                    update_file_in_graph(driver, project_root, p)
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.run_coroutine_threadsafe(
+                            broadcast({"type": "file_changed", "path": str(p)}),
+                            loop,
+                        )
+                except Exception as e:
+                    logger.error("Error in watcher callback: %s", e)
+
+        exclude = raw_config.get("parser", {}).get("exclude_patterns", [])
+        watcher = CodeGraphWatcher(project_root, on_changes, exclude_patterns=exclude)
+        watcher.start()
+
+        _stop_poll = threading.Event()
+
+        def _poll_watcher() -> None:
+            while not _stop_poll.is_set():
+                watcher.check_for_changes()
+                _stop_poll.wait(0.5)
+
+        threading.Thread(target=_poll_watcher, daemon=True).start()
+
+        @app.on_event("shutdown")
+        def stop_watcher() -> None:
+            _stop_poll.set()
+            watcher.stop()
 
     @app.post("/api/query", response_model=QueryResponse)
     def query(req: QueryRequest):
@@ -254,5 +387,139 @@ def create_app(driver: Driver, raw_config: dict[str, Any]):
     def health():
         """Health check endpoint."""
         return {"status": "ok"}
+
+    @app.get("/api/tree", response_model=TreeResponse)
+    def tree():
+        """Return a flat file list for the sidebar tree."""
+        try:
+            return _build_tree(project_root, raw_config)
+        except Exception as e:
+            logger.exception("Tree endpoint failed")
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/api/stats", response_model=StatsResponse)
+    def graph_stats():
+        """Return graph node and edge counts."""
+        try:
+            from codegraph.core.graph.queries import count_nodes_by_label, count_edges_by_type
+            label_counts = count_nodes_by_label(driver)
+            edge_type_counts = count_edges_by_type(driver)
+            file_count = label_counts.get("File", 0)
+            return StatsResponse(
+                node_count=sum(label_counts.values()),
+                edge_count=sum(edge_type_counts.values()),
+                file_count=file_count,
+                label_counts=label_counts,
+                edge_type_counts=edge_type_counts,
+            )
+        except Exception as e:
+            logger.exception("Stats endpoint failed")
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/api/node/{qname:path}", response_model=NodeDetailResponse)
+    def node_detail(qname: str):
+        """Return full detail for a single node."""
+        try:
+            from codegraph.core.graph.queries import get_node_detail
+            detail = get_node_detail(driver, qname)
+            if not detail:
+                raise HTTPException(status_code=404, detail=f"Node '{qname}' not found")
+            
+            source_snippet = None
+            file_path = detail["node"].get("file_path")
+            line_start = detail["node"].get("line_number", 0)
+            line_end = detail["node"].get("end_line", 0)
+            
+            if file_path and project_root:
+                full_path = Path(project_root) / file_path
+                if full_path.exists() and line_start > 0:
+                    try:
+                        with open(full_path, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+                            snippet_lines = lines[max(0, line_start-1):line_end]
+                            source_snippet = "".join(snippet_lines)
+                    except Exception:
+                        pass
+            
+            detail["source_snippet"] = source_snippet
+            return detail
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Node detail endpoint failed")
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/api/subgraph", response_model=SubgraphResponse)
+    def subgraph(focus: str):
+        """Return a subgraph filtered by file_path prefix."""
+        try:
+            from codegraph.core.graph.queries import get_subgraph_by_prefix
+            data = get_subgraph_by_prefix(driver, focus)
+            return SubgraphResponse(graph=data, focus_path=focus)
+        except Exception as e:
+            logger.exception("Subgraph endpoint failed")
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.websocket("/ws/status")
+    async def websocket_status(websocket: WebSocket):
+        await websocket.accept()
+        connected_clients.add(websocket)
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            connected_clients.remove(websocket)
+        except Exception:
+            if websocket in connected_clients:
+                connected_clients.remove(websocket)
+
+    @app.post("/api/open")
+    def open_file(req: OpenFileRequest):
+        """Open a file in the local editor."""
+        import subprocess
+        full_path = Path(project_root) / req.file_path
+        if not full_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        target = f"{full_path.as_posix()}:{req.line_number}" if req.line_number else full_path.as_posix()
+        try:
+            subprocess.Popen(["code", "--goto", target])
+        except Exception:
+            try:
+                import os
+                if sys.platform == "win32":
+                    os.startfile(full_path)
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", full_path])
+                else:
+                    subprocess.Popen(["xdg-open", full_path])
+            except Exception as e:
+                logger.error("Failed to open file: %s", e)
+                raise HTTPException(status_code=500, detail="Could not open file")
+        return {"status": "ok"}
+
+    # Static files and SPA fallback — MUST be registered last so API routes take precedence
+    if not dev_mode:
+        dist_dir = STATIC_DIR / "dist"
+        if dist_dir.exists():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(dist_dir / "assets")),
+                name="assets",
+            )
+
+        @app.get("/", include_in_schema=False)
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def spa_fallback(full_path: str = ""):
+            """Serve index.html for all non-/api routes (SPA fallback)."""
+            if full_path.startswith("api/") or full_path.startswith("ws/"):
+                raise HTTPException(status_code=404)
+            dist_index = STATIC_DIR / "dist" / "index.html"
+            if dist_index.exists():
+                return FileResponse(str(dist_index))
+            return JSONResponse(
+                {"error": "Frontend not built. Run: cd frontend && npm run build"},
+                status_code=404,
+            )
 
     return app

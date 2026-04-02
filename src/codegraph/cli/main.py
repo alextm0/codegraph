@@ -15,6 +15,9 @@ from codegraph.cli.cli_helpers import (
     query_helper,
     explain_helper,
     visualize_helper,
+    init_helper,
+    watch_helper,
+    analyze_complexity_helper,
     find_name_helper,
     find_pattern_helper,
     _initialize_db
@@ -60,6 +63,22 @@ def rebuild(ctx: typer.Context):
     rebuild_helper(config_path)
 
 @app.command()
+def init(ctx: typer.Context):
+    """
+    Initialize a new CodeGraph project with an interactive wizard.
+    """
+    config_path = get_config_path(ctx)
+    init_helper(config_path)
+
+@app.command()
+def watch(ctx: typer.Context):
+    """
+    Watch for file changes and update the graph incrementally.
+    """
+    config_path = get_config_path(ctx)
+    watch_helper(config_path)
+
+@app.command()
 def stats(ctx: typer.Context):
     """
     Show statistics about the current graph (nodes, edges, etc.).
@@ -85,13 +104,19 @@ def query(
     file: str | None = typer.Option(None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"),
     top_k: int = typer.Option(0, "--top-k", help="Max results (0 = use config default)"),
     budget: int = typer.Option(0, "--budget", help="Token budget (0 = use config default)"),
+    viz: bool = typer.Option(False, "--viz", help="Open visualizer after running query"),
+    json_out: bool = typer.Option(False, "--json", help="Output results as machine-readable JSON"),
+    compact: bool = typer.Option(False, "--compact", help="Compact output: file paths and scores only"),
 ):
     """
     Run the retrieval pipeline to get context for a specific task.
     """
     config_path = get_config_path(ctx)
     _initialize_db(config_path)
-    query_helper(config_path, task, entities, file, top_k, budget)
+    query_helper(config_path, task, entities, file, top_k, budget, json_out=json_out, compact=compact)
+
+    if viz:
+        visualize_helper(config_path, port=8474, no_browser=False, initial_task=task)
 
 @app.command()
 def explain(
@@ -112,6 +137,8 @@ def visualize(
     ctx: typer.Context,
     port: int = typer.Option(8474, "--port", "-p", help="Port to listen on"),
     no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser automatically"),
+    dev: bool = typer.Option(False, "--dev", help="API-only mode for Vite dev server (run 'cd frontend && npm run dev' separately)"),
+    watch: bool = typer.Option(False, "--watch", help="Enable file watching and live updates"),
 ) -> None:
     """
     Start the interactive CodeGraph visualizer in your browser.
@@ -121,7 +148,7 @@ def visualize(
     """
     config_path = get_config_path(ctx)
     _initialize_db(config_path)
-    visualize_helper(config_path, port, no_browser)
+    visualize_helper(config_path, port, no_browser, dev=dev, watch=watch)
 
 
 @app.command()
@@ -168,7 +195,8 @@ app.add_typer(analyze_app, name="analyze")
 @analyze_app.command("callers")
 def analyze_callers(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Qualified name or name of the entity")
+    name: str = typer.Argument(..., help="Qualified name or name of the entity"),
+    viz: bool = typer.Option(False, "--viz", help="Open visualizer for results"),
 ):
     """Find all entities that call the specified function/method."""
     config_path = get_config_path(ctx)
@@ -191,10 +219,14 @@ def analyze_callers(
         table.add_row(res.qualified_name, res.label, res.file_path)
     console.print(table)
 
+    if viz:
+        visualize_helper(config_path, port=8474, no_browser=False)
+
 @analyze_app.command("callees")
 def analyze_callees(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Qualified name or name of the entity")
+    name: str = typer.Argument(..., help="Qualified name or name of the entity"),
+    viz: bool = typer.Option(False, "--viz", help="Open visualizer for results"),
 ):
     """Find all entities called by the specified function/method."""
     config_path = get_config_path(ctx)
@@ -216,12 +248,16 @@ def analyze_callees(
         table.add_row(res.qualified_name, res.label, res.file_path)
     console.print(table)
 
+    if viz:
+        visualize_helper(config_path, port=8474, no_browser=False)
+
 @analyze_app.command("deps")
 def analyze_deps(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Entity name to find dependencies for"),
     direction: str = typer.Option("both", "--direction", "-d", help="upsteam, downstream, or both"),
-    depth: int = typer.Option(1, "--depth", help="Search depth (1 or 2)")
+    depth: int = typer.Option(1, "--depth", help="Search depth (1 or 2)"),
+    viz: bool = typer.Option(False, "--viz", help="Open visualizer for results"),
 ):
     """Analyze dependencies and imports for an entity."""
     config_path = get_config_path(ctx)
@@ -243,6 +279,9 @@ def analyze_deps(
         for res in results:
             table.add_row(res.qualified_name, res.label, res.file_path)
         console.print(table)
+
+        if viz:
+            visualize_helper(config_path, port=8474, no_browser=False)
     except ValueError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
 
@@ -270,6 +309,16 @@ def analyze_dead(
     for res in results:
         table.add_row(res.qualified_name, res.label, res.file_path)
     console.print(table)
+
+@analyze_app.command("complexity")
+def analyze_complexity(
+    ctx: typer.Context,
+    path: str = typer.Argument(".", help="File or directory to analyze"),
+    threshold: int = typer.Option(10, "--threshold", "-t", help="Complexity threshold")
+):
+    """Analyze cyclomatic complexity of functions and methods."""
+    config_path = get_config_path(ctx)
+    analyze_complexity_helper(config_path, path, threshold)
 
 def cli():
     app()

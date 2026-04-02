@@ -8,11 +8,8 @@ from neo4j import Driver
 from codegraph.core.graph.ppr import PPRConfig, drop_projection, project_graph, run_ppr_from_node_ids
 from codegraph.core.retrieval.post_processing import (
     ContextResult,
-    apply_directory_colocation_bonus,
     apply_idf_weights,
-    expand_structural_neighbors,
     format_context,
-    inject_directory_neighbors,
     reset_base_weights,
 )
 from codegraph.core.retrieval.seed_selection import (
@@ -38,8 +35,6 @@ def run_retrieval_pipeline(
     relationship_types: list[str] | None = None,
     orientation: str = "UNDIRECTED",
     apply_idf: bool = True,
-    expand_neighbors: bool = False,
-    inject_directory_files: bool = False,
     exclude_seed_paths: list[str] | None = None,
 ) -> list[ContextResult]:
     """Run the full retrieval pipeline and return context results."""
@@ -85,22 +80,6 @@ def run_retrieval_pipeline(
     if not ppr_results:
         logger.warning("Pipeline: PPR returned no results")
         return []
-
-    # Step 3.5: Structural neighborhood expansion (SpIDER-inspired, disabled by default).
-    # PPR already propagates through graph structure, making explicit BFS expansion
-    # redundant. Retained for ablation studies. See DEC-019.
-    if expand_neighbors:
-        ppr_results = expand_structural_neighbors(
-            driver, ppr_results, task_description, bm25_index, searchable_nodes
-        )
-        ppr_results = apply_directory_colocation_bonus(ppr_results)
-
-    # Step 3.6: Directory-based file injection — catch files PPR misses due to
-    # missing graph edges between sibling files. See DEC-021.
-    if inject_directory_files:
-        ppr_results = inject_directory_neighbors(
-            driver, ppr_results, task_description, bm25_index, searchable_nodes
-        )
 
     # Step 4: Format results into token-budgeted ContextResult items with source code.
     context_items = format_context(ppr_results, project_root, token_budget)

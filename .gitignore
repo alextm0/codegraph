@@ -1,12 +1,13 @@
 # Documentation
 docs/
+site/
 
 # AI Agents
 .agents/
 .claude/
 AGENTS.md
 CLAUDE.md
-DECISIONS.md
+docs/DECISIONS.md
 TODO.md
 memory/
 
@@ -21,6 +22,10 @@ env/
 build/
 dist/
 *.egg-info/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
 
 # Neo4j / Local Data (if applicable)
 data/
@@ -37,3 +42,7 @@ demo/requests/
 *.swp
 *.swo
 .worktrees/
+
+.superpowers
+out/
+skills-lock.json

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 from pathlib import Path
@@ -10,9 +11,10 @@ from neo4j import Driver
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.prompt import Prompt, Confirm
 from rich import box
 
-from codegraph.utils.config import load_raw_config, resolve_project_root, parse_signal_weights
+from codegraph.utils.config import load_raw_config, save_raw_config, resolve_project_root, parse_signal_weights
 from codegraph.utils.logging import setup_logging
 from codegraph.utils.ignore import load_ignore_patterns
 from codegraph.core.graph import clear_database, build_graph, get_database_manager, load_full_config
@@ -38,11 +40,85 @@ def _initialize_db(config_path: Path):
     db_manager.initialize(str(config_path))
     return db_manager
 
-def visualize_helper(config_path: Path, port: int, no_browser: bool) -> None:
+def init_helper(config_path: Path) -> None:
+    """Run an interactive setup wizard to create/update config.yaml."""
+    console.print("\n[bold cyan]CodeGraph Setup Wizard[/bold cyan]\n")
+
+    if config_path.exists():
+        if not Confirm.ask(f"Config file [blue]{config_path.name}[/blue] already exists. Overwrite?"):
+            return
+
+    # 1. Neo4j Settings
+    console.print("\n[bold]1. Database Connection[/bold]")
+    uri = Prompt.ask("Neo4j URI", default="neo4j://localhost:7687")
+    user = Prompt.ask("Neo4j Username", default="neo4j")
+    password = Prompt.ask("Neo4j Password", password=True)
+
+    # Test connectivity
+    with console.status("[yellow]Testing connectivity..."):
+        from codegraph.core.graph.connection import Neo4jConfig
+        from codegraph.core.graph.database import DatabaseManager
+        test_config = Neo4jConfig(uri=uri, username=user, password=password, database="neo4j")
+        test_mgr = DatabaseManager()
+        test_mgr._config = test_config # Hack to test without full init
+        connected = test_mgr.is_connected()
+
+    if connected:
+        console.print("   [green]+[/green] Connected successfully!")
+    else:
+        console.print("   [red]-[/red] Connection failed. Please check your credentials.")
+        if not Confirm.ask("Continue anyway?"):
+            return
+
+    # 2. Project Settings
+    console.print("\n[bold]2. Project Settings[/bold]")
+    project_root = Prompt.ask("Project root directory (absolute or relative to config)", default=".")
+    
+    # 3. Exclude Patterns
+    exclude = [".git", "__pycache__", ".venv", "node_modules", ".pytest_cache"]
+    console.print(f"\n[bold]3. Default exclusions:[/bold] [dim]{', '.join(exclude)}[/dim]")
+    
+    config_data = {
+        "neo4j": {
+            "uri": uri,
+            "username": user,
+            "password": password
+        },
+        "project_root": project_root,
+        "parser": {
+            "exclude_patterns": exclude
+        },
+        "ppr": {
+            "top_k": 20
+        },
+        "mcp": {
+            "default_token_budget": 8000
+        }
+    }
+
+    save_raw_config(config_path, config_data)
+    console.print(f"\n[bold green]+ Configuration saved to {config_path}[/bold green]")
+
+    # Create .cgignore if it doesn't exist
+    resolved_root = resolve_project_root(config_data, config_path)
+    ignore_file = resolved_root / ".cgignore"
+    if not ignore_file.exists():
+        if Confirm.ask("Create [blue].cgignore[/blue] with default patterns?"):
+            with open(ignore_file, "w", encoding="utf-8") as f:
+                f.write("# CodeGraph ignore patterns\n")
+                for p in exclude:
+                    f.write(f"{p}\n")
+            console.print(f"   [green]+[/green] Created {ignore_file}")
+
+    if Confirm.ask("\nRun [bold]codegraph rebuild[/bold] now?"):
+        rebuild_helper(config_path)
+
+def visualize_helper(config_path: Path, port: int, no_browser: bool, dev: bool = False, watch: bool = False, initial_task: str | None = None) -> None:
     """Start the FastAPI visualizer server and (optionally) open the browser."""
     setup_logging(level=logging.WARNING)
 
     raw_config = load_raw_config(config_path)
+    project_root = resolve_project_root(raw_config, config_path)
     db_manager = _initialize_db(config_path)
     driver = db_manager.get_driver()
 
@@ -61,13 +137,21 @@ def visualize_helper(config_path: Path, port: int, no_browser: bool) -> None:
 
     from codegraph.visualizer.server import create_app
 
-    fastapi_app = create_app(driver, raw_config)
+    fastapi_app = create_app(driver, raw_config, project_root=str(project_root), dev_mode=dev, watch_mode=watch)
     url = f"http://localhost:{port}"
 
-    if not no_browser:
-        import threading
-        import webbrowser
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    if dev:
+        console.print(
+            f"[yellow]Dev mode:[/yellow] API only on port {port}. "
+            "Run [bold]cd frontend && npm run dev[/bold] for the frontend."
+        )
+    else:
+        if not no_browser:
+            import threading
+            import webbrowser
+            from urllib.parse import urlencode
+            browser_url = f"{url}/?{urlencode({'task': initial_task})}" if initial_task else url
+            threading.Timer(1.0, lambda: webbrowser.open(browser_url)).start()
 
     console.print(f"[green]CodeGraph Visualizer[/green] running at [bold cyan]{url}[/bold cyan]")
     console.print("Press [bold]Ctrl+C[/bold] to stop.\n")
@@ -90,11 +174,11 @@ def rebuild_helper(config_path: Path) -> None:
                 console.print("[bold red]ERROR:[/bold red] Cannot reach Neo4j. Is it running?")
                 sys.exit(1)
         
-        console.print("[green]✓[/green] Connected to Neo4j.")
+        console.print("[green]+[/green] Connected to Neo4j.")
 
         with console.status("[bold yellow]Clearing existing graph..."):
             deleted = clear_database(driver)
-        console.print(f"[green]✓[/green] Cleared {deleted} nodes.")
+        console.print(f"[green]+[/green] Cleared {deleted} nodes.")
 
         # Load ignore patterns
         ignore_file = project_root / ".cgignore"
@@ -124,17 +208,15 @@ def rebuild_helper(config_path: Path) -> None:
                 str(project_root), parser, exclude_patterns=exclude,
                 progress_callback=parse_progress,
             )
-        console.print(f"[green]✓[/green] Parsed {len(all_entities)} files.")
+        console.print(f"[green]+[/green] Parsed {len(all_entities)} files.")
 
         console.print("Building graph...")
         def graph_progress(stage: str, count: int) -> None:
             console.print(f"  {stage}: [bold]{count}[/bold]")
 
-        create_colocation = raw_config.get("graph", {}).get("create_colocation_edges", False)
         counts = build_graph(
             driver, all_entities,
             progress_callback=graph_progress,
-            create_colocation_edges=create_colocation,
         )
 
         total_nodes = sum(v for k, v in counts.items() if k in ("File", "Function", "Class", "Method"))
@@ -206,19 +288,19 @@ def doctor_helper() -> None:
 
     db_manager = get_database_manager()
     
-    console.print("[bold cyan]🏥 Running CodeGraph Diagnostics...[/bold cyan]\n")
+    console.print("[bold cyan]Running CodeGraph Diagnostics...[/bold cyan]\n")
     
     # 1. Neo4j connectivity
     console.print("[bold]1. Checking Neo4j Connectivity...[/bold]")
     try:
         connected = db_manager.is_connected()
         if connected:
-            console.print(f"   [green]✓[/green] Connected to {db_manager._config.uri if db_manager._config else 'Neo4j'}")
+            console.print(f"   [green]+[/green] Connected to {db_manager._config.uri if db_manager._config else 'Neo4j'}")
         else:
-            console.print(f"   [red]✗[/red] Cannot reach Neo4j at {db_manager._config.uri if db_manager._config else 'unknown'}")
+            console.print(f"   [red]-[/red] Cannot reach Neo4j at {db_manager._config.uri if db_manager._config else 'unknown'}")
             ok = False
     except Exception as exc:
-        console.print(f"   [red]✗[/red] Connection error: {exc}")
+        console.print(f"   [red]-[/red] Connection error: {exc}")
         ok = False
         connected = False
 
@@ -229,30 +311,30 @@ def doctor_helper() -> None:
             from codegraph.core.graph.ppr import create_gds_client
             gds = create_gds_client(db_manager.get_driver())
             version = gds.version()
-            console.print(f"   [green]✓[/green] GDS Plugin installed (version: {version})")
+            console.print(f"   [green]+[/green] GDS Plugin installed (version: {version})")
         except Exception as exc:
-            console.print(f"   [red]✗[/red] GDS check failed: {exc}")
+            console.print(f"   [red]-[/red] GDS check failed: {exc}")
             console.print("       [dim]Note: GDS is required for Personalized PageRank (PPR) retrieval.[/dim]")
             ok = False
     else:
-        console.print("   [yellow]⚠[/yellow] SKIP (Neo4j not reachable)")
+        console.print("   [yellow]![/yellow] SKIP (Neo4j not reachable)")
 
     # 3. tree-sitter installation
     console.print("\n[bold]3. Checking Tree-Sitter Installation...[/bold]")
     try:
         from tree_sitter import Language, Parser
         import tree_sitter_python
-        console.print("   [green]✓[/green] tree-sitter is installed")
-        console.print("   [green]✓[/green] python parser is available")
+        console.print("   [green]+[/green] tree-sitter is installed")
+        console.print("   [green]+[/green] python parser is available")
     except ImportError as e:
-        console.print(f"   [red]✗[/red] tree-sitter check failed: {e}")
+        console.print(f"   [red]-[/red] tree-sitter check failed: {e}")
         ok = False
 
     console.print("\n" + "=" * 40)
     if ok:
-        console.print("[bold green]✅ All diagnostics passed! System is healthy.[/bold green]")
+        console.print("[bold green]+ All diagnostics passed! System is healthy.[/bold green]")
     else:
-        console.print("[bold yellow]⚠️  Some issues detected. Please review the output above.[/bold yellow]")
+        console.print("[bold yellow]!  Some issues detected. Please review the output above.[/bold yellow]")
     console.print("=" * 40 + "\n")
 
 def query_helper(
@@ -262,6 +344,8 @@ def query_helper(
     current_file: str | None,
     top_k: int,
     token_budget: int,
+    json_out: bool = False,
+    compact: bool = False,
 ) -> None:
     """Run the retrieval pipeline and print context to stdout."""
     setup_logging(level=logging.WARNING)
@@ -318,7 +402,36 @@ def query_helper(
             )
 
         if not results:
-            console.print("[yellow]No results found. Is the graph built? Run: codegraph rebuild[/yellow]")
+            if json_out:
+                import json
+                console.print(json.dumps({"results": [], "total": 0}))
+            else:
+                console.print("[yellow]No results found. Is the graph built? Run: codegraph rebuild[/yellow]")
+            return
+
+        if json_out:
+            import json
+            output = {
+                "total": len(results),
+                "results": [
+                    {
+                        "rank": i,
+                        "qualified_name": item.qualified_name,
+                        "entity_type": item.entity_type,
+                        "file_path": item.file_path,
+                        "lines": [item.line_start, item.line_end],
+                        "relevance_score": round(item.relevance_score, 4),
+                        "token_count": item.token_count,
+                    }
+                    for i, item in enumerate(results, start=1)
+                ],
+            }
+            console.print(json.dumps(output, indent=2))
+            return
+
+        if compact:
+            for i, item in enumerate(results, start=1):
+                console.print(f"[bold]{i:>2}.[/bold] [blue]{item.file_path}[/blue]  [dim]score={item.relevance_score:.4f}[/dim]")
             return
 
         console.print(f"Found [bold]{len(results)}[/bold] context items:\n")
@@ -474,6 +587,105 @@ def _print_results_table(
     console.print(results_table)
     console.print()
 
+def analyze_complexity_helper(config_path: Path, path: str, threshold: int = 10) -> None:
+    """Analyze cyclomatic complexity for a file or directory."""
+    from codegraph.core.parser.complexity import analyze_file_complexity
+    
+    raw_config = load_raw_config(config_path)
+    project_root = resolve_project_root(raw_config, config_path)
+    target = (project_root / path).resolve()
+    
+    if not target.exists():
+        console.print(f"[red]Path not found:[/red] {target}")
+        return
+
+    files = []
+    if target.is_file():
+        if target.suffix == '.py':
+            files.append(target)
+    else:
+        files = list(target.rglob("*.py"))
+        # Filter exclusions
+        exclude = raw_config.get("parser", {}).get("exclude_patterns", [])
+        files = [f for f in files if not any(ex in str(f) for ex in exclude)]
+
+    if not files:
+        console.print("[yellow]No Python files found for analysis.[/yellow]")
+        return
+
+    table = Table(title=f"Cyclomatic Complexity (threshold: {threshold})", box=box.ROUNDED)
+    table.add_column("Complexity", justify="right", style="bold")
+    table.add_column("Type", style="magenta")
+    table.add_column("Entity", style="cyan")
+    table.add_column("Location", style="dim")
+    
+    found = 0
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+        task = progress.add_task("Analyzing complexity...", total=len(files))
+        for f in files:
+            progress.update(task, description=f"Analyzing {f.name}")
+            try:
+                results = analyze_file_complexity(str(f))
+                for res in sorted(results, key=lambda x: x['complexity'], reverse=True):
+                    if res['complexity'] >= threshold:
+                        rel_path = f.relative_to(project_root)
+                        table.add_row(
+                            str(res['complexity']),
+                            res['type'],
+                            res['name'],
+                            f"{rel_path}:{res['line']}"
+                        )
+                        found += 1
+                progress.advance(task)
+            except Exception as e:
+                console.print(f"[red]Error analyzing {f.name}:[/red] {e}")
+
+    if found > 0:
+        console.print(table)
+    else:
+        console.print(f"[green]+ All entities are below complexity threshold {threshold}.[/green]")
+
+
+def watch_helper(config_path: Path) -> None:
+    """Watch for file changes and update the graph incrementally."""
+    from codegraph.watcher.file_watcher import CodeGraphWatcher
+    from codegraph.watcher.incremental import update_file_in_graph
+    import time
+
+    setup_logging(level=logging.INFO)
+    raw_config = load_raw_config(config_path)
+    project_root = resolve_project_root(raw_config, config_path)
+    db_manager = _initialize_db(config_path)
+    driver = db_manager.get_driver()
+
+    if not db_manager.is_connected():
+        console.print("[bold red]ERROR:[/bold red] Cannot reach Neo4j.")
+        return
+
+    exclude = raw_config.get("parser", {}).get("exclude_patterns", [])
+
+    def on_changes(paths: set[str]):
+        for p in paths:
+            try:
+                res = update_file_in_graph(driver, str(project_root), p)
+                console.print(f"[dim]{time.strftime('%H:%M:%S')}[/dim] [green]Updated:[/green] {Path(p).name}")
+            except Exception as e:
+                console.print(f"[red]Error updating {p}:[/red] {e}")
+
+    watcher = CodeGraphWatcher(str(project_root), on_changes, exclude_patterns=exclude)
+    watcher.start()
+
+    console.print(f"[bold green]Watching for changes in {project_root}...[/bold green]")
+    console.print("Press [bold]Ctrl+C[/bold] to stop.")
+
+    try:
+        while True:
+            watcher.check_for_changes()
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        watcher.stop()
+        console.print("\n[yellow]Stopped watching.[/yellow]")
+
 
 def find_name_helper(name: str):
     """Find nodes by name."""
@@ -516,4 +728,3 @@ def find_pattern_helper(pattern: str):
         console.print(table)
     except Exception as e:
         console.print(f"[bold red]Error finding node by pattern:[/bold red] {e}")
-

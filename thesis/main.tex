@@ -1,0 +1,67 @@
+%\documentclass[12pt]{scrreprt}
+\documentclass[12pt]{report}
+
+% language may be romanian or english (default is english)
+% type may be bachelor or master (default is bachelor)
+\usepackage[language=english, type=bachelor]{style}
+
+% Additional packages for tables and formatting
+\usepackage{booktabs}       % professional tables
+\usepackage{array}          % extended column definitions
+\usepackage{caption}        % caption customization
+\usepackage{subcaption}     % subfigures
+\usepackage{amsmath}        % math environments
+\usepackage{enumitem}       % list customization
+
+%\geometry{a4paper,top=2.5cm,left=3cm,right=2.5cm,bottom=2.5cm}
+%in style
+%controlling the appearance of your headers and footers
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\lhead{}
+\chead{}
+\renewcommand{\headrulewidth}{0.2pt}
+\renewcommand{\footrulewidth}{0.2pt}
+
+\begin{document}
+
+\specialization{Computer Science}
+\title{Structural Context Retrieval for AI Coding Agents via Weighted Personalized PageRank on Code Dependency Graphs}
+\author{Toma Alexandru-Mihai}
+\supervisor{Dr. Arthur Molnar}
+
+\hypersetup{pageanchor=false}
+\maketitle
+\hypersetup{pageanchor=true}
+
+
+\cleardoublepage
+\pagenumbering{roman}
+
+\cleardoublepage
+\chapter*{Abstract}
+\vspace{0.5cm}
+\hrule
+\vspace{0.5cm}
+
+% TODO: Write abstract after all chapters are complete
+
+\tableofcontents
+
+
+\newpage
+\pagenumbering{arabic}
+
+\input{chapters/chapter1_introduction}
+
+\input{chapters/chapter2_background}
+
+\input{chapters/chapter3_system_design}
+
+\input{chapters/chapter4_evaluation}
+
+\input{chapters/chapter5_discussion}
+
+\bibliography{references}
+
+\end{document}
