@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { postQuery } from '../api/client'
 import type { QueryResponse } from '../types/api'
 
@@ -14,11 +14,13 @@ interface UseQueryReturn {
 }
 
 export function useQuery(onResult?: (r: QueryResponse) => void): UseQueryReturn {
-  const [task, setTask] = useState('')
+  const initialTask = new URLSearchParams(window.location.search).get('task') ?? ''
+  const [task, setTask] = useState(initialTask)
   const [topK, setTopK] = useState(10)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<QueryResponse | null>(null)
+  const autoRan = useRef(false)
 
   const runQuery = useCallback(async () => {
     if (!task.trim()) return
@@ -34,6 +36,13 @@ export function useQuery(onResult?: (r: QueryResponse) => void): UseQueryReturn 
       setLoading(false)
     }
   }, [task, topK, onResult])
+
+  useEffect(() => {
+    if (initialTask && !autoRan.current) {
+      autoRan.current = true
+      runQuery()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { task, setTask, topK, setTopK, loading, error, result, runQuery }
 }

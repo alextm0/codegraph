@@ -2,12 +2,13 @@ import { useEffect, useRef } from 'react'
 import * as d3 from 'd3'
 import type { D3Node, D3Edge } from '../../types/graph'
 import type { GraphNode } from '../../types/api'
-import { edgeColor } from './graphHelpers'
+import { nodeColor, edgeColor } from './graphHelpers'
 
 interface GraphCanvasProps {
   nodes: D3Node[]
   edges: D3Edge[]
   onNodeSelect: (node: GraphNode | null) => void
+  selectedNode?: GraphNode | null
 }
 
 const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const
@@ -25,8 +26,9 @@ function createTooltipEl(): HTMLDivElement {
 }
 
 function showTooltip(tt: HTMLDivElement, e: MouseEvent, d: D3Node) {
-  const sc = d.ppr_score > 0 ? d.ppr_score.toFixed(4) : '—'
-  const seedPart = d.is_seed ? ` · seed ${d.seed_weight.toFixed(3)}` : ''
+  const ppr = d.ppr_score || 0
+  const sc = ppr > 0 ? ppr.toFixed(5) : '—'
+  const seedPart = d.is_seed ? ` · seed ${(d.seed_weight || 0).toFixed(3)}` : ''
 
   tt.innerHTML = ''
 
@@ -60,24 +62,19 @@ function hideTooltip(tt: HTMLDivElement) {
 }
 
 function nodeRadius(d: D3Node): number {
-  if (d.is_seed) return 11
-  return Math.max(5, 4 + d.ppr_score * 28)
+  const base = d.is_seed ? 10 : 6
+  const ppr = d.ppr_score || 0
+  return base + Math.sqrt(Math.max(0, ppr)) * 25
 }
 
-function nodeVisualColor(d: D3Node): string {
-  if (d.is_seed) return '#d4af37'
-  if (d.ppr_score <= 0) return '#2d3748'
-  // Heat map: blue (low) → red (high) based on PPR score
-  return d3.interpolateRdYlBu(1 - Math.min(d.ppr_score / 0.4, 1))
-}
-
-export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasProps) {
+export default function GraphCanvas({ nodes, edges, onNodeSelect, selectedNode }: GraphCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const simRef = useRef<d3.Simulation<D3Node, D3Edge> | null>(null)
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
   const sizeRef = useRef({ w: 800, h: 600 })
   const tooltipRef = useRef<HTMLDivElement | null>(null)
+  const requestRef = useRef<number>()
 
-  // ResizeObserver to track container size
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
@@ -92,16 +89,13 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
     return () => ro.disconnect()
   }, [])
 
-  // D3 simulation
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
 
-    // Create tooltip for this mount
     const tt = createTooltipEl()
     tooltipRef.current = tt
 
-    // Cleanup previous simulation
     d3.select(svg).selectAll('*').remove()
     if (simRef.current) {
       simRef.current.stop()
@@ -121,10 +115,29 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
 
     const svgSel = d3.select(svg)
 
-    // Arrow markers for each edge type
     const defs = svgSel.append('defs')
+
+    // Glow filter
+    const filter = defs.append('filter')
+      .attr('id', 'glow')
+      .attr('x', '-50%')
+      .attr('y', '-50%')
+      .attr('width', '200%')
+      .attr('height', '200%')
+
+    filter.append('feGaussianBlur')
+      .attr('stdDeviation', '2.5')
+      .attr('result', 'coloredBlur')
+
+    const feMerge = filter.append('feMerge')
+    feMerge.append('feMergeNode').attr('in', 'coloredBlur')
+    feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
+
+    // Arrow markers
     EDGE_TYPES.forEach((rel) => {
       const color = edgeColor(rel)
+      
+      // Standard marker
       defs
         .append('marker')
         .attr('id', `arr-${rel}`)
@@ -137,22 +150,35 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
         .append('path')
         .attr('d', 'M0,-4L8,0L0,4')
         .attr('fill', color)
+
+      // Dimmed marker
+      defs
+        .append('marker')
+        .attr('id', `arr-${rel}-dim`)
+        .attr('viewBox', '0 -4 8 8')
+        .attr('refX', 20)
+        .attr('refY', 0)
+        .attr('markerWidth', 5)
+        .attr('markerHeight', 5)
+        .attr('orient', 'auto')
+        .append('path')
+        .attr('d', 'M0,-4L8,0L0,4')
+        .attr('fill', color)
+        .attr('fill-opacity', 0.1)
     })
 
     const g = svgSel.append('g')
 
-    // Zoom + pan
-    svgSel.call(
-      d3.zoom<SVGSVGElement, unknown>()
-        .scaleExtent([0.15, 5])
-        .on('zoom', (e) => g.attr('transform', e.transform)),
-    )
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 8])
+      .on('zoom', (e) => g.attr('transform', e.transform))
+      
+    svgSel.call(zoom)
+    zoomRef.current = zoom
 
-    // Build id→node map for resolving edge references
     const nodeById: Record<string, D3Node> = {}
     nodes.forEach((n) => { nodeById[n.id] = n })
 
-    // Resolve edges so source/target are node objects
     const links: D3Edge[] = edges
       .map((e) => ({
         source: nodeById[e.source as string] ?? e.source,
@@ -165,75 +191,106 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
           typeof e.target === 'object',
       )
 
-    // Edge lines
     const linkSel = g
       .append('g')
-      .attr('stroke-opacity', 0.55)
+      .attr('stroke-opacity', 0.4)
       .selectAll<SVGLineElement, D3Edge>('line')
       .data(links)
       .join('line')
       .attr('stroke', (d) => edgeColor(d.type))
-      .attr('stroke-width', 1.5)
+      .attr('stroke-width', 1.2)
       .attr('marker-end', (d) => `url(#arr-${d.type})`)
 
-    // Invisible hit area (larger click target)
-    const hitSel = g
-      .append('g')
-      .selectAll<SVGCircleElement, D3Node>('circle')
-      .data(nodes)
+    // Particle animation layer
+    const particleGroup = g.append('g')
+    const animatedLinks = links.filter(l => l.type === 'CALLS' || l.type === 'IMPORTS')
+    const particles = particleGroup
+      .selectAll<SVGCircleElement, D3Edge>('circle.particle')
+      .data(animatedLinks)
       .join('circle')
-      .attr('r', (d) => nodeRadius(d) + 9)
-      .attr('fill', 'transparent')
-      .attr('cursor', 'pointer')
-      .on('click', (_e, d) => { onNodeSelect(d) })
-      .on('mouseover', (_e, d) => showTooltip(tt, _e as unknown as MouseEvent, d))
-      .on('mousemove', (e) => moveTooltip(tt, e as unknown as MouseEvent))
-      .on('mouseout', () => hideTooltip(tt))
+      .attr('class', 'particle')
+      .attr('r', 2)
+      .attr('fill', d => edgeColor(d.type))
+      .attr('opacity', 0.8)
+
+    const startTime = Date.now()
+    const animate = () => {
+      const elapsed = (Date.now() - startTime) % 2000
+      const t = elapsed / 2000
+
+      particles
+        .attr('cx', d => {
+          const x1 = (d.source as D3Node).x || 0
+          const x2 = (d.target as D3Node).x || 0
+          return x1 + (x2 - x1) * t
+        })
+        .attr('cy', d => {
+          const y1 = (d.source as D3Node).y || 0
+          const y2 = (d.target as D3Node).y || 0
+          return y1 + (y2 - y1) * t
+        })
+
+      requestRef.current = requestAnimationFrame(animate)
+    }
+    requestRef.current = requestAnimationFrame(animate)
+
+    const nodeGroup = g.append('g')
+
+    // Seed node animated ring
+    const seedRings = nodeGroup
+      .selectAll<SVGCircleElement, D3Node>('circle.seed-ring')
+      .data(nodes.filter(d => d.is_seed))
+      .join('circle')
+      .attr('class', 'seed-ring')
+      .attr('r', d => nodeRadius(d) + 4)
+      .attr('fill', 'none')
+      .attr('stroke', '#fbbf24')
+      .attr('stroke-width', 2)
+      .attr('stroke-opacity', 0.6)
+    
+    seedRings.append('animate')
+      .attr('attributeName', 'stroke-opacity')
+      .attr('values', '0.6;0.1;0.6')
+      .attr('dur', '2s')
+      .attr('repeatCount', 'indefinite')
 
     // Visible node circles
-    const nodeSel = g
-      .append('g')
-      .selectAll<SVGCircleElement, D3Node>('circle')
+    const nodeSel = nodeGroup
+      .selectAll<SVGCircleElement, D3Node>('circle.node')
       .data(nodes)
       .join('circle')
+      .attr('class', 'node')
       .attr('r', nodeRadius)
-      .attr('fill', nodeVisualColor)
-      .attr('stroke', (d) => d.is_seed ? '#d4af37' : 'rgba(255,255,255,0.12)')
-      .attr('stroke-width', (d) => d.is_seed ? 2.5 : 1)
+      .attr('fill', (d) => nodeColor(d.label))
+      .attr('filter', (d) => (d.ppr_score || 0) > 0.05 ? 'url(#glow)' : null)
+      .attr('stroke', 'rgba(255,255,255,0.2)')
+      .attr('stroke-width', 1)
       .attr('cursor', 'pointer')
       .on('click', (_e, d) => { onNodeSelect(d) })
       .on('mouseover', (_e, d) => showTooltip(tt, _e as unknown as MouseEvent, d))
       .on('mousemove', (e) => moveTooltip(tt, e as unknown as MouseEvent))
       .on('mouseout', () => hideTooltip(tt))
-
-    // Labels for seeds and top-PPR nodes only
-    const topIds = new Set([
-      ...nodes.filter((d) => d.is_seed).map((d) => d.id),
-      ...[...nodes]
-        .sort((a, b) => b.ppr_score - a.ppr_score)
-        .slice(0, 6)
-        .map((d) => d.id),
-    ])
 
     const labelSel = g
       .append('g')
       .selectAll<SVGTextElement, D3Node>('text')
-      .data(nodes.filter((d) => topIds.has(d.id)))
+      .data(nodes)
       .join('text')
-      .text((d) => (d.name.length > 22 ? `${d.name.slice(0, 20)}…` : d.name))
-      .attr('font-size', 9)
-      .attr('fill', '#94a3b8')
+      .text(d => d.name || d.file_path || "Unknown")
+      .attr('font-size', d => d.is_seed || (d.ppr_score || 0) > 0.05 ? 10 : 9)
+      .attr('fill', 'var(--text)')
+      .attr('opacity', d => d.is_seed || (d.ppr_score || 0) > 0.05 ? 1 : 0.5)
       .attr('text-anchor', 'middle')
-      .attr('dy', (d) => nodeRadius(d) + 11)
+      .attr('dy', d => nodeRadius(d) + 14)
       .attr('pointer-events', 'none')
+      .style('text-shadow', '0 1px 2px rgba(0,0,0,0.8)')
 
-    // Force simulation — declared BEFORE drag setup so drag callbacks can reference it
     const sim = d3
       .forceSimulation<D3Node, D3Edge>(nodes)
-      .force('link', d3.forceLink<D3Node, D3Edge>(links).id((d) => d.id).distance(100).strength(0.35))
-      .force('charge', d3.forceManyBody<D3Node>().strength(-250))
+      .force('link', d3.forceLink<D3Node, D3Edge>(links).id((d) => d.id).distance(120).strength(0.2))
+      .force('charge', d3.forceManyBody<D3Node>().strength(-200))
       .force('center', d3.forceCenter(W / 2, H / 2))
-      .force('collision', d3.forceCollide<D3Node>().radius((d) => nodeRadius(d) + 12))
+      .force('collision', d3.forceCollide<D3Node>().radius((d) => nodeRadius(d) + 10))
       .on('tick', () => {
         linkSel
           .attr('x1', (d) => (d.source as D3Node).x ?? 0)
@@ -241,11 +298,10 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
           .attr('x2', (d) => (d.target as D3Node).x ?? 0)
           .attr('y2', (d) => (d.target as D3Node).y ?? 0)
         nodeSel.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0)
-        hitSel.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0)
+        seedRings.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0)
         labelSel.attr('x', (d) => d.x ?? 0).attr('y', (d) => d.y ?? 0)
       })
 
-    // Drag behaviour — attached AFTER sim declaration
     nodeSel.call(
       d3.drag<SVGCircleElement, D3Node>()
         .on('start', (e, d) => {
@@ -268,11 +324,76 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
 
     return () => {
       sim.stop()
+      if (requestRef.current) cancelAnimationFrame(requestRef.current)
       hideTooltip(tt)
       tt.remove()
       tooltipRef.current = null
     }
   }, [nodes, edges, onNodeSelect])
+
+  useEffect(() => {
+    if (!svgRef.current) return
+    const svg = d3.select(svgRef.current)
+    const nodeSel = svg.selectAll<SVGCircleElement, D3Node>('circle.node')
+    const linkSel = svg.selectAll<SVGLineElement, D3Edge>('line')
+    const labelSel = svg.selectAll<SVGTextElement, D3Node>('text')
+    const ringSel = svg.selectAll<SVGCircleElement, D3Node>('circle.seed-ring')
+    const particleSel = svg.selectAll<SVGCircleElement, D3Edge>('circle.particle')
+
+    if (!selectedNode) {
+      // Restore standard opacities
+      nodeSel.attr('opacity', 1)
+      ringSel.attr('opacity', 1)
+      linkSel.attr('stroke-opacity', 0.4).attr('marker-end', d => `url(#arr-${d.type})`)
+      labelSel.attr('opacity', d => d.is_seed || (d.ppr_score || 0) > 0.05 ? 1 : 0.5)
+      particleSel.attr('opacity', 0.8)
+      return
+    }
+
+    const connected = new Set<string>([selectedNode.id])
+    edges.forEach(e => {
+        const sourceId = typeof e.source === 'object' ? (e.source as D3Node).id : e.source
+        const targetId = typeof e.target === 'object' ? (e.target as D3Node).id : e.target
+        if (sourceId === selectedNode.id) connected.add(targetId as string)
+        if (targetId === selectedNode.id) connected.add(sourceId as string)
+    })
+
+    nodeSel.attr('opacity', d => connected.has(d.id) ? 1 : 0.05)
+    ringSel.attr('opacity', d => connected.has(d.id) ? 1 : 0)
+    linkSel
+      .attr('stroke-opacity', d => {
+        const sourceId = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
+        const targetId = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+        return (sourceId === selectedNode.id || targetId === selectedNode.id) ? 0.8 : 0.05
+      })
+      .attr('marker-end', d => {
+        const sourceId = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
+        const targetId = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+        const isConnected = sourceId === selectedNode.id || targetId === selectedNode.id
+        return isConnected ? `url(#arr-${d.type})` : `url(#arr-${d.type}-dim)`
+      })
+
+    labelSel.attr('opacity', d => connected.has(d.id) ? 1 : 0.05)
+    
+    particleSel.attr('opacity', d => {
+      const sourceId = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
+      const targetId = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+      return (sourceId === selectedNode.id || targetId === selectedNode.id) ? 0.8 : 0.01
+    })
+
+    const sn = nodes.find(n => n.id === selectedNode.id)
+    if (sn && sn.x !== undefined && sn.y !== undefined && zoomRef.current) {
+      const W = sizeRef.current.w
+      const H = sizeRef.current.h
+      const scale = 2
+      const tx = W / 2 - sn.x * scale
+      const ty = H / 2 - sn.y * scale
+
+      svg.transition()
+        .duration(750)
+        .call(zoomRef.current.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+    }
+  }, [selectedNode, nodes, edges])
 
   const hasData = nodes.length > 0
 
@@ -305,10 +426,10 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect }: GraphCanvasP
 
 function GraphLegend() {
   const nodeTypes: [string, string][] = [
-    ['#d4af37', 'Seed'],
-    ['#f87171', 'High PPR'],
-    ['#60a5fa', 'Low PPR'],
-    ['#2d3748', 'Graph entity'],
+    [nodeColor('File'), 'File'],
+    [nodeColor('Class'), 'Class'],
+    [nodeColor('Function'), 'Function'],
+    [nodeColor('Method'), 'Method'],
   ]
   const edgeTypes: [string, string][] = [
     [edgeColor('CALLS'), 'CALLS'],
@@ -330,26 +451,32 @@ function GraphLegend() {
         fontSize: 10,
         backdropFilter: 'blur(8px)',
         pointerEvents: 'none',
+        display: 'flex',
+        gap: 20
       }}
     >
-      <div style={{ color: 'var(--text-dim)', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        Nodes
-      </div>
-      {nodeTypes.map(([c, l]) => (
-        <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, color: 'var(--text-dim)' }}>
-          <div style={{ width: 9, height: 9, borderRadius: '50%', background: c, flexShrink: 0 }} />
-          {l}
+      <div>
+        <div style={{ color: 'var(--text-dim)', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Nodes
         </div>
-      ))}
-      <div style={{ color: 'var(--text-dim)', fontWeight: 600, marginTop: 8, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        Edges
+        {nodeTypes.map(([c, l]) => (
+          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, color: 'var(--text-dim)' }}>
+            <div style={{ width: 9, height: 9, borderRadius: '50%', background: c, flexShrink: 0 }} />
+            {l}
+          </div>
+        ))}
       </div>
-      {edgeTypes.map(([c, l]) => (
-        <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, color: 'var(--text-dim)' }}>
-          <div style={{ width: 20, height: 2, background: c, flexShrink: 0 }} />
-          {l}
+      <div>
+        <div style={{ color: 'var(--text-dim)', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Edges
         </div>
-      ))}
+        {edgeTypes.map(([c, l]) => (
+          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, color: 'var(--text-dim)' }}>
+            <div style={{ width: 20, height: 2, background: c, flexShrink: 0 }} />
+            {l}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

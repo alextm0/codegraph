@@ -42,3 +42,12 @@ export async function getStats(): Promise<StatsResponse> {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+export async function openFile(filePath: string, lineNumber?: number): Promise<void> {
+  const res = await fetch(`${BASE}/api/open`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath, line_number: lineNumber }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+}

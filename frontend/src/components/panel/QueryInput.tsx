@@ -1,19 +1,23 @@
 import { useCallback } from 'react'
-import type { QueryResponse } from '../../types/api'
-import { useQuery } from '../../hooks/useQuery'
 
 interface QueryInputProps {
-  onResult: (r: QueryResponse) => void
+  task: string
+  setTask: (task: string) => void
+  topK: number
+  setTopK: (topK: number) => void
+  loading: boolean
+  error: string | null
+  onRun: () => void
 }
 
-export default function QueryInput({ onResult }: QueryInputProps) {
-  const { task, setTask, topK, setTopK, loading, error, runQuery } = useQuery(onResult)
-
+export default function QueryInput({
+  task, setTask, topK, setTopK, loading, error, onRun,
+}: QueryInputProps) {
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runQuery()
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') onRun()
     },
-    [runQuery],
+    [onRun],
   )
 
   return (
@@ -80,7 +84,7 @@ export default function QueryInput({ onResult }: QueryInputProps) {
       )}
       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
         <button
-          onClick={runQuery}
+          onClick={onRun}
           disabled={loading || !task.trim()}
           style={{
             display: 'inline-flex',

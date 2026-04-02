@@ -72,16 +72,24 @@ export interface QueryResponse {
 // File tree types  (/api/tree)
 // ---------------------------------------------------------------------------
 
+export interface FileEntry {
+  path: string
+  type: 'file' | 'directory'
+}
+
+export interface TreeResponse {
+  root: string
+  project_root: string
+  files: FileEntry[]
+}
+
+/** Nested version built by useFileTree hook */
 export interface TreeNode {
   name: string
   path: string
   type: 'file' | 'directory'
   children?: TreeNode[]
-  entity_count?: number
-}
-
-export interface TreeResponse {
-  tree: TreeNode[]
+  ppr_rank?: number // Added later by merging results
 }
 
 // ---------------------------------------------------------------------------
