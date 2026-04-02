@@ -17,13 +17,9 @@ class AblationConfig:
     Attributes:
         name: Short identifier used in output filenames and summary JSON.
         relationship_types: Edge types included in the GDS projection. None means
-            use all five (CONTAINS, CALLS, IMPORTS, INHERITS_FROM, CO_LOCATED).
+            use all four (CONTAINS, CALLS, IMPORTS, INHERITS_FROM).
         orientation: GDS projection orientation — "UNDIRECTED", "NATURAL", or "REVERSE".
         apply_idf: When False, skip IDF weight recomputation before projection.
-        expand_neighbors: When False, skip SpIDER-inspired structural neighborhood
-            expansion after PPR (useful for isolating its contribution).
-        inject_directory_files: When False, skip directory-based file injection
-            after PPR (useful for isolating its contribution). See DEC-021.
         ppr_config: PPRConfig override (damping_factor, top_k, etc.).
     """
 
@@ -31,9 +27,6 @@ class AblationConfig:
     relationship_types: list[str] | None = None
     orientation: str = "UNDIRECTED"
     apply_idf: bool = True
-    expand_neighbors: bool = False
-    inject_directory_files: bool = False
-    create_colocation_edges: bool = False
     ppr_config: PPRConfig = field(default_factory=PPRConfig)
 
 
@@ -42,7 +35,6 @@ class AblationConfig:
 # ---------------------------------------------------------------------------
 
 _ALL_TYPES = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM"]
-_ALL_TYPES_WITH_COLOCATION = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM", "CO_LOCATED"]
 
 ABLATIONS: list[AblationConfig] = [
     # Full config — the default run; used as the reference point.
@@ -84,48 +76,6 @@ ABLATIONS: list[AblationConfig] = [
     AblationConfig(name="top_k_5",  ppr_config=PPRConfig(top_k=5)),
     AblationConfig(name="top_k_10", ppr_config=PPRConfig(top_k=10)),
     AblationConfig(name="top_k_50", ppr_config=PPRConfig(top_k=50)),
-
-    # Structural expansion ablations — isolate SpIDER-inspired neighborhood expansion
-    AblationConfig(name="no_structural_expansion", expand_neighbors=False),
-
-    # CO_LOCATED edge + directory injection ablations (iteration 3)
-    # Iteration 3 result: CO_LOCATED + injection was net-neutral on R@10 (74.0% → 73.33%).
-    # These ablations are retained for reproducibility and negative result documentation.
-    # See DEC-020, DEC-021, DEC-022.
-
-    # no_colocation_edges: CO_LOCATED edges built but excluded from GDS projection; injection enabled
-    AblationConfig(
-        name="no_colocation_edges",
-        relationship_types=_ALL_TYPES,
-        inject_directory_files=True,
-        create_colocation_edges=True,
-    ),
-    # no_directory_injection: CO_LOCATED edges in PPR but no post-hoc injection
-    AblationConfig(
-        name="no_directory_injection",
-        inject_directory_files=False,
-        create_colocation_edges=True,
-    ),
-    # no_colocation_no_injection: pure iter-2 PPR; baseline for iter-3 comparison
-    AblationConfig(
-        name="no_colocation_no_injection",
-        relationship_types=_ALL_TYPES,
-        inject_directory_files=False,
-        create_colocation_edges=False,
-    ),
-    # colocation_only: CO_LOCATED edges in PPR, no post-hoc injection
-    AblationConfig(
-        name="colocation_only",
-        inject_directory_files=False,
-        create_colocation_edges=True,
-    ),
-    # injection_only: post-hoc injection, CO_LOCATED edges excluded from graph and GDS
-    AblationConfig(
-        name="injection_only",
-        relationship_types=_ALL_TYPES,
-        inject_directory_files=True,
-        create_colocation_edges=False,
-    ),
 
     # Uniform PPR parameter sweep — combined configurations for further tuning
     # Uniform PPR + damping factor sweep — find optimal alpha for uniform mode
