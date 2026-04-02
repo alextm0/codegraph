@@ -524,6 +524,119 @@ def get_subgraph_for_nodes(
     return {"nodes": list(nodes_by_id.values()), "edges": edges}
 
 
+def get_subgraph_by_prefix(
+    driver: Driver,
+    prefix: str,
+) -> dict[str, list[dict]]:
+    """Return all nodes and edges where file_path starts with the given prefix.
+
+    Useful for focusing the visualization on a specific directory or file.
+    """
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (a)-[r]-(b)
+            WHERE a.file_path STARTS WITH $prefix AND b.file_path STARTS WITH $prefix
+            RETURN
+                a.qualified_name AS src_id,
+                a.name           AS src_name,
+                labels(a)[0]     AS src_label,
+                a.file_path      AS src_file,
+                type(r)          AS rel_type,
+                b.qualified_name AS tgt_id,
+                b.name           AS tgt_name,
+                labels(b)[0]     AS tgt_label,
+                b.file_path      AS tgt_file
+            """,
+            prefix=prefix,
+        )
+        rows = result.data()
+
+    nodes_by_id: dict[str, dict] = {}
+    edges: list[dict] = []
+    seen_edges: set[frozenset] = set()
+
+    for row in rows:
+        for p, qname in [("src", row["src_id"]), ("tgt", row["tgt_id"])]:
+            if qname not in nodes_by_id:
+                nodes_by_id[qname] = {
+                    "id": qname,
+                    "name": row[f"{p}_name"],
+                    "label": row[f"{p}_label"] or "Unknown",
+                    "file_path": row[f"{p}_file"] or "",
+                }
+
+        edge_key = frozenset({row["src_id"], row["tgt_id"], row["rel_type"]})
+        if edge_key not in seen_edges:
+            seen_edges.add(edge_key)
+            edges.append(
+                {
+                    "source": row["src_id"],
+                    "target": row["tgt_id"],
+                    "type": row["rel_type"],
+                }
+            )
+
+    return {"nodes": list(nodes_by_id.values()), "edges": edges}
+
+
+def get_node_detail(driver: Driver, qualified_name: str) -> dict[str, Any]:
+    """Return full detail for a single node including its neighborhood."""
+    with driver.session() as session:
+        # Get core node attributes
+        node_res = session.run(
+            """
+            MATCH (n {qualified_name: $qname})
+            RETURN n.qualified_name AS id,
+                   n.name AS name,
+                   labels(n)[0] AS label,
+                   n.file_path AS file_path,
+                   coalesce(n.line_number, 0) AS line_number,
+                   coalesce(n.end_line, 0) AS end_line
+            """,
+            qname=qualified_name,
+        ).single()
+
+        if not node_res:
+            return {}
+
+        node_data = dict(node_res)
+
+        # Get incoming relationships
+        incoming_res = session.run(
+            """
+            MATCH (other)-[r]->(n {qualified_name: $qname})
+            RETURN other.qualified_name AS qualified_name,
+                   other.name AS name,
+                   labels(other)[0] AS label,
+                   other.file_path AS file_path,
+                   type(r) AS relationship
+            """,
+            qname=qualified_name,
+        )
+        incoming = [dict(r) for r in incoming_res]
+
+        # Get outgoing relationships
+        outgoing_res = session.run(
+            """
+            MATCH (n {qualified_name: $qname})-[r]->(other)
+            RETURN other.qualified_name AS qualified_name,
+                   other.name AS name,
+                   labels(other)[0] AS label,
+                   other.file_path AS file_path,
+                   type(r) AS relationship
+            """,
+            qname=qualified_name,
+        )
+        outgoing = [dict(r) for r in outgoing_res]
+
+    return {
+        "node": node_data,
+        "incoming": incoming,
+        "outgoing": outgoing,
+    }
+
+
 def _format_path(node_names: list[str], rel_types: list[str]) -> str:
     """Interleave node names and relationship types into a readable path string."""
     _MAX_NODE_LEN = 30
@@ -534,3 +647,17 @@ def _format_path(node_names: list[str], rel_types: list[str]) -> str:
         if i < len(rel_types):
             parts.append(f"-[{rel_types[i]}]->")
     return " ".join(parts)
+
+
+def delete_file_entities(driver: Driver, file_path: str) -> int:
+    """Delete all nodes whose file_path matches and their relationships.
+
+    Returns the number of nodes deleted.
+    """
+    with driver.session() as session:
+        result = session.run(
+            "MATCH (n {file_path: $fp}) DETACH DELETE n RETURN count(n) AS deleted",
+            fp=file_path,
+        )
+        record = result.single()
+        return record["deleted"] if record else 0
