@@ -28,6 +28,10 @@ from codegraph.mcp.tools import (
     get_relevant_context_impl,
     query_dependencies_impl,
     execute_cypher_query_impl,
+    find_callers_impl,
+    find_callees_impl,
+    visualize_query_impl,
+    analyze_complexity_impl,
 )
 
 logger = logging.getLogger(__name__)
@@ -170,6 +174,53 @@ def find_dead_code(limit: int, ctx: Context) -> str:
     state = ctx.request_context.lifespan_context
     return find_dead_code_impl(limit, state)
 
+@mcp.tool()
+def find_callers(entity_name: str, ctx: Context) -> str:
+    """Find all entities that call the specified function, method, or class."""
+    state = ctx.request_context.lifespan_context
+    return find_callers_impl(entity_name, state)
+
+
+@mcp.tool()
+def find_callees(entity_name: str, ctx: Context) -> str:
+    """Find all entities called by the specified function or method."""
+    state = ctx.request_context.lifespan_context
+    return find_callees_impl(entity_name, state)
+
+
+@mcp.tool()
+def visualize_query(
+    task_description: str,
+    top_k: int,
+    ctx: Context,
+) -> str:
+    """Run retrieval and open the interactive visualization. Returns URL and instructions."""
+    state = ctx.request_context.lifespan_context
+    return visualize_query_impl(task_description, top_k, state)
+
+
+@mcp.tool()
+def analyze_complexity(
+    file_path: str,
+    threshold: int,
+    ctx: Context,
+) -> str:
+    """Calculate cyclomatic complexity for functions and methods in the given path."""
+    state = ctx.request_context.lifespan_context
+    return analyze_complexity_impl(file_path, threshold, state)
+
+
+@mcp.tool()
+def watch_directory(action: str, ctx: Context) -> str:
+    """Control file watching. Actions: start, stop, status.
+
+    Returns JSON with watch state and pending changes.
+    """
+    from codegraph.mcp.tools import watch_directory_impl
+    state = ctx.request_context.lifespan_context
+    return watch_directory_impl(action, state)
+
+
 def main() -> None:
     """Start the MCP server using STDIO transport.
 
@@ -191,6 +242,7 @@ def main() -> None:
     )
     logging.getLogger("codegraph").setLevel(logging.INFO)
     mcp.run()
+
 
 if __name__ == "__main__":
     main()
