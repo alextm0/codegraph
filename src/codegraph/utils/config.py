@@ -39,3 +39,10 @@ def parse_signal_weights(seed_section: dict) -> dict[str, float]:
     if seed_section.get("bm25_top_n") is not None:
         signal_weights["bm25_top_n"] = int(seed_section["bm25_top_n"])
     return signal_weights
+
+
+def save_raw_config(config_path: str | Path, config_data: dict) -> None:
+    """Save a dictionary to config.yaml."""
+    path = Path(config_path)
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(config_data, f, default_flow_style=False, sort_keys=False)
