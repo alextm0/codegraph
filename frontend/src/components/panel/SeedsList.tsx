@@ -56,9 +56,9 @@ export default function SeedsList({ seeds, loading = false }: SeedsListProps) {
         <div style={{ color: 'var(--text-dim)', fontSize: 11 }}>No seeds yet.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {seeds.map((s, i) => (
+          {seeds.map((s) => (
             <div
-              key={i}
+              key={`${s.name}-${s.weight}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',

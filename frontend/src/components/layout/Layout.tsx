@@ -90,7 +90,7 @@ export default function Layout({
         </div>
 
         {/* Seeds + Results — shown at bottom only when results exist */}
-        {(seeds.length > 0 || pprResults.length > 0) && (
+        {(seeds.length > 0 || pprResults.length > 0 || bm25Results.length > 0) && (
           <div style={{
             flexShrink: 0,
             maxHeight: '45vh',

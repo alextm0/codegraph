@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getNodeDetail, openFile } from '../../api/client'
 import type { GraphNode, NodeDetailResponse } from '../../types/api'
 
@@ -12,16 +12,32 @@ interface RightPanelProps {
 export default function RightPanel({ selectedNode, onClose, onNodeSelect, width = 380 }: RightPanelProps) {
   const [detail, setDetail] = useState<NodeDetailResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const requestIdRef = useRef<number>(0)
 
   useEffect(() => {
     if (selectedNode) {
+      const currentRequestId = ++requestIdRef.current
       setLoading(true)
+      setDetail(null)
       getNodeDetail(selectedNode.id)
-        .then(setDetail)
-        .catch(err => console.error('Failed to fetch node detail', err))
-        .finally(() => setLoading(false))
+        .then(res => {
+          if (currentRequestId === requestIdRef.current) {
+            setDetail(res)
+          }
+        })
+        .catch(err => {
+          if (currentRequestId === requestIdRef.current) {
+            console.error('Failed to fetch node detail', err)
+          }
+        })
+        .finally(() => {
+          if (currentRequestId === requestIdRef.current) {
+            setLoading(false)
+          }
+        })
     } else {
       setDetail(null)
+      setLoading(false)
     }
   }, [selectedNode])
 

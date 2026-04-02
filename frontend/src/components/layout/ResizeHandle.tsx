@@ -1,13 +1,13 @@
-import { useState } from 'react'
+import { useState, type MouseEvent } from 'react'
 
 interface ResizeHandleProps {
-  onMouseDown: (e: React.MouseEvent) => void
+  onMouseDown: (e: MouseEvent<HTMLDivElement>) => void
 }
 
 export default function ResizeHandle({ onMouseDown }: ResizeHandleProps) {
   const [dragging, setDragging] = useState(false)
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: MouseEvent<HTMLDivElement>) => {
     setDragging(true)
     onMouseDown(e)
 

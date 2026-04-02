@@ -34,7 +34,7 @@ function showTooltip(tt: HTMLDivElement, e: MouseEvent, d: D3Node) {
 
   const nameEl = document.createElement('div')
   nameEl.style.cssText = 'font-family:var(--mono);font-weight:600;color:var(--text);margin-bottom:2px;word-break:break-all'
-  nameEl.textContent = d.name
+  nameEl.textContent = d.name || (d.file_path ? d.file_path.split('/').pop() : null) || d.id?.split('::').pop() || '?'
   tt.appendChild(nameEl)
 
   const pathEl = document.createElement('div')
@@ -276,8 +276,8 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect, selectedNode }
       .selectAll<SVGTextElement, D3Node>('text')
       .data(nodes)
       .join('text')
-      .text(d => d.name || d.file_path || "Unknown")
-      .attr('font-size', d => d.is_seed || (d.ppr_score || 0) > 0.05 ? 10 : 9)
+      .text(d => d.name || (d.file_path ? d.file_path.split('/').pop() : null) || d.id?.split('::').pop() || '?')
+      .attr('font-size', d => d.is_seed || (d.ppr_score || 0) > 0.05 ? 12 : 9)
       .attr('fill', 'var(--text)')
       .attr('opacity', d => d.is_seed || (d.ppr_score || 0) > 0.05 ? 1 : 0.5)
       .attr('text-anchor', 'middle')
@@ -350,6 +350,17 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect, selectedNode }
       return
     }
 
+    const sn = nodes.find(n => n.id === selectedNode.id)
+    if (!sn) {
+      // Selected node not in current nodes array; restore standard opacities
+      nodeSel.attr('opacity', 1)
+      ringSel.attr('opacity', 1)
+      linkSel.attr('stroke-opacity', 0.4).attr('marker-end', d => `url(#arr-${d.type})`)
+      labelSel.attr('opacity', d => d.is_seed || (d.ppr_score || 0) > 0.05 ? 1 : 0.5)
+      particleSel.attr('opacity', 0.8)
+      return
+    }
+
     const connected = new Set<string>([selectedNode.id])
     edges.forEach(e => {
         const sourceId = typeof e.source === 'object' ? (e.source as D3Node).id : e.source
@@ -374,15 +385,14 @@ export default function GraphCanvas({ nodes, edges, onNodeSelect, selectedNode }
       })
 
     labelSel.attr('opacity', d => connected.has(d.id) ? 1 : 0.05)
-    
+
     particleSel.attr('opacity', d => {
       const sourceId = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
       const targetId = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
       return (sourceId === selectedNode.id || targetId === selectedNode.id) ? 0.8 : 0.01
     })
 
-    const sn = nodes.find(n => n.id === selectedNode.id)
-    if (sn && sn.x !== undefined && sn.y !== undefined && zoomRef.current) {
+    if (sn.x !== undefined && sn.y !== undefined && zoomRef.current) {
       const W = sizeRef.current.w
       const H = sizeRef.current.h
       const scale = 2

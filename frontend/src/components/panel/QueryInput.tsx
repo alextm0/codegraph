@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, type KeyboardEvent } from 'react'
 
 interface QueryInputProps {
   task: string
@@ -14,7 +14,7 @@ export default function QueryInput({
   task, setTask, topK, setTopK, loading, error, onRun,
 }: QueryInputProps) {
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') onRun()
     },
     [onRun],

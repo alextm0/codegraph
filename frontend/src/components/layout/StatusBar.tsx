@@ -46,7 +46,7 @@ export default function StatusBar({ wsState, nodeCount, edgeCount }: StatusBarPr
           <>
             <span style={{ color: 'var(--accent)', marginRight: 8 }}>[{lastMessage.timestamp}]</span>
             {lastMessage.type === 'file_changed' && (
-              <span>File changed: <code style={{ color: 'var(--text)' }}>{lastMessage.path}</code> (Incremental update applied)</span>
+              <span>File changed: <code style={{ color: 'var(--text)' }}>{lastMessage.path || 'unknown path'}</code> (Incremental update applied)</span>
             )}
             {lastMessage.type === 'rebuild_started' && <span>Graph rebuild started...</span>}
             {lastMessage.type === 'rebuild_complete' && <span>Graph rebuild complete.</span>}

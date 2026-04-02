@@ -38,7 +38,6 @@ from codegraph.core.graph.ppr import create_gds_client, run_ppr_from_node_ids, d
 from codegraph.core.graph.connection import create_driver, load_config
 from codegraph.core.parser.python_parser import create_parser, parse_directory
 from codegraph.core.retrieval.pipeline import ensure_graph_ready
-from codegraph.core.retrieval.post_processing import apply_idf_weights
 from codegraph.core.retrieval.seed_selection import extract_entity_names, extract_seeds, prepare_bm25_index
 
 from evaluation.ablations import ABLATIONS, AblationConfig

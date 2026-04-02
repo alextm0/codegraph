@@ -111,7 +111,7 @@ function TreeNode({ node, depth, onFocusPath, currentFocus }: TreeNodeProps) {
           fontSize: '0.85rem',
           backgroundColor: isSelected ? 'var(--bg-accent)' : 'transparent',
           borderRadius: 4,
-          color: node.ppr_rank ? 'var(--ppr-color)' : 'inherit'
+          color: node.ppr_rank != null ? 'var(--ppr-color)' : 'inherit'
         }}
         onClick={handleClick}
       >
