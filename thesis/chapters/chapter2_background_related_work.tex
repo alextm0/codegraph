@@ -1,0 +1,117 @@
+% ============================================================
+%  Chapter 2 — Background and Related Work
+% ============================================================
+\chapter{Background and Related Work}
+\label{chap:background}
+
+This chapter identifies the fundamental constraints of code retrieval for LLM-based agents. We define the retrieval problem, establish its requirements, and survey established methodological families.
+
+% ============================================================
+\section{Code Retrieval for AI Agents}
+\label{sec:code-retrieval}
+% ============================================================
+
+LLM-based coding agents face a fundamental selection problem: given a natural language task description and a large code repository, which source files should the agent examine? This section defines this retrieval problem, establishes its constraints, and surveys three classes of methods---sparse, dense, and graph-based---that represent increasingly structural approaches to solving it.
+
+% ------------------------------------------------------------
+\subsection{The Retrieval Problem}
+\label{sec:retrieval-problem}
+% ------------------------------------------------------------
+
+Transformer-based language models process a fixed-length token sequence at inference time. For current production models, this limit ranges from 32{,}000 to 200{,}000 tokens~\cite{gpt4,claude3}, while a moderately sized Python repository---Django being a representative example---contains several million tokens of source code. An agent operating on such a repository must therefore select a small subset of files, typically 5--20, that is likely to contain the code relevant to the task at hand~\cite{yang2024swebench}.
+
+This selection problem has an asymmetric cost structure. A false negative---failing to retrieve a file that the agent must modify---renders the task unsolvable regardless of the agent's subsequent reasoning quality. A false positive---retrieving an irrelevant file---incurs only a noise cost: it consumes context budget but does not prevent a correct solution. This asymmetry makes retrieval fundamentally \emph{recall-oriented}: the primary measure of retrieval quality is whether the relevant files appear within the top-$k$ results, rather than the precision of the entire retrieved set.
+
+% ------------------------------------------------------------
+\subsection{Retrieval-Augmented Generation for Code}
+\label{sec:rag}
+% ------------------------------------------------------------
+
+Retrieval-augmented generation (RAG)~\cite{lewis2020rag} addresses the context window limitation by treating the repository as an external knowledge base. A typical RAG pipeline first retrieves candidate code entities, then uses an LLM to reason over the retrieved context. The quality of generation is strictly bounded by retrieval: an LLM cannot produce a correct fix for code it was not shown.
+
+RAG for code faces a fundamental challenge: bridging the modal gap between natural language task descriptions and structured source code. A bug report uses high-level, ambiguous prose, while the retrieval targets are syntax-constrained code entities interconnected through explicit dependencies. Surface-level text similarity often fails to identify the relevant code. Recent empirical work confirms that retrieval quality, rather than reasoning capacity, is the dominant bottleneck in agent performance~\cite{yang2024swebench}. Evaluations on benchmarks such as SWE-bench demonstrate that agents with targeted retrieval mechanisms outperform those given larger but unfocused context~\cite{yang2024swebench}.
+
+% ------------------------------------------------------------
+\subsection{Sparse, Dense, and Graph-Based Retrieval}
+\label{sec:retrieval-families}
+% ------------------------------------------------------------
+
+We now examine three classes of retrieval methods in turn, analyzing their strengths and fundamental limitations.
+The key characteristics of these families are summarized in \cref{tab:retrieval-comparison}, and their respective conceptual workflows are illustrated in \cref{fig:retrieval-flow}.
+
+\paragraph{Sparse retrieval.}
+Sparse retrieval methods compute relevance as a weighted term overlap between the query and the indexed code tokens. BM25~\cite{bm25}, the dominant method in this class, scores each document using term frequency, inverse document frequency, and a saturation function that prevents overfitting to high-frequency terms. Sparse methods require no learned parameters, scale to large corpora, and produce interpretable scores. Their principal limitation is lexical sensitivity: relevance is measured at the token level, so a query term and a code identifier that express the same concept but differ in surface form will not match. In source code, this is a pervasive problem. Identifiers frequently combine multiple semantic units into a single compound token---such as \texttt{SQLCompiler}, \texttt{get\_absolute\_url}, or \texttt{BaseHasher}---using camelCase or underscore conventions. A query mentioning "SQL compilation" does not match the token \texttt{SQLCompiler} under atomic tokenization. Sparse methods are therefore most effective when the vocabulary of the task description closely mirrors the vocabulary of the relevant source code, and degrade when it does not.
+
+\paragraph{Dense retrieval.}
+Dense retrieval methods encode queries and code entities into a shared continuous vector space and rank candidates by cosine similarity. Models such as CodeBERT~\cite{codebert}, GraphCodeBERT~\cite{graphcodebert}, and UniXcoder~\cite{unixcoder} are trained on large code corpora to align natural language descriptions with code representations, enabling matching that is robust to vocabulary variation and paraphrase. However, dense methods have three limitations for repository-scale retrieval. First, they compute similarity from token sequences alone and have no structural awareness: the score assigned to a candidate file is determined entirely by its textual content, without regard to which modules it imports, which functions it calls, or which components depend on it. Second, achieving competitive performance typically requires fine-tuning on domain-specific code--query pairs, which may not be available for every repository or language. Third, embedding similarity scores are opaque: there is no principled way to trace why a specific candidate received a high score, making it difficult to diagnose retrieval failures or improve the system systematically.
+
+\paragraph{Graph-based retrieval.}
+Graph-based retrieval methods represent code relationships as edges in a typed directed graph and propagate relevance from query-matched seed entities to structurally connected entities. Unlike sparse and dense methods, which score candidates independently, graph-based methods model relevance as flowing along structural connections between code entities. Recent work demonstrates the effectiveness of this approach. GraphCoder~\cite{liu2024graphcoder} captures call and data-flow relationships through a code context graph to enhance repository-level code completion. Athale and Vaddina~\cite{athale2025knowledge} construct a knowledge graph over repository structure and use graph queries to retrieve context for LLM-based generation. CodexGraph~\cite{liu2024codexgraph} further demonstrates the utility of bridging LLMs and code repositories via graph databases. These systems use sparse retrieval to identify seed nodes in a code dependency graph, then apply graph traversal or ranking algorithms (such as Personalized PageRank) to reach structurally relevant entities.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Comparison of code retrieval methodologies along key performance and implementation dimensions.}
+    \label{tab:retrieval-comparison}
+    \renewcommand{\arraystretch}{1.6}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{2.4cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
+        \toprule
+        & \textbf{Sparse} & \textbf{Dense} & \textbf{Graph-based} \\
+        \midrule
+        Representative systems & BM25, TF-IDF & CodeBERT, UniXcoder & GraphCoder, RANGER, GRACE \\
+        Input signal & Term overlap & Vector similarity & Graph structure \\
+        Structural awareness & None & None & Explicit (calls, imports, inheritance) \\
+        Key strength & Fast, interpretable, no training & Vocabulary-robust, handles paraphrase & Recovers structurally coupled entities \\
+        Key failure mode & Lexical mismatch (\texttt{SQLCompiler} vs. "SQL compilation") & Ignores dependency structure; opaque scores & Bounded by seed quality \\
+        Training required & None & Fine-tuning on code--query pairs & None for retrieval; requires graph construction \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            box/.style={draw, rectangle, rounded corners=3pt, fill=blue!8, text width=2.4cm, align=center, minimum height=0.7cm, font=\scriptsize\sffamily},
+            codebox/.style={draw, rectangle, rounded corners=3pt, fill=orange!8, text width=2.2cm, align=center, minimum height=0.7cm, font=\scriptsize\ttfamily},
+            arrow/.style={-{Stealth[length=5pt]}, semithick, draw=gray!80},
+            lbl/.style={font=\scriptsize, align=center, text=gray!80!black},
+            title/.style={font=\small\bfseries, align=left}
+        ]
+
+        % --- Sparse ---
+        \node[title] (sparse_title) at (-3, 3.5) {Sparse Retrieval\\(e.g., BM25)};
+        \node[box] (sq) at (0, 3.5) {Query: "SQL compilation"};
+        \node[codebox] (sc) at (5, 3.5) {class SQLCompiler};
+        \draw[<->, dashed, thick, draw=red!60] (sq) -- node[lbl, above] {Keyword mismatch\\(no overlap)} (sc);
+
+        % --- Dense ---
+        \node[title] (dense_title) at (-3, 1) {Dense Retrieval\\(e.g., CodeBERT)};
+        \node[box] (dq) at (0, 1.5) {Query};
+        \node[codebox] (dc) at (5, 1.5) {Code};
+        \node[box, fill=purple!10, text width=2.0cm] (dvq) at (0, 0.2) {[0.12, 0.84, \dots]};
+        \node[box, fill=purple!10, text width=2.0cm] (dvc) at (5, 0.2) {[0.15, 0.79, \dots]};
+        \draw[arrow] (dq) -- node[lbl, left] {Encoder} (dvq);
+        \draw[arrow] (dc) -- node[lbl, right] {Encoder} (dvc);
+        \draw[<->, thick, draw=green!60!black] (dvq) -- node[lbl, above] {Vector Similarity\\(High score)} (dvc);
+
+        % --- Graph-based ---
+        \node[title] (graph_title) at (-3, -2) {Graph-based\\Retrieval};
+        \node[box] (gq) at (0.2, -2) {Matched Entity\\(e.g., function)};
+        
+        \node[codebox, text width=1.5cm, fill=green!10] (n1) at (3.5, -1.2) {Entity B};
+        \node[codebox, text width=1.5cm, fill=green!10] (n2) at (6, -2) {Entity C};
+        \node[codebox, text width=1.5cm, fill=green!10] (n3) at (3.5, -2.8) {Entity D};
+
+        \draw[arrow] (gq) to[bend left=10] node[lbl, above, sloped] {calls} (n1);
+        \draw[arrow] (gq) to[bend right=10] node[lbl, below, sloped] {imports} (n3);
+        \draw[arrow] (n1) -- node[lbl, above, sloped] {inherits} (n2);
+        \draw[arrow] (n3) -- (n2);
+        
+        % Background separator lines
+        \draw[dotted, draw=gray!40] (-4.5, 2.5) -- (7.5, 2.5);
+        \draw[dotted, draw=gray!40] (-4.5, -0.6) -- (7.5, -0.6);
+
+    \end{tikzpicture}
+    \caption{Conceptual retrieval workflows. Sparse methods rely on keyword matching; Dense methods leverage semantic embeddings; Graph-based methods traverse structural dependencies to recover coupled code entities.}
+    \label{fig:retrieval-flow}
+\end{figure}
