@@ -1,8 +1,12 @@
 """Import-aware entity resolution helpers for the code graph.
 
-These pure functions resolve caller/callee/base-class names to qualified_names
-using an entity lookup table and per-file import maps. They have no Neo4j
-dependency and can be tested in isolation.
+Design notes:
+- All functions are pure: inputs are parsed entity lists, outputs are qualified_name strings.
+  No Neo4j dependency — the entire module is testable without a running database.
+- Resolution strategy: build a lookup table (simple_name → qualified_names list) from all
+  parsed files, then walk each file's import map to disambiguate ambiguous names.
+- Python builtins (len, print, int, …) are filtered out here to avoid polluting the graph
+  with edges to names that are not part of the project.
 """
 
 import builtins

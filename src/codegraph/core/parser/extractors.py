@@ -1,4 +1,16 @@
-"""Entity extraction functions — take an AST root node and return entity dataclasses."""
+"""Entity extraction functions — take an AST root node and return entity dataclasses.
+
+Design notes:
+- All functions are pure: they take a tree-sitter Node + source bytes and return dataclasses.
+  No side effects, no global state, trivially testable in isolation.
+- One extractor per entity type (functions, classes, methods, imports, calls).
+
+To add a new entity type:
+1. Add a frozen dataclass for it in models.py.
+2. Add a field for it on FileEntities in models.py.
+3. Add an extract_*() function in this file.
+4. Call it in python_parser.parse_file() and assign the result to the new FileEntities field.
+"""
 
 from tree_sitter import Node
 

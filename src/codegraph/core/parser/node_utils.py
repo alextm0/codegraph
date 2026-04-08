@@ -1,4 +1,10 @@
-"""Low-level tree-sitter node helpers."""
+"""Low-level tree-sitter node helpers.
+
+Design notes:
+- Lowest layer of the parser stack: no imports from other codegraph modules.
+- All helpers take tree-sitter Node objects and raw source bytes; none touch the filesystem.
+- These are the only functions allowed to decode raw bytes or inspect node byte offsets.
+"""
 
 import sys
 

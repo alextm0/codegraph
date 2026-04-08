@@ -1,4 +1,12 @@
-"""FastMCP server instance and lifecycle management."""
+"""FastMCP server instance and lifecycle management.
+
+Design notes:
+- The lifespan pattern (@asynccontextmanager) ensures the Neo4j driver and GDS client are
+  properly closed on shutdown even if a tool call raises.
+- ServerState is injected into every tool call via FastMCP's context dependency mechanism;
+  tools never access global state directly.
+- Transport is STDIO by default (standard for local MCP servers with Claude Desktop/Code).
+"""
 
 import logging
 import os

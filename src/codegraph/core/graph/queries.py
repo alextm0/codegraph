@@ -1,4 +1,12 @@
-"""Read-only Cypher query functions for the code graph."""
+"""Cypher query functions for the code graph.
+
+Design notes:
+- Most functions are read-only (MATCH only). Exception: delete_file_entities runs DETACH DELETE
+  and requires a writable driver; callers should obtain one from DatabaseManager.
+- driver defaults to None; pass one explicitly in tests or accept the singleton from DatabaseManager.
+- To add a new node label: update any label-filtering queries (e.g. find_dead_code, count_nodes_by_label)
+  to include the new label, and add a corresponding result dataclass if needed.
+"""
 
 import logging
 from dataclasses import dataclass

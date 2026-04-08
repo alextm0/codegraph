@@ -1,4 +1,11 @@
-"""MCP tool definitions."""
+"""MCP tool implementations.
+
+Design notes:
+- Thin wrappers only: each tool validates inputs and delegates immediately to core modules.
+  No business logic lives here — that belongs in core/graph/ and core/retrieval/.
+- ServerState (driver, gds, config) is retrieved from FastMCP context; never accessed globally.
+- To add a new MCP tool: implement *_impl() here, then register it with @mcp.tool() in server.py.
+"""
 
 from __future__ import annotations
 

@@ -3,15 +3,24 @@
 
 % language may be romanian or english (default is english)
 % type may be bachelor or master (default is bachelor)
-\usepackage[language=english, type=bachelor]{style}
+\usepackage[language=english, type=bachelor]{style} 
 
 % Additional packages for tables and formatting
 \usepackage{booktabs}       % professional tables
 \usepackage{array}          % extended column definitions
+\usepackage{tabularx}       % flexible width tables
+\usepackage{ragged2e}       % better alignment in narrow columns
 \usepackage{caption}        % caption customization
 \usepackage{subcaption}     % subfigures
+\usepackage{float}          % exact placement [H]
 \usepackage{amsmath}        % math environments
+\usepackage{amssymb}        % math symbols
 \usepackage{enumitem}       % list customization
+
+% TikZ and graphics
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage{cleveref}
 
 %\geometry{a4paper,top=2.5cm,left=3cm,right=2.5cm,bottom=2.5cm}
 %in style
@@ -52,15 +61,15 @@
 \newpage
 \pagenumbering{arabic}
 
-\input{chapters/chapter1_introduction}
+%\input{chapters/chapter1_introduction}
 
-\input{chapters/chapter2_background}
+\input{chapters/chapter2_background_related_work}
 
-\input{chapters/chapter3_system_design}
+%\input{chapters/chapter3_system_design}
 
-\input{chapters/chapter4_evaluation}
+%\input{chapters/chapter4_evaluation}
 
-\input{chapters/chapter5_discussion}
+%\input{chapters/chapter5_discussion}
 
 \bibliography{references}
 

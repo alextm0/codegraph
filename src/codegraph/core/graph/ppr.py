@@ -1,4 +1,12 @@
-"""GDS projection and Personalized PageRank over the code graph."""
+"""GDS projection and Personalized PageRank over the code graph.
+
+Design notes:
+- Two retrieval modes: "uniform" runs a single GDS sourceNodes call (default);
+  "weighted" runs PPR once per seed and combines results via linear combination.
+- The GDS projection is dropped and recreated on every retrieval call to ensure
+  IDF-reweighted edge weights are always current at a small (~50ms) overhead.
+- Projection is UNDIRECTED so PPR can follow edges in both directions.
+"""
 
 import logging
 from dataclasses import dataclass
@@ -10,6 +18,10 @@ from graphdatascience.graph.graph_object import Graph
 
 logger = logging.getLogger(__name__)
 
+# --- GDS projection constants ---
+# _PROJECTION_NAME: name used when creating/dropping the in-memory GDS graph projection.
+# _ALL_RELATIONSHIP_TYPES: relationship types included in the projection by default.
+#   Update this list when adding a new edge type to the graph.
 _PROJECTION_NAME = "codegraph"
 
 
