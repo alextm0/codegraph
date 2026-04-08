@@ -12,9 +12,9 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from codegraph.utils.ignore import is_ignored
+from codegraph.utils.tree_sitter_manager import get_tree_sitter_manager
 
-import tree_sitter_python as tspython
-from tree_sitter import Language, Parser
+from tree_sitter import Parser
 
 from codegraph.core.parser.extractors import (
     extract_calls,
@@ -27,11 +27,11 @@ from codegraph.core.parser.models import FileEntities
 
 logger = logging.getLogger(__name__)
 
-# Python language grammar, loaded once at module import.
+# Python language grammar, loaded via the shared TreeSitterManager (cached after first load).
 # To add a new language: create a new module (e.g. javascript_parser.py) that defines
 # its own Language constant and implements parse_file() / parse_directory() using the
 # LanguageParser ABC in base.py. Register it via TreeSitterManager in utils/.
-PY_LANGUAGE = Language(tspython.language())
+PY_LANGUAGE = get_tree_sitter_manager().get_language("python")
 
 
 def create_parser() -> Parser:
