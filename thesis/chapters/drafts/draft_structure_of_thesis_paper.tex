@@ -1,0 +1,260 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{minted}
+\usepackage{booktabs}
+\usepackage{ltablex}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{ulem}
+\usepackage{colortbl}
+\usepackage{soul}
+\usepackage{float}
+
+% Configure ltablex for multi-page tables with auto-width columns
+\keepXColumns
+
+% Configure hyperref for better link breaking
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    breaklinks=true
+}
+
+% Configure minted for code highlighting
+\setminted{
+    frame=lines,
+    framesep=2mm,
+    baselinestretch=1.2,
+    fontsize=\footnotesize,
+    linenos=true,
+    breaklines=true
+}
+
+% Configure soul for highlighting
+\sethlcolor{yellow}
+
+\title{Structure of thesis written paper}
+\begin{document}
+\maketitle
+
+\section{Structure of thesis written paper}
+
+Based on standard practices for Computer Science theses and academic papers, we can outline a robust and effective structure for your research paper \hyperref[ref:1]{1} \hyperref[ref:2]{2} \hyperref[ref:3]{3}. The goal is to create a clear narrative that guides the reader from the problem you are solving to the significance of your solution, supported by empirical evidence \hyperref[ref:4]{4} \hyperref[ref:5]{5}.
+
+A standard architecture has emerged for theses because it allows readers to find answers to their most frequent questions efficiently: What is the problem? Did the approach work? What are the results? \hyperref[ref:4]{4}.
+
+The most suitable structure for your project follows a well-established seven-chapter format. This organization allows you to present your work logically, with each chapter building upon the last \hyperref[ref:1]{1} \hyperref[ref:2]{2}.
+
+\subsubsection{Recommended Thesis Structure}
+
+Here is a breakdown of the recommended chapter structure and the ideas to organize within each section:
+
+\paragraph{\textbf{Chapter 1: Introduction}}
+
+The purpose of the introduction is to hook the reader, provide context, and clearly state the problem and your contributions \hyperref[ref:6]{6} \hyperref[ref:3]{3} \hyperref[ref:7]{7}. You should structure this chapter like a funnel, starting broad and narrowing to your specific research question \hyperref[ref:6]{6}.
+
+\begin{itemize}
+\item \textbf{Motivation:} Begin with the high-level problem: modern codebases are complex, and AI coding assistants struggle with a lack of repository-level context.
+
+
+\item \textbf{Problem Statement:} Narrow down to the specific problem your thesis addresses: creating an efficient and accurate method for retrieving context-relevant code snippets from an entire repository to feed into an LLM \hyperref[ref:1]{1} \hyperref[ref:8]{8}.
+
+
+\item \textbf{Motivating Example:} This is a crucial section for a project like yours \hyperref[ref:7]{7}. Present a real, challenging example from your SWE-bench evaluation where a simple keyword search (like your BM25 baseline) fails, but your graph-based PPR approach succeeds. This immediately demonstrates the value of your work.
+
+
+\item \textbf{Proposed Solution \& Contributions:} Clearly state your solution at a high level. Then, provide a bulleted list of your specific contributions, as this is standard practice in CS papers \hyperref[ref:1]{1} \hyperref[ref:7]{7}. For example:
+
+\begin{itemize}
+\item "The design and implementation of a novel graph-based context retrieval system using Personalized PageRank (PPR)."
+
+
+\item "A comprehensive evaluation on the SWE-bench Lite benchmark, demonstrating a significant improvement in retrieval recall over baseline methods."
+
+
+\item "An analysis of the limitations of purely structural graph representations for code retrieval."
+
+
+\end{itemize}
+
+
+\item \textbf{Thesis Outline:} Conclude with a brief (1-2 sentences per chapter) overview of the rest of the paper's structure.
+
+
+\end{itemize}
+
+\paragraph{\textbf{Chapter 2: Background and Related Work}}
+
+The function of this chapter is to place your work in the context of existing research, showing that you are aware of the state of the art and that your work is a novel contribution \hyperref[ref:1]{1} \hyperref[ref:2]{2}.
+
+\begin{itemize}
+\item \textbf{Background:} Define the core concepts your thesis builds upon \hyperref[ref:4]{4} \hyperref[ref:3]{3}. Explain foundational technologies like \texttt{tree-sitter} for parsing, graph databases (Neo4j), and the PageRank algorithm as a precursor to your PPR approach.
+
+
+\item \textbf{Related Work:} This is where you review the academic papers from your research (\texttt{RepoGraph}, \texttt{LocAgent}, \texttt{CodexGraph}, etc.). For each, briefly describe its approach and then clearly articulate how your work differs or improves upon it. For instance, you might note that while others build graphs, your use of PPR for retrieval is a key differentiator.
+
+
+\end{itemize}
+
+\paragraph{\textbf{Chapter 3: System Design and Methodology}}
+
+This chapter describes the "what" and "why" of your solution---the architecture and the theory behind it \hyperref[ref:1]{1} \hyperref[ref:2]{2} \hyperref[ref:8]{8}.
+
+\begin{itemize}
+\item \textbf{System Architecture:} Present your high-level pipeline diagram from \texttt{00-overview.md}. Explain the end-to-end flow: from repository code to the \texttt{tree-sitter} parser, to the graph construction, and finally to the query engine.
+
+
+\item \textbf{Graph Schema:} Detail the design of your knowledge graph. Define the node types (e.g., \texttt{FILE}, \texttt{CLASS}, \texttt{FUNCTION}) and edge types (e.g., \texttt{IMPORTS}, \texttt{CALLS}, \texttt{INHERITS}). Justify your design choices.
+
+
+\item \textbf{The PPR Retrieval Algorithm:} This is the theoretical core of your thesis. Explain how Personalized PageRank works and, most importantly, justify why you chose it for this specific problem (e.g., its ability to find structurally important nodes relative to a starting "seed").
+
+
+\end{itemize}
+
+\paragraph{\textbf{Chapter 4: Implementation}}
+
+This section details \emph{how} you built the system, providing enough information that a trained scientist could replicate your work \hyperref[ref:6]{6} \hyperref[ref:1]{1}.
+
+\begin{itemize}
+\item \textbf{Technology Stack:} List and describe the key libraries and frameworks used (Python, Neo4j, \texttt{tree-sitter} bindings, etc.).
+
+
+\item \textbf{Core Components:} Describe the implementation of the main parts of your system:
+
+\begin{itemize}
+\item The \textbf{Indexer:} How it traverses files and builds the graph.
+
+
+\item The \textbf{CLI:} The functionality of \texttt{codegraph doctor}, \texttt{rebuild}, etc.
+
+
+\item The \textbf{Query Engine:} How a natural language query is translated into seeds for the PPR algorithm.
+
+
+\end{itemize}
+
+
+\end{itemize}
+
+\paragraph{\textbf{Chapter 5: Evaluation and Results}}
+
+Here, you present the empirical evidence that your approach is effective \hyperref[ref:3]{3} \hyperref[ref:7]{7}. This is where you describe your scientific contribution and validate your thesis \hyperref[ref:6]{6} \hyperref[ref:5]{5}.
+
+\begin{itemize}
+\item \textbf{Experimental Setup:} Describe your evaluation methodology. Detail the SWE-bench Lite benchmark, the performance metric (Recall), and the baselines you compared against (BM25).
+
+
+\item \textbf{Results:} Present your key findings from the benchmark iterations in clear tables and graphs \hyperref[ref:9]{9}. Structure the narrative around the progression:
+
+\begin{enumerate}
+\item The initial large gain from implementing weighted PPR (Iteration 1).
+
+
+\item The further improvement from refining seed selection (Iteration 2).
+
+
+\item The critical finding that adding more structural edges (\texttt{CO\_LOCATED}) did \emph{not} help, and why (Iteration 3).
+
+
+\end{enumerate}
+
+
+\item \textbf{Analysis of Results:} Interpret the data. Explain \emph{why} you think PPR outperformed the baseline and what the negative result from Iteration 3 implies about the limits of structural retrieval.
+
+
+\end{itemize}
+
+\paragraph{\textbf{Chapter 6: Discussion and Limitations}}
+
+This is where you step back and interpret your findings more broadly, acknowledge the boundaries of your work, and discuss its implications \hyperref[ref:6]{6}.
+
+\begin{itemize}
+\item \textbf{Interpretation of Key Findings:} Reiterate your main conclusion: graph-aware retrieval using PPR is highly effective, but there is a ceiling to what purely structural information can achieve.
+
+
+\item \textbf{Analysis of Failures:} Discuss the primary failure modes you identified (e.g., "right directory, zero connectivity" and "wrong directory"). This demonstrates a deep understanding of your system.
+
+
+\item \textbf{Threats to Validity:} Acknowledge the limitations of your study. For example, your evaluation was limited to Python on a specific benchmark.
+
+
+\end{itemize}
+
+\paragraph{\textbf{Chapter 7: Conclusion and Future Work}}
+
+This chapter provides a concise summary of your work and suggests directions for future research \hyperref[ref:6]{6} \hyperref[ref:1]{1} \hyperref[ref:2]{2} \hyperref[ref:8]{8}.
+
+\begin{itemize}
+\item \textbf{Conclusion:} Briefly restate the problem, your solution, and your key findings. Reiterate your contributions from the introduction, now backed by the evidence you've presented.
+
+
+\item \textbf{Future Work:} This section flows naturally from your limitations and analysis. Propose the next steps you identified but deemed out of scope:
+
+\begin{itemize}
+\item Using LLMs for semantic seed extraction.
+
+
+\item Integrating dense vector retrieval.
+
+
+\item Adding live/incremental graph updates.
+
+
+\item Expanding to other programming languages.
+
+
+\end{itemize}
+
+
+\end{itemize}
+
+This structure is a standard, proven format that will allow you to present your impressive work in a clear, professional, and compelling manner.
+
+
+
+\section*{References}
+\begin{enumerate}
+\item \label{ref:1} {[}Missing authors{]} (n.d.). Thesis Organization
+
+| Home· Topics· Link Farm |
+| --- |
+
+\#\#\# Thesis Organization
+
+This page contain.... \url{https://www.st.cs.uni-saarland.de/~neuhaus/thesis-organization.html}
+\item \label{ref:2} {[}Missing authors{]} (n.d.). About Computer Science Thesis Structure, Vlado Keselj
+
+Index: An Incremental Blog Newer: Preprocessi.... \url{https://web.cs.dal.ca/~vlado/blog/thesis-structure.html}
+\item \label{ref:3} {[}Missing authors{]} (n.d.). Writing a Thesis/Paper - Compiler Design Lab, Saarland University 
+
+Writing a thesis or a paper on y.... \url{https://compilers.cs.uni-saarland.de/people/hack/writing.php}
+\item \label{ref:4} {[}Missing authors{]} (n.d.). Thesis Architecture -- Thesis Guide
+
+\# Thesis Architecture
+
+The outline is the architecture of your t.... \url{https://thesisguide.org/2014/10/13/thesis-architecture/}
+\item \label{ref:5} {[}Missing authors{]} (n.d.). 1. Obligation 2: Validating Your Thesis The second obligation--to prove your case--is much more prob.... \url{http://www.cc.gatech.edu/fac/Spencer.Rugaber/txt/thesis.html}
+\item \label{ref:6} {[}Missing authors{]} (n.d.). You can think of the organization of certain sections as shapes. For example, the Introduction secti.... \url{https://poorvucenter.yale.edu/sites/default/files/files/Schultz_ResearchPaper_NaturalSciences_formatted.pdf}
+\item \label{ref:7} {[}Missing authors{]} (n.d.). IJSCAR International Journal of Secondary Computing and Applications Research | A High School Comput.... \url{https://ijscar.org/blog/sections_of_a_paper.html}
+\item \label{ref:8} {[}Missing authors{]} (n.d.). Thesis writing guidelines
+
+\# Thesis writing guidelines
+
+Menu
+
+Computer Science and Engineering
+
+Grad.... \url{https://educationguide.tue.nl/programs/graduate-school/masters-programs/computer-science-and-engineering/graduation/thesis-writing-guidelines/}
+\item \label{ref:9} {[}Missing authors{]} (n.d.). Each section of your paper should be organized as: high-level important points first, details second.... \url{https://www.cs.swarthmore.edu/~newhall/thesis_guide.html}
+\end{enumerate}
+\end{document}

@@ -1,0 +1,749 @@
+% ============================================================
+%  Chapter 2 — Background and Related Work
+% ============================================================
+\chapter{Background and Related Work}
+\label{chap:background}
+
+This chapter develops the conceptual and technical foundations on which \textsc{CodeGraph} is built.
+We begin with the retrieval problem that arises when LLM-based agents operate on large codebases
+(\cref{sec:code-retrieval}), then establish why source code is naturally modelled as a typed,
+directed graph whose topology carries retrieval-relevant information (\cref{sec:code-as-graph}).
+We introduce Personalized PageRank as the core ranking algorithm over such graphs
+(\cref{sec:ppr}), describe SWE-bench as the evaluation framework used throughout this thesis
+(\cref{sec:swebench}), and conclude with a survey of related systems (\cref{sec:related-work}).
+
+% ============================================================
+\section{Code Retrieval for AI Agents}
+\label{sec:code-retrieval}
+% ============================================================
+
+LLM-based coding agents face a fundamental selection problem: given a natural language task description and a large code repository, which source files should the agent examine? This section defines this retrieval problem, establishes its constraints, and surveys three classes of methods---sparse, dense, and graph-based---that represent increasingly structural approaches to solving it.
+
+% ------------------------------------------------------------
+\subsection{The Retrieval Problem}
+\label{sec:retrieval-problem}
+% ------------------------------------------------------------
+
+Transformer-based language models process a fixed-length token sequence at inference time. For current production models, this limit ranges from 32{,}000 to 200{,}000 tokens~\cite{gpt4,claude3}, while a moderately sized Python repository---Django being a representative example---contains several million tokens of source code. An agent operating on such a repository must therefore select a small subset of files, typically 5--20, that is likely to contain the code relevant to the task at hand~\cite{yang2024swebench}.
+
+This selection problem has an asymmetric cost structure. A false negative---failing to retrieve a file that the agent must modify---renders the task unsolvable regardless of the agent's subsequent reasoning quality. A false positive---retrieving an irrelevant file---incurs only a noise cost: it consumes context budget but does not prevent a correct solution. This asymmetry makes retrieval fundamentally \emph{recall-oriented}: the primary measure of retrieval quality is whether the relevant files appear within the top-$k$ results, rather than the precision of the entire retrieved set.
+
+% ------------------------------------------------------------
+\subsection{Retrieval-Augmented Generation for Code}
+\label{sec:rag}
+% ------------------------------------------------------------
+
+Retrieval-augmented generation (RAG)~\cite{lewis2020rag} addresses the context window limitation by treating the repository as an external knowledge base. A typical RAG pipeline first retrieves candidate code entities, then uses an LLM to reason over the retrieved context. The quality of generation is strictly bounded by retrieval: an LLM cannot produce a correct fix for code it was not shown.
+
+RAG for code faces a fundamental challenge: bridging the modal gap between natural language task descriptions and structured source code. A bug report uses high-level, ambiguous prose, while the retrieval targets are syntax-constrained code entities interconnected through explicit dependencies. Surface-level text similarity often fails to identify the relevant code. Recent empirical work confirms that retrieval quality, rather than reasoning capacity, is the dominant bottleneck in agent performance~\cite{yang2024swebench}. Evaluations on benchmarks such as SWE-bench demonstrate that agents with targeted retrieval mechanisms outperform those given larger but unfocused context~\cite{yang2024swebench}.
+
+% ------------------------------------------------------------
+\subsection{Sparse, Dense, and Graph-Based Retrieval}
+\label{sec:retrieval-families}
+% ------------------------------------------------------------
+
+We now examine three classes of retrieval methods in turn, analyzing their strengths and fundamental limitations.
+The key characteristics of these families are summarized in \cref{tab:retrieval-comparison}, and their respective conceptual workflows are illustrated in \cref{fig:retrieval-flow}.
+
+\paragraph{Sparse retrieval.}
+Sparse retrieval methods compute relevance as a weighted term overlap between the query and the indexed code tokens. BM25~\cite{bm25}, the dominant method in this class, scores each document using term frequency, inverse document frequency, and a saturation function that prevents overfitting to high-frequency terms. Sparse methods require no learned parameters, scale to large corpora, and produce interpretable scores. Their principal limitation is lexical sensitivity: relevance is measured at the token level, so a query term and a code identifier that express the same concept but differ in surface form will not match. In source code, this is a pervasive problem. Identifiers frequently combine multiple semantic units into a single compound token---such as \texttt{SQLCompiler}, \texttt{get\_absolute\_url}, or \texttt{BaseHasher}---using camelCase or underscore conventions. A query mentioning "SQL compilation" does not match the token \texttt{SQLCompiler} under atomic tokenization. Sparse methods are therefore most effective when the vocabulary of the task description closely mirrors the vocabulary of the relevant source code, and degrade when it does not.
+
+\paragraph{Dense retrieval.}
+Dense retrieval methods encode queries and code entities into a shared continuous vector space and rank candidates by cosine similarity. Models such as CodeBERT~\cite{codebert}, GraphCodeBERT~\cite{graphcodebert}, and UniXcoder~\cite{unixcoder} are trained on large code corpora to align natural language descriptions with code representations, enabling matching that is robust to vocabulary variation and paraphrase. However, dense methods have three limitations for repository-scale retrieval. First, they compute similarity from token sequences alone and have no structural awareness: the score assigned to a candidate file is determined entirely by its textual content, without regard to which modules it imports, which functions it calls, or which components depend on it. Second, achieving competitive performance typically requires fine-tuning on domain-specific code--query pairs, which may not be available for every repository or language. Third, embedding similarity scores are opaque: there is no principled way to trace why a specific candidate received a high score, making it difficult to diagnose retrieval failures or improve the system systematically.
+
+\paragraph{Graph-based retrieval.}
+Graph-based retrieval methods represent code relationships as edges in a typed directed graph and propagate relevance from query-matched seed entities to structurally connected entities. Unlike sparse and dense methods, which score candidates independently, graph-based methods model relevance as flowing along structural connections between code entities. Recent work demonstrates the effectiveness of this approach. GraphCoder~\cite{liu2024graphcoder} captures call and data-flow relationships through a code context graph to enhance repository-level code completion. Athale and Vaddina~\cite{athale2025knowledge} construct a knowledge graph over repository structure and use graph queries to retrieve context for LLM-based generation. CodexGraph~\cite{liu2024codexgraph} further demonstrates the utility of bridging LLMs and code repositories via graph databases. These systems use sparse retrieval to identify seed nodes in a code dependency graph, then apply graph traversal or ranking algorithms (such as Personalized PageRank) to reach structurally relevant entities.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Comparison of code retrieval methodologies along key performance and implementation dimensions.}
+    \label{tab:retrieval-comparison}
+    \renewcommand{\arraystretch}{1.6}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{2.4cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
+        \toprule
+        & \textbf{Sparse} & \textbf{Dense} & \textbf{Graph-based} \\
+        \midrule
+        Representative systems & BM25, TF-IDF & CodeBERT, UniXcoder & GraphCoder, RANGER, GRACE \\
+        Input signal & Term overlap & Vector similarity & Graph structure \\
+        Structural awareness & None & None & Explicit (calls, imports, inheritance) \\
+        Key strength & Fast, interpretable, no training & Vocabulary-robust, handles paraphrase & Recovers structurally coupled entities \\
+        Key failure mode & Lexical mismatch (\texttt{SQLCompiler} vs. "SQL compilation") & Ignores dependency structure; opaque scores & Bounded by seed quality \\
+        Training required & None & Fine-tuning on code--query pairs & None for retrieval; requires graph construction \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            box/.style={draw, rectangle, rounded corners=3pt, fill=blue!8, text width=2.4cm, align=center, minimum height=0.7cm, font=\scriptsize\sffamily},
+            codebox/.style={draw, rectangle, rounded corners=3pt, fill=orange!8, text width=2.2cm, align=center, minimum height=0.7cm, font=\scriptsize\ttfamily},
+            arrow/.style={-{Stealth[length=5pt]}, semithick, draw=gray!80},
+            lbl/.style={font=\scriptsize, align=center, text=gray!80!black},
+            title/.style={font=\small\bfseries, align=left}
+        ]
+
+        % --- Sparse ---
+        \node[title] (sparse_title) at (-3, 3.5) {Sparse Retrieval\\(e.g., BM25)};
+        \node[box] (sq) at (0, 3.5) {Query: "SQL compilation"};
+        \node[codebox] (sc) at (5, 3.5) {class SQLCompiler};
+        \draw[<->, dashed, thick, draw=red!60] (sq) -- node[lbl, above] {Keyword mismatch\\(no overlap)} (sc);
+
+        % --- Dense ---
+        \node[title] (dense_title) at (-3, 1) {Dense Retrieval\\(e.g., CodeBERT)};
+        \node[box] (dq) at (0, 1.5) {Query};
+        \node[codebox] (dc) at (5, 1.5) {Code};
+        \node[box, fill=purple!10, text width=2.0cm] (dvq) at (0, 0.2) {[0.12, 0.84, \dots]};
+        \node[box, fill=purple!10, text width=2.0cm] (dvc) at (5, 0.2) {[0.15, 0.79, \dots]};
+        \draw[arrow] (dq) -- node[lbl, left] {Encoder} (dvq);
+        \draw[arrow] (dc) -- node[lbl, right] {Encoder} (dvc);
+        \draw[<->, thick, draw=green!60!black] (dvq) -- node[lbl, above] {Vector Similarity\\(High score)} (dvc);
+
+        % --- Graph-based ---
+        \node[title] (graph_title) at (-3, -2) {Graph-based\\Retrieval};
+        \node[box] (gq) at (0.2, -2) {Matched Entity\\(e.g., function)};
+        
+        \node[codebox, text width=1.5cm, fill=green!10] (n1) at (3.5, -1.2) {Entity B};
+        \node[codebox, text width=1.5cm, fill=green!10] (n2) at (6, -2) {Entity C};
+        \node[codebox, text width=1.5cm, fill=green!10] (n3) at (3.5, -2.8) {Entity D};
+
+        \draw[arrow] (gq) to[bend left=10] node[lbl, above, sloped] {calls} (n1);
+        \draw[arrow] (gq) to[bend right=10] node[lbl, below, sloped] {imports} (n3);
+        \draw[arrow] (n1) -- node[lbl, above, sloped] {inherits} (n2);
+        \draw[arrow] (n3) -- (n2);
+        
+        % Background separator lines
+        \draw[dotted, draw=gray!40] (-4.5, 2.5) -- (7.5, 2.5);
+        \draw[dotted, draw=gray!40] (-4.5, -0.6) -- (7.5, -0.6);
+
+    \end{tikzpicture}
+    \caption{Conceptual retrieval workflows. Sparse methods rely on keyword matching; Dense methods leverage semantic embeddings; Graph-based methods traverse structural dependencies to recover coupled code entities.}
+    \label{fig:retrieval-flow}
+\end{figure}
+
+% ============================================================
+\section{Source Code as a Graph}
+\label{sec:code-as-graph}
+% ============================================================
+
+Sparse and dense retrieval methods evaluate each candidate independently: the relevance
+score assigned to a file depends only on its content and the query, not on its structural
+relationships to the rest of the codebase.
+This independence assumption conflicts with how software is organised.
+A bug report typically describes a symptom observed at one level of abstraction, while
+the root cause resides in a component that may be several dependency hops removed from
+anything named in the report.
+Keyword-based methods can only surface files that share vocabulary with the query;
+they cannot follow dependency chains.
+Recovering a root-cause component that is lexically distant from the query but
+structurally proximate to the symptom requires reasoning over the relational structure
+of the repository.
+
+Source code exposes this structure explicitly and at a level of detail unavailable in
+unstructured text.
+Every import statement records a directed dependency between modules; every function
+call records an invocation relationship between procedures; every class declaration
+records inheritance and containment relationships.
+These relationships can be extracted statically from the source text and represented as
+edges in a typed directed graph, making the full structural topology of the codebase
+available to graph algorithms.
+
+% ------------------------------------------------------------
+\subsection{Graph Representations of Code}
+\label{sec:graph-representations}
+% ------------------------------------------------------------
+
+Source code has been represented as graphs since the earliest program analysis
+tools~\cite{compilers}.
+Different graph formalisms capture different aspects of program structure, each suited to
+a different class of downstream tasks.
+
+\textbf{Abstract Syntax Trees (ASTs)} represent the syntactic structure of a source file
+as a tree of grammatical constructs — function definitions, conditional branches,
+assignment expressions.
+They are the foundational representation for syntax-aware tools such as code completion,
+style linters, and automated refactoring.
+
+\textbf{Control Flow Graphs (CFGs)} model the possible execution paths through a
+procedure: nodes represent basic blocks of sequential statements, and edges represent
+conditional or unconditional branches.
+CFGs underlie compiler optimisation~\cite{compilers} and test coverage analysis.
+
+\textbf{Data Flow Graphs (DFGs)} track how values propagate through a program:
+nodes represent variables and operations, and directed edges represent value
+dependencies.
+They support program slicing and taint analysis~\cite{weiser1984slicing}.
+
+\textbf{Call Graphs} represent invocation relationships between procedures: a directed
+edge $(u, v)$ indicates that function $u$ may call function $v$.
+They are widely used for impact analysis, dead code detection, and navigation in large
+codebases.
+
+\textbf{Program Dependence Graphs (PDGs)} unify control and data dependencies into a
+single structure, enabling joint reasoning about execution order and value flow, and
+supporting program understanding and automated refactoring~\cite{ferrante1987pdg}.
+
+Recent systems have combined these representations into heterogeneous multi-level graphs.
+The Code Property Graph~\cite{yamaguchi2014cpg} unifies AST, CFG, and DFG into a single
+queryable graph, enabling simultaneous analysis across syntactic, control, and data
+dimensions for vulnerability detection.
+
+For retrieval tasks, call graphs and import dependency graphs have proven most relevant,
+because they capture how components interact across file boundaries — a critical signal
+when a query describes a high-level symptom whose root cause lies in a transitive
+dependency.
+\Cref{fig:code-graph-example} shows a representative fragment of such a dependency graph.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+            filenode/.style  = {draw, rectangle, rounded corners=3pt, fill=blue!10,
+                    minimum width=2.7cm, minimum height=0.75cm,
+                    font=\small\ttfamily, align=center},
+            classnode/.style = {draw, rectangle, rounded corners=3pt, fill=orange!15,
+                    minimum width=2.5cm, minimum height=0.7cm,
+                    font=\small\ttfamily, align=center},
+            funcnode/.style  = {draw, ellipse, fill=green!10,
+                    minimum width=2.5cm, minimum height=0.7cm,
+                    font=\small\ttfamily, align=center},
+            lbl/.style       = {font=\scriptsize, fill=white, inner sep=1.5pt},
+            earr/.style      = {-{Stealth[length=5pt]}, semithick},
+        ]
+        %--- File nodes (top row) ---
+        \node[filenode] (views)   at (0,0)     {views.py};
+        \node[filenode] (auth)    at (4.5,0)   {auth.py};
+        \node[filenode] (hashers) at (9,0)     {hashers.py};
+
+        %--- Function / class nodes ---
+        \node[funcnode]  (login)  at (0,-2.2)    {login()};
+        \node[funcnode]  (authn)  at (4.5,-2.2)  {authenticate()};
+        \node[classnode] (bcrypt) at (7.5,-4.0)  {BCryptHasher};
+        \node[classnode] (base)   at (10.5,-4.0) {BaseHasher};
+
+        %--- CONTAINS edges (grey) ---
+        \draw[earr, gray!60]
+        (views)   -- node[lbl,left]  {\textsc{contains}} (login);
+        \draw[earr, gray!60]
+        (auth)    -- node[lbl,right] {\textsc{contains}} (authn);
+        \draw[earr, gray!60]
+        (hashers) -- node[lbl,right] {\textsc{contains}} (bcrypt);
+        \draw[earr, gray!60]
+        (hashers.south east) to[bend right=18]
+        node[lbl,right] {\textsc{contains}} (base);
+
+        %--- IMPORTS edges (blue) ---
+        \draw[earr, blue!55]
+        (views) -- node[lbl,above] {\textsc{imports}} (auth);
+        \draw[earr, blue!55]
+        (auth)  -- node[lbl,above] {\textsc{imports}} (hashers);
+
+        %--- CALLS edge (red) ---
+        \draw[earr, red!55]
+        (login) -- node[lbl,below] {\textsc{calls}} (authn);
+
+        %--- INHERITS edge (purple) ---
+        \draw[earr, purple!55]
+        (bcrypt) -- node[lbl,below] {\textsc{inherits}} (base);
+
+        %--- Legend ---
+        \node[draw, rounded corners, fill=white, font=\scriptsize,
+            inner sep=6pt, align=left,
+            below right=0.4cm and 0.2cm of hashers] (leg) {%
+            \textcolor{gray!70}{$\longrightarrow$}~\textsc{Contains}\quad
+            \textcolor{blue!55}{$\longrightarrow$}~\textsc{Imports}\\[3pt]
+            \textcolor{red!55}{$\longrightarrow$}~\textsc{Calls}\quad\hspace{5pt}
+            \textcolor{purple!55}{$\longrightarrow$}~\textsc{Inherits}%
+        };
+
+    \end{tikzpicture}
+    \caption{A representative fragment of a code dependency graph.
+        File nodes (blue) contain function and class nodes (green, orange).
+        \textsc{Imports} edges link files; \textsc{Calls} edges link functions;
+        \textsc{Inherits} edges link classes.
+        A query referencing \texttt{login} can reach \texttt{BaseHasher}
+        through \textsc{Calls} and \textsc{Imports} edges,
+        recovering a component that shares no vocabulary with the query.}
+    \label{fig:code-graph-example}
+\end{figure}
+
+% ------------------------------------------------------------
+\subsection{Static versus Dynamic Analysis}
+\label{sec:static-dynamic}
+% ------------------------------------------------------------
+
+Dependency edges can be extracted through \emph{static} or \emph{dynamic} analysis,
+each with distinct trade-offs.
+
+\emph{Static analysis} examines source text without executing the program: it reads
+import declarations, identifies call expressions, and resolves class inheritance from
+the parse tree.
+Common static analysis tools include parsing-based parsers such as Tree-sitter~\cite{treesitter}
+and ANTLR, which produce syntax trees from source text in sub-millisecond time and
+handle syntactically incomplete code gracefully; language server-based tools that leverage
+the Language Server Protocol~\cite{lsp} for precise cross-file symbol resolution; and
+compiler-based front-ends such as Clang~\cite{clang}, which apply the full compilation
+pipeline for richer semantic information.
+Static analysis covers the entire repository without requiring an execution environment
+and produces deterministic, reproducible results.
+Its principal limitation is the inability to resolve dynamically constructed references —
+calls assembled via reflection, monkey-patching, or string-based dispatch — which leaves
+some runtime dependencies unrepresented in the graph.
+
+\emph{Dynamic analysis} instruments a running program to record actual call targets,
+object instantiations, and runtime dispatch decisions.
+It resolves cases that static analysis cannot, but requires a functioning execution
+environment and covers only the code paths exercised during profiling — introducing
+a coverage gap for untested or rarely executed branches.
+Hybrid approaches that combine static analysis for repository-wide structure with
+dynamic analysis for ambiguous cases have been explored in tools such as Facebook's
+Infer~\cite{calcagno2015infer}.
+
+For retrieval applications, where incomplete structural coverage is acceptable — unlike
+correctness-critical settings such as formal verification — static analysis is generally
+preferred for its scalability and its ability to analyse a repository without executing
+it~\cite{livshits2015soundy}.
+
+% ============================================================
+\section{Personalized PageRank}
+\label{sec:ppr}
+% ============================================================
+
+Given a code dependency graph and a set of query-relevant seed entities, we require a
+mechanism that assigns a relevance score to every node in the graph — one that accounts
+for both the structural proximity of a node to the seeds and the topology of the paths
+connecting them.
+Personalized PageRank provides this mechanism.
+
+% ------------------------------------------------------------
+\subsection{Standard PageRank}
+\label{sec:pagerank}
+% ------------------------------------------------------------
+
+Page et al.~\cite{page1999pagerank} introduced PageRank as the link-analysis algorithm
+underlying Google's original web search engine.
+The algorithm models importance through a random walk over the graph: at each step,
+the walker either follows a randomly chosen outgoing edge with probability $d$, or
+resets to a uniformly random node with probability $1 - d$.
+A node is important if many important nodes point to it — a recursive definition that
+the random walk process resolves to a unique fixed point.
+
+Formally, let $G = (V, E)$ be a directed graph with $n = |V|$ nodes, and let
+$\mathbf{M} \in \mathbb{R}^{n \times n}$ be the column-stochastic transition matrix,
+where $M_{ij}$ denotes the probability of transitioning from node $j$ to node $i$
+along an edge.
+The PageRank vector $\boldsymbol{\pi} \in \mathbb{R}^n$ is the unique
+stationary distribution satisfying:
+
+\begin{equation}
+    \boldsymbol{\pi}
+    \;=\;
+    (1 - d)\,\frac{\mathbf{1}}{n}
+    \;+\;
+    d\,\mathbf{M}\boldsymbol{\pi}
+    \label{eq:pagerank}
+\end{equation}
+
+where $d \in [0, 1]$ is the \emph{damping factor} and $\mathbf{1}/n$ is the uniform
+distribution over all nodes.
+The entry $\pi_i$ gives the long-run probability of the walker occupying node $i$,
+capturing the intuition that a node is structurally central if many central nodes
+point to it.
+
+% ------------------------------------------------------------
+\subsection{Personalized PageRank}
+\label{sec:personalized-pagerank}
+% ------------------------------------------------------------
+
+Standard PageRank assigns query-independent scores: every node's rank is identical
+regardless of the retrieval context.
+Personalized PageRank (PPR)~\cite{haveliwala2002ppr} replaces the uniform restart
+distribution $\mathbf{1}/n$ with a query-specific seed distribution
+$\mathbf{s} \in \mathbb{R}^n$:
+
+\begin{equation}
+    \boldsymbol{\pi}
+    \;=\;
+    (1 - d)\,\mathbf{s}
+    \;+\;
+    d\,\mathbf{M}\boldsymbol{\pi}
+    \label{eq:ppr}
+\end{equation}
+
+The seed vector $\mathbf{s}$ places probability mass on the entities most directly
+associated with the query — in the code retrieval setting, the functions, classes, and
+files whose names appear in the bug report or task description.
+When the random walker resets, it returns to one of these seed nodes rather than to an
+arbitrary node in the graph.
+This concentrates the stationary distribution around the seeds' structural neighbourhood:
+nodes that are graph-structurally proximate to the seeds receive proportionally higher
+scores, with probability attenuating as a function of distance and path topology.
+\Cref{fig:ppr-comparison} illustrates the difference between the two variants.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.44\textwidth}
+        \centering
+        \begin{tikzpicture}[
+                nd/.style  = {draw, circle, minimum size=0.72cm, font=\small,
+                        semithick},
+                earr/.style = {-{Stealth[length=5pt]}, semithick},
+            ]
+            \node[nd, fill=gray!50] (C) at (1.6,1.6) {C};
+            \node[nd, fill=gray!25] (A) at (0,0)     {A};
+            \node[nd, fill=gray!25] (B) at (3.2,0)   {B};
+            \node[nd, fill=gray!12] (D) at (0,-1.8)  {D};
+            \node[nd, fill=gray!12] (E) at (3.2,-1.8){E};
+            \draw[earr] (A) -- (C);
+            \draw[earr] (B) -- (C);
+            \draw[earr] (D) -- (A);
+            \draw[earr] (E) -- (B);
+            \draw[earr] (D) to[bend left=25] (C);
+        \end{tikzpicture}
+        \caption{Standard PageRank: node~C dominates globally due to in-degree.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.44\textwidth}
+        \centering
+        \begin{tikzpicture}[
+                nd/.style   = {draw, circle, minimum size=0.72cm, font=\small,
+                        semithick},
+                seed/.style = {draw, circle, minimum size=0.72cm, font=\small,
+                        semithick, double, double distance=1.5pt},
+                earr/.style = {-{Stealth[length=5pt]}, semithick},
+            ]
+            \node[seed,fill=blue!35] (A) at (0,0)     {A};
+            \node[nd,  fill=blue!22] (C) at (1.6,1.6) {C};
+            \node[nd,  fill=blue!15] (B) at (3.2,0)   {B};
+            \node[nd,  fill=blue!22] (D) at (0,-1.8)  {D};
+            \node[nd,  fill=gray!6]  (E) at (3.2,-1.8){E};
+            \draw[earr] (A) -- (C);
+            \draw[earr] (B) -- (C);
+            \draw[earr] (D) -- (A);
+            \draw[earr] (E) -- (B);
+            \draw[earr] (D) to[bend left=25] (C);
+        \end{tikzpicture}
+        \caption{PPR with seed~A: probability concentrates around A's structural neighbourhood.}
+    \end{subfigure}
+    \caption{Standard PageRank~(a) assigns query-independent scores based on global graph
+        topology — node~C dominates due to high in-degree.
+        Personalized PageRank~(b) biases the random walk toward seed node~A (double
+        border), elevating nodes in A's structural neighbourhood — here B and~D —
+        relative to their global importance.
+        Shading intensity indicates score magnitude.
+        This locality property makes PPR suitable for query-specific retrieval: relevance
+        propagates from the query-matched seed rather than reflecting global centrality.}
+    \label{fig:ppr-comparison}
+\end{figure}
+
+PPR has been applied successfully across several retrieval domains.
+Topic-sensitive PageRank~\cite{haveliwala2002ppr} uses PPR with topic-category seeds
+to improve query-sensitive web page ranking.
+ObjectRank~\cite{balmin2004objectrank} extends the formulation to structured databases,
+ranking objects by relevance to a query object.
+In biomedical informatics, PPR over protein interaction networks is the standard method
+for gene prioritisation given a set of known disease-associated genes~\cite{kohler2008disease}.
+Across these settings, a consistent pattern emerges: PPR effectively propagates relevance
+through sparse, heterogeneous networks in which direct connections between the query
+context and the retrieval target are absent.
+
+\paragraph{PPR for code retrieval.}
+Code dependency graphs share the structural properties of networks where PPR performs well:
+they are sparse — most files do not directly import each other — directed, and exhibit
+meaningful transitivity.
+A dependency chain $A \to B \to C$ implies that $C$ is likely relevant to queries
+involving $A$, a signal that BFS-based neighbourhood expansion cannot exploit without
+also returning a large number of irrelevant nodes.
+PPR's random walk captures this transitive relevance through multi-hop traversal,
+with two additional advantages over simpler graph traversal strategies.
+First, it assigns a continuous relevance score to every reachable node, providing a
+total ranking within the retrieved set without requiring a fixed hop radius.
+Second, it is sensitive to path convergence: a node reachable from multiple independent
+seed entities accumulates higher probability mass than one reachable via a single long
+path, reflecting the intuition that a shared dependency of many query-relevant components
+is more likely to be relevant than an isolated transitive dependency.
+
+\paragraph{Parameters.}
+Two parameters govern PPR behaviour.
+The \emph{damping factor} $d$ controls the depth of graph exploration.
+As $d \to 1$, the walker teleports less frequently and probability spreads further from
+the seeds, producing a more global ranking; as $d$ decreases, the walker resets more
+often and probability concentrates in the immediate neighbourhood of the seeds, producing
+a more local ranking.
+Lower values of $d$ suit focused retrieval tasks where the target is expected to be
+structurally proximate to the query; higher values suit exploratory tasks where the
+target may lie several hops away.
+The canonical web search setting uses $d = 0.85$~\cite{page1999pagerank}; domain-specific
+applications tune $d$ to match the graph topology and retrieval objective.
+The \emph{seed distribution} $\mathbf{s}$ determines where the random walk restarts.
+Uniform seeding assigns equal weight to all seed nodes; weighted seeding places mass
+proportional to each seed's relevance score, giving seeds more closely aligned with
+the query stronger influence on the final ranking.
+The optimal configuration depends on graph topology and the specifics of the retrieval
+task~\cite{haveliwala2002ppr}.
+
+% ============================================================
+\section{SWE-bench as an Evaluation Framework}
+\label{sec:swebench}
+% ============================================================
+
+\textbf{SWE-bench}~\cite{yang2024swebench} is a benchmark for evaluating software
+engineering agents on real-world repository-level tasks.
+It comprises \textbf{2{,}294 instances} drawn from real GitHub issues and their
+associated patches across \textbf{12 open-source Python repositories} — including
+Django, sympy, matplotlib, scikit-learn, and pytest.
+Each instance consists of three components: the issue text (a natural language bug
+report or feature request authored before the patch was written), a snapshot of the
+repository in the state preceding the patch, and the set of files modified by the
+ground-truth patch.
+
+\textbf{SWE-bench Lite} is a curated subset of \textbf{300 instances} selected for
+clarity and patch isolation — issues with well-scoped problem descriptions and patches
+that modify a small number of files.
+It has become the de facto standard evaluation setting for coding agent research,
+enabling direct comparison across systems.
+
+As a \textbf{retrieval benchmark}, SWE-bench provides a precise and realistic evaluation
+protocol: given the issue text and the pre-patch repository snapshot, the retrieval system
+must return the files modified by the ground-truth patch.
+The primary metrics are \textbf{Recall@$k$} — whether the gold file appears among the
+top-$k$ retrieved results — and \textbf{Mean Reciprocal Rank (MRR)}, which rewards
+systems that place the correct file at a higher rank within the retrieved set.
+SWE-bench instances are notably difficult for lexical retrieval: baseline sparse
+retrieval achieves Recall@10 below 50\% on the full dataset~\cite{yang2024swebench},
+reflecting the vocabulary gap between natural language issue descriptions and the
+identifiers present in the corresponding source files.
+This makes SWE-bench an appropriate testbed for structural retrieval methods that can
+bridge such gaps through dependency traversal.
+
+Several properties make SWE-bench a stronger evaluation environment than synthetic code
+retrieval benchmarks.
+The bug reports were authored by developers before the fix was known, so their vocabulary
+reflects natural problem descriptions rather than crafted query--answer pairs.
+The patches are verified against the repository's existing test suite, ensuring that the
+ground truth is both correct and non-trivial.
+The 12 repositories vary substantially in size, module structure, and vocabulary,
+providing breadth that prevents overfitting to a single codebase style and makes the
+benchmark a challenging yet realistic testbed for retrieval quality.
+
+% ============================================================
+\section{Related Work}
+\label{sec:related-work}
+% ============================================================
+
+% ------------------------------------------------------------
+\subsection{Code Knowledge Graphs and CodexGraph}
+\label{sec:codexgraph}
+% ------------------------------------------------------------
+
+The use of graph-structured representations for code has a long history in program
+analysis, where call graphs, control-flow graphs, and program dependence graphs underlie
+compiler optimisation, static analysis, and refactoring tools.
+Recent systems have extended this tradition to the context of LLM-based agents,
+constructing queryable knowledge graphs over source code repositories.
+
+\textbf{CodexGraph}~\cite{liu2024codexgraph} builds a knowledge graph from repository
+code using language server protocol (LSP) data, storing entities and their relationships
+as graph nodes and edges accessible via a structured query interface.
+An LLM agent issues Cypher queries against this graph to retrieve context for code
+generation.
+The evaluation focuses on generation quality on synthetic benchmarks rather than
+retrieval quality on real-world bug-fixing tasks, and the system does not address the
+ranking problem: how to prioritise among many structurally connected candidates when the
+retrieval budget is limited.
+
+\textbf{PROMETHEUS}~\cite{prometheus2024} takes a similar graph construction approach,
+transforming repositories into unified knowledge graphs with typed nodes and five edge
+types, stored in \mbox{Neo4j}.
+The system is evaluated on SWE-bench Lite, resolving 35.33\% of instances using a
+multi-agent framework that couples graph-based context retrieval with LLM-driven patch
+generation.
+PROMETHEUS shares the same storage infrastructure as \textsc{CodeGraph} (Neo4j, typed
+graph schema) and the same evaluation benchmark, making it the most directly comparable
+prior system.
+The primary architectural difference lies in the retrieval mechanism: PROMETHEUS uses
+structured Cypher queries issued by an LLM agent to navigate the graph reactively,
+whereas \textsc{CodeGraph} applies Personalized PageRank to rank all graph-reachable
+nodes simultaneously in a single, query-driven traversal — decoupling retrieval from
+agent reasoning.
+
+% ------------------------------------------------------------
+\subsection{Graph-Based Code Retrieval}
+\label{sec:graph-retrieval-related}
+% ------------------------------------------------------------
+
+A parallel line of work investigates graph representations specifically for the retrieval
+problem, rather than for end-to-end generation or agent task completion.
+
+\textbf{GRACE}~\cite{grace2026} constructs a multi-level code graph that unifies file
+structure, abstract syntax trees, function call graphs, class hierarchies, and data-flow
+graphs.
+It employs a hybrid retrieval mechanism combining GNN-based structural similarity with
+textual retrieval, surpassing graph-based RAG baselines by 8.19\% exact match on
+repository-level code completion tasks.
+The contrast with \textsc{CodeGraph} lies in the retrieval mechanism: GRACE learns
+graph node representations through a trained GNN and uses them for similarity matching,
+whereas \textsc{CodeGraph} treats graph structure as a traversal medium and applies PPR
+as a ranking algorithm, requiring no learned graph representations.
+
+\textbf{RANGER}~\cite{ranger2025} constructs a comprehensive knowledge graph capturing
+hierarchical and cross-file dependencies at variable granularity, augmenting nodes with
+textual descriptions and embeddings.
+It combines Cypher-based entity lookup with Monte Carlo tree search for natural language
+queries, using a dual-pipeline design: one path for entity-based queries, another for
+natural language queries.
+This design contrasts with \textsc{CodeGraph}'s unified PPR approach, which handles
+both query types through the same graph traversal mechanism seeded by BM25.
+
+\textbf{CodeMCP}~\cite{codemcp} combines PPR over a symbol dependency graph with
+full-text search, reporting Recall improvements from 62.1\% to 100\% when graph-based
+re-ranking is added to the text baseline.
+The architecture — full-text search for initial seed selection, PPR for structural
+ranking — is closely aligned with the approach developed in this thesis and constitutes
+independent validation of the central design hypothesis: that BM25-seeded PPR is an
+effective and principled retrieval mechanism at repository scale.
+However, CodeMCP is evaluated on internal datasets; a key contribution of this work
+is providing public benchmark results on SWE-bench Lite.
+
+% ------------------------------------------------------------
+\subsection{Neural Code Retrieval}
+\label{sec:neural-retrieval-related}
+% ------------------------------------------------------------
+
+Dense retrieval methods encode queries and code into a shared embedding space, enabling
+semantic matching beyond lexical overlap.
+
+\textbf{CodeBERT}~\cite{codebert} pre-trains a BERT model on bimodal code--text pairs,
+learning to align natural language queries with code representations.
+It achieves strong performance on code search benchmarks but assigns independent
+similarity scores to each candidate without considering structural relationships between
+files.
+
+\textbf{GraphCodeBERT}~\cite{graphcodebert} extends CodeBERT by incorporating data-flow
+edges derived from abstract syntax trees during pre-training, improving understanding of
+program semantics beyond surface-level tokens.
+However, the structural information is consumed at pre-training time; at retrieval time,
+candidates are still scored independently, without multi-hop reasoning over the dependency
+graph.
+
+\textbf{UniXcoder}~\cite{unixcoder} unifies encoder and decoder objectives across
+multiple code tasks, improving generalisation to code generation and summarisation.
+Like prior dense models, retrieval scores are computed as embedding similarity, without
+explicit traversal of dependency structure.
+
+These methods achieve strong performance when training data is abundant, but share three
+limitations that motivate structural retrieval.
+First, embedding similarity has no mechanism for multi-hop reasoning: a file that is
+structurally critical but lexically distant from the query cannot be surfaced.
+Second, ranking decisions are opaque: there is no principled way to explain why a
+specific file received a high score, making systematic failure diagnosis difficult.
+Third, fine-tuning requires labelled query--code pairs and substantial compute, which may
+not be available in every deployment setting.
+\textsc{CodeGraph} addresses these limitations by treating dependency structure as a
+first-class retrieval signal — exploiting explicit code topology rather than approximating
+it through learned embeddings.
+
+\Cref{tab:related-systems} summarises the key dimensions along which these systems differ.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Comparison of \textsc{CodeGraph} with related systems along key design dimensions.}
+    \label{tab:related-systems}
+    \begin{tabularx}{\textwidth}{l l X X l}
+        \toprule
+        System                              & Storage      & Retrieval algorithm   & Seed method   & Benchmark      \\
+        \midrule
+        CodexGraph~\cite{liu2024codexgraph} & Graph DB     & LLM Cypher queries    & Query parsing & HumanEval+     \\
+        PROMETHEUS~\cite{prometheus2024}    & Neo4j        & LLM Cypher queries    & Query parsing & SWE-bench Lite \\
+        GRACE~\cite{grace2026}              & In-memory    & GNN similarity        & NL embedding  & CrossCodeEval  \\
+        RANGER~\cite{ranger2025}            & Graph DB     & Cypher + MCTS         & Entity lookup & CrossCodeEval  \\
+        CodeMCP~\cite{codemcp}              & Symbol graph & PPR + FTS             & FTS           & Internal       \\
+        \textsc{CodeGraph} (this work)      & Neo4j        & Personalized PageRank & BM25          & SWE-bench Lite \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------
+\subsection{Sparse Retrieval for Code}
+\label{sec:bm25-related}
+% ------------------------------------------------------------
+
+BM25~\cite{bm25} computes a relevance score for each document as a function of term
+frequency, inverse document frequency, and a length normalisation factor.
+It requires no training, is computationally inexpensive, and serves as the standard
+sparse retrieval baseline across information retrieval research.
+
+Applied to source code, BM25 must contend with properties of code that have no parallel
+in document retrieval.
+Code identifiers routinely combine multiple semantic units into compound tokens using
+camelCase or underscore conventions.
+BM25 treats each such identifier as an atomic vocabulary item, producing a mismatch
+between the natural language terms present in a bug report and the compound identifiers
+indexed from source files~\cite{sourcerer}.
+For example, a query containing the term ``authentication'' would match a method named
+\texttt{authenticate} but miss \texttt{checkAuthExpiry}, despite semantic equivalence.
+This mismatch can be mitigated through \emph{compound tokenisation}: splitting identifiers
+at camelCase and underscore boundaries before indexing, so that each semantic constituent
+becomes independently retrievable.
+Studies applying this preprocessing to code search tasks report consistent improvements
+across multiple programming languages and query types~\cite{codehow}.
+
+A second challenge is field weighting: BM25 assigns relevance based on term frequency
+without distinguishing between structurally significant textual fields — such as qualified
+identifier names and file paths — and incidental text such as inline comments or
+docstrings.
+Systems such as Sourcerer~\cite{sourcerer} and CodeHow~\cite{codehow} apply custom field
+weights to prioritise identifier matches over comment matches, improving precision on
+API-level queries.
+
+Despite these adaptations, sparse retrieval cannot exploit structural dependencies: the
+score assigned to a candidate file reflects only its textual content, not its position
+in the dependency graph.
+A high-scoring file may be architecturally isolated from other relevant components, while
+a low-scoring file may be structurally critical if called by multiple query-relevant
+entities.
+This gap motivates graph-based post-processing, as explored by the systems surveyed
+in \cref{sec:graph-retrieval-related}.
+
+% ------------------------------------------------------------
+\subsection{Chapter Summary}
+\label{sec:background-summary}
+% ------------------------------------------------------------
+
+This chapter has established the conceptual and technical foundations for
+\textsc{CodeGraph}.
+Code retrieval for LLM agents is a recall-oriented problem in which the retrieval stage
+bounds end-to-end agent performance (\cref{sec:code-retrieval}).
+The explicit relational structure of source code — function calls, module imports, class
+hierarchies — provides a retrieval signal that neither lexical nor embedding methods can
+exploit, because both evaluate each candidate file in isolation without considering its
+structural relationships to the rest of the codebase (\cref{sec:code-as-graph}).
+Personalized PageRank implements this signal as a query-conditioned ranking over
+a typed dependency graph, with well-understood semantics and principled behaviour in
+sparse, multi-typed networks (\cref{sec:ppr}).
+SWE-bench Lite provides a realistic evaluation protocol against real GitHub issues and
+verified patches, enabling direct comparison across systems (\cref{sec:swebench}).
+
+The related systems surveyed in \cref{sec:related-work} collectively confirm that
+graph-structured retrieval improves over text-only methods.
+However, they differ in a critical dimension: systems such as CodexGraph and PROMETHEUS
+use reactive Cypher queries issued by an LLM agent to navigate the graph, coupling
+retrieval quality to the agent's ability to formulate correct graph traversals.
+Systems such as GRACE rely on trained GNN embeddings, requiring labelled datasets and
+significant compute.
+CodeMCP validates the BM25-seeded PPR design but evaluates on internal datasets.
+
+The key gap: no existing system combines interpretable lexical seed selection (BM25)
+with principled structural ranking (Personalized PageRank) and evaluates this combination
+on a public, repository-scale benchmark.
+This gap matters because BM25 provides interpretable, query-aligned seed selection —
+it is possible to inspect exactly which entities triggered retrieval and why — while PPR
+offers principled probability propagation that captures transitive relevance through
+multi-hop dependency paths.
+Existing systems sacrifice one or the other: GRACE and similar neural systems sacrifice
+interpretability through learned GNN embeddings; CodexGraph and PROMETHEUS sacrifice
+structural reasoning depth by relying on LLM-issued Cypher queries that may miss
+relevant transitive dependencies.
+\textsc{CodeGraph} bridges this gap by using BM25 seeds as input to PPR traversal,
+creating a retrieval pipeline in which both stages are explainable and structurally aware.
+The following chapter presents this architecture in detail.

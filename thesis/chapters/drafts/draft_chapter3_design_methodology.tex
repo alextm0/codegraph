@@ -1,0 +1,58 @@
+% ============================================================
+%  Chapter 3 — System Design and Methodology
+% ============================================================
+\chapter{System Design and Methodology}
+\label{chap:design}
+
+\section{System Architecture}
+\label{sec:architecture}
+% Present your high-level pipeline diagram (from 00-overview.md). Explain the end-to-end flow.
+
+\section{Graph Schema}
+\label{sec:graph-schema}
+
+The \textsc{CodeGraph} system represents a repository as a typed directed property graph. This section details the node and edge types that constitute our knowledge representation.
+
+\subsection{Node Types}
+We define nodes at multiple levels of granularity to capture both file-level structure and fine-grained code entities:
+\begin{itemize}
+    \item \textbf{FILE:} Represents a source file on disk. Properties include the file path and raw text hash.
+    \item \textbf{CLASS:} Represents a class definition extracted from a file.
+    \item \textbf{FUNCTION:} Represents a function or method definition. Properties include the name and signature.
+\end{itemize}
+
+\subsection{Edge Types}
+Relationships between nodes capture the structural dependencies of the codebase:
+\begin{itemize}
+    \item \textbf{\textsc{CONTAINS}:} A hierarchical edge linking a \texttt{FILE} to the \texttt{CLASS} or \texttt{FUNCTION} entities defined within it.
+    \item \textbf{\textsc{IMPORTS}:} A cross-file dependency indicating that one file (or entity) imports another.
+    \item \textbf{\textsc{CALLS}:} Indicates that one function or method invokes another.
+    \item \textbf{\textsc{INHERITS}:} Captures class inheritance relationships.
+\end{itemize}
+
+This schema allows for rich traversal. A random walker starting at a function node can reach a relevant class in another file by following a \textsc{CALLS} edge to another function and then tracing back through a \textsc{CONTAINS} edge.
+
+\section{The PPR Retrieval Algorithm}
+\label{sec:ppr-algorithm}
+
+Given a code dependency graph and a set of query-relevant seed entities, we require a mechanism that assigns a relevance score to every node in the graph---one that accounts for both the structural proximity of a node to the seeds and the topology of the paths connecting them. Personalized PageRank (PPR)~\cite{haveliwala2002ppr} provides this mechanism.
+
+\subsection{Standard PageRank}
+Page et al.~\cite{page1999pagerank} introduced PageRank as the link-analysis algorithm underlying Google’s original search engine. The algorithm models importance through a random walk: at each step, the walker either follows a randomly chosen outgoing edge with probability $d$, or resets to a uniformly random node with probability $1 - d$. Formally, let $\mathbf{M}$ be the column-stochastic transition matrix of the graph. The PageRank vector $\boldsymbol{\pi}$ satisfies:
+\begin{equation}
+    \boldsymbol{\pi} = (1 - d)\frac{\mathbf{1}}{n} + d\mathbf{M}\boldsymbol{\pi}
+\end{equation}
+
+\subsection{Personalization and Seed Vectors}
+PPR replaces the uniform reset distribution $\mathbf{1}/n$ with a query-specific seed distribution $\mathbf{s}$:
+\begin{equation}
+    \boldsymbol{\pi} = (1 - d)\mathbf{s} + d\mathbf{M}\boldsymbol{\pi}
+\end{equation}
+The seed vector $\mathbf{s}$ places probability mass on the entities most directly associated with the query---in our case, the results of a BM25 keyword search. When the walker resets, it returns to one of these seed nodes, concentrating the stationary distribution around the seeds' structural neighbourhood. This locality property makes PPR suitable for query-specific retrieval: relevance propagates from the query-matched seed rather than reflecting global centrality.
+
+\subsection{Why PPR for Code?}
+Code dependency graphs share the structural properties of networks where PPR performs well: they are sparse, directed, and exhibit meaningful transitivity. A dependency chain $A \to B \to C$ implies that $C$ is likely relevant to queries involving $A$. PPR's random walk captures this transitive relevance through multi-hop traversal with two key advantages:
+\begin{enumerate}
+    \item \textbf{Total Ranking:} It assigns a continuous score to every reachable node, providing a total ranking without requiring a fixed hop radius.
+    \item \textbf{Path Convergence Sensitivity:} Nodes reachable from multiple independent seed entities accumulate higher probability mass, reflecting the intuition that shared dependencies of many query-relevant components are highly significant.
+\end{enumerate}
