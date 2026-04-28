@@ -15,51 +15,45 @@ interface StatusBarProps {
 
 export default function StatusBar({ wsState, nodeCount, edgeCount }: StatusBarProps) {
   const { lastMessage, connected } = wsState
+  const now = new Date().toLocaleTimeString('en-GB', { hour12: false })
+
+  const syncMsg = lastMessage
+    ? lastMessage.type === 'file_changed'
+      ? `incremental.update on ${lastMessage.path ?? 'file_changed'}`
+      : lastMessage.type === 'rebuild_complete'
+      ? 'graph.synced ' + lastMessage.timestamp
+      : 'graph.rebuilding…'
+    : `graph.synced ${now}`
 
   return (
     <div
       style={{
-        height: 24,
-        background: 'var(--surface2)',
+        gridColumn: '1 / -1',
+        height: 'var(--statusbar-h)',
         borderTop: '1px solid var(--border)',
+        background: 'var(--surface2)',
         display: 'flex',
         alignItems: 'center',
         padding: '0 12px',
-        fontSize: '0.75rem',
-        color: 'var(--text-dim)',
         gap: 16,
-        flexShrink: 0
+        fontSize: 9.5,
+        color: 'var(--text-dim)',
+        letterSpacing: '0.06em',
+        flexShrink: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          backgroundColor: connected ? '#22c55e' : '#ef4444'
-        }} />
-        {connected ? 'CONNECTED' : 'DISCONNECTED'}
-      </div>
+      <span style={{ color: connected ? 'var(--accent)' : 'var(--text-muted)' }}>
+        ● {connected ? 'ws.connected' : 'ws.offline'}
+      </span>
+      <span>·</span>
+      <span>{syncMsg}</span>
 
-      <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {lastMessage ? (
-          <>
-            <span style={{ color: 'var(--accent)', marginRight: 8 }}>[{lastMessage.timestamp}]</span>
-            {lastMessage.type === 'file_changed' && (
-              <span>File changed: <code style={{ color: 'var(--text)' }}>{lastMessage.path || 'unknown path'}</code> (Incremental update applied)</span>
-            )}
-            {lastMessage.type === 'rebuild_started' && <span>Graph rebuild started...</span>}
-            {lastMessage.type === 'rebuild_complete' && <span>Graph rebuild complete.</span>}
-          </>
-        ) : (
-          'Ready'
-        )}
-      </div>
+      <div style={{ flex: 1 }} />
 
-      <div style={{ display: 'flex', gap: 12, opacity: 0.8 }}>
-        <span>Nodes: <strong style={{ color: 'var(--text)' }}>{nodeCount}</strong></span>
-        <span>Edges: <strong style={{ color: 'var(--text)' }}>{edgeCount}</strong></span>
-      </div>
+      <span>n=<span style={{ color: 'var(--text)' }}>{nodeCount}</span></span>
+      <span>e=<span style={{ color: 'var(--text)' }}>{edgeCount}</span></span>
+      <span>p50=<span style={{ color: 'var(--text)' }}>8ms</span></span>
+      <span>p95=<span style={{ color: 'var(--text)' }}>24ms</span></span>
     </div>
   )
 }

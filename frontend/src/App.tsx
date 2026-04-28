@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react'
+import { ThemeProvider } from './context/ThemeContext'
 import Layout from './components/layout/Layout'
 import type { QueryResponse, GraphNode } from './types/api'
 
 export default function App() {
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null)
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
-  const [focusPath, setFocusPath] = useState<string | null>(null)
 
   const handleQueryResult = useCallback((result: QueryResponse) => {
     setQueryResult(result)
@@ -13,13 +13,13 @@ export default function App() {
   }, [])
 
   return (
-    <Layout
-      queryResult={queryResult}
-      selectedNode={selectedNode}
-      focusPath={focusPath}
-      onQueryResult={handleQueryResult}
-      onNodeSelect={setSelectedNode}
-      onFocusPath={setFocusPath}
-    />
+    <ThemeProvider>
+      <Layout
+        queryResult={queryResult}
+        selectedNode={selectedNode}
+        onQueryResult={handleQueryResult}
+        onNodeSelect={setSelectedNode}
+      />
+    </ThemeProvider>
   )
 }

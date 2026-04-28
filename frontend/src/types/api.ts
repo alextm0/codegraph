@@ -69,30 +69,6 @@ export interface QueryResponse {
 }
 
 // ---------------------------------------------------------------------------
-// File tree types  (/api/tree)
-// ---------------------------------------------------------------------------
-
-export interface FileEntry {
-  path: string
-  type: 'file' | 'directory'
-}
-
-export interface TreeResponse {
-  root: string
-  project_root: string
-  files: FileEntry[]
-}
-
-/** Nested version built by useFileTree hook */
-export interface TreeNode {
-  name: string
-  path: string
-  type: 'file' | 'directory'
-  children?: TreeNode[]
-  ppr_rank?: number // Added later by merging results
-}
-
-// ---------------------------------------------------------------------------
 // Node detail  (/api/node/:qualified_name)
 // ---------------------------------------------------------------------------
 
@@ -118,16 +94,4 @@ export interface NodeDetailResponse {
 export interface SubgraphResponse {
   graph: GraphData
   focus_path: string
-}
-
-// ---------------------------------------------------------------------------
-// Stats  (/api/stats)
-// ---------------------------------------------------------------------------
-
-export interface StatsResponse {
-  node_count: number
-  edge_count: number
-  file_count: number
-  label_counts: Record<string, number>
-  edge_type_counts: Record<string, number>
 }

@@ -1,34 +1,77 @@
+/* Lattice design system — scientific instrument aesthetic */
+/* IBM Plex Mono dominant, signal-green accent, cool near-black ground */
+
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #22263a;
-  --border: rgba(255,255,255,0.08);
-  --border-hover: rgba(255,255,255,0.18);
-  --text: #e2e8f0;
-  --text-dim: #64748b;
-  --accent: #6366f1;
-  --accent2: #818cf8;
-  --green: #22c55e;
-  --yellow: #facc15;
-  --red: #f87171;
-  --radius-lg: 12px;
-  --radius-md: 8px;
-  --radius-sm: 4px;
-  --shadow: 0 1px 2px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3);
-  --font: 'Inter', system-ui, sans-serif;
-  --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  /* Node colors */
-  --node-file: #60a5fa;
-  --node-class: #4ade80;
-  --node-function: #fbbf24;
-  --node-method: #a78bfa;
-  /* Visualizer specific */
-  --ppr-color: #fbbf24;
-  --bg-accent: rgba(99, 102, 241, 0.15);
-  --text-muted: #94a3b8;
-  /* Edge colors */
-  --edge-calls: #22c55e;
-  --edge-imports: #3b82f6;
-  --edge-contains: #475569;
-  --edge-inherits: #f97316;
+  --font-display: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-body:    'IBM Plex Mono', ui-monospace, monospace;
+  --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+
+  --topbar-h:    40px;
+  --subbar-h:    28px;
+  --statusbar-h: 24px;
+}
+
+/* ── Dark theme (Lattice default) ──────────────────────── */
+:root,
+[data-theme="dark"] {
+  --bg:            oklch(0.13 0.005 240);
+  --surface:       oklch(0.16 0.006 240);
+  --surface2:      oklch(0.20 0.007 240);
+  --border:        oklch(0.28 0.008 240);
+  --border-strong: oklch(0.40 0.010 240);
+  --text:          oklch(0.96 0.005 80);
+  --text-dim:      oklch(0.66 0.010 240);
+  --text-muted:    oklch(0.48 0.010 240);
+
+  --accent:        oklch(0.82 0.16 145);   /* signal green */
+  --accent-soft:   oklch(0.28 0.08 145);
+  --accent-ink:    oklch(0.85 0.16 145);
+
+  --seed:          oklch(0.82 0.16 75);    /* amber */
+
+  --node-file:     oklch(0.78 0.13 240);
+  --node-class:    oklch(0.82 0.16 145);
+  --node-function: oklch(0.82 0.16 75);
+  --node-method:   oklch(0.78 0.16 320);
+
+  --edge-calls:    oklch(0.78 0.14 145);
+  --edge-imports:  oklch(0.74 0.13 240);
+  --edge-contains: oklch(0.42 0.008 240);
+  --edge-inherits: oklch(0.78 0.16 35);
+
+  --shadow: 0 1px 3px oklch(0 0 0 / 0.5), 0 4px 16px oklch(0 0 0 / 0.4);
+}
+
+/* ── Light theme (Lattice paper) ───────────────────────── */
+[data-theme="light"] {
+  --bg:            oklch(0.99 0.002 240);
+  --surface:       oklch(0.97 0.003 240);
+  --surface2:      oklch(0.94 0.004 240);
+  --border:        oklch(0.86 0.006 240);
+  --border-strong: oklch(0.72 0.008 240);
+  --text:          oklch(0.18 0.008 240);
+  --text-dim:      oklch(0.45 0.010 240);
+  --text-muted:    oklch(0.60 0.008 240);
+
+  --accent:        oklch(0.50 0.18 145);
+  --accent-soft:   oklch(0.92 0.05 145);
+  --accent-ink:    oklch(0.42 0.18 145);
+
+  --seed:          oklch(0.62 0.16 75);
+
+  --node-file:     oklch(0.50 0.13 240);
+  --node-class:    oklch(0.50 0.16 145);
+  --node-function: oklch(0.62 0.14 75);
+  --node-method:   oklch(0.50 0.16 320);
+
+  --edge-calls:    oklch(0.55 0.14 145);
+  --edge-imports:  oklch(0.55 0.13 240);
+  --edge-contains: oklch(0.75 0.005 240);
+  --edge-inherits: oklch(0.58 0.16 35);
+
+  --shadow: 0 1px 3px oklch(0 0 0 / 0.10), 0 4px 16px oklch(0 0 0 / 0.06);
 }
