@@ -55,21 +55,13 @@ class TestToolRegistration:
         module = _import_mcp_server()
         assert hasattr(module, "mcp"), "Expected 'mcp' attribute on mcp_server module"
 
-    def test_all_five_tools_registered(self):
-        """All expected tools must be registered on the FastMCP server."""
+    def test_exactly_two_tools_registered(self):
+        """Exactly 2 tools must be registered: get_relevant_context and query_dependencies."""
         module = _import_mcp_server()
-        # FastMCP stores registered tools in a dict accessible via _tool_manager._tools.
         registered_names = set(module.mcp._tool_manager._tools.keys())
-        expected_names = {
-            "get_relevant_context", 
-            "query_dependencies", 
-            "get_graph_stats",
-            "find_dead_code",
-            "execute_cypher_query"
-        }
-        missing = expected_names - registered_names
-        assert not missing, (
-            f"Missing tools: {missing}. Registered: {registered_names}"
+        expected_names = {"get_relevant_context", "query_dependencies"}
+        assert registered_names == expected_names, (
+            f"Expected exactly {expected_names}, got: {registered_names}"
         )
 
     def test_get_relevant_context_registered(self):
@@ -83,24 +75,6 @@ class TestToolRegistration:
         module = _import_mcp_server()
         registered_names = set(module.mcp._tool_manager._tools.keys())
         assert "query_dependencies" in registered_names
-
-    def test_get_graph_stats_registered(self):
-        """get_graph_stats tool must be individually verifiable."""
-        module = _import_mcp_server()
-        registered_names = set(module.mcp._tool_manager._tools.keys())
-        assert "get_graph_stats" in registered_names
-        
-    def test_find_dead_code_registered(self):
-        """find_dead_code tool must be individually verifiable."""
-        module = _import_mcp_server()
-        registered_names = set(module.mcp._tool_manager._tools.keys())
-        assert "find_dead_code" in registered_names
-        
-    def test_execute_cypher_query_registered(self):
-        """execute_cypher_query tool must be individually verifiable."""
-        module = _import_mcp_server()
-        registered_names = set(module.mcp._tool_manager._tools.keys())
-        assert "execute_cypher_query" in registered_names
 
     def test_server_has_correct_name(self):
         """The FastMCP server must be named 'codegraph'."""

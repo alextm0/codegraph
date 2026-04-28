@@ -31,15 +31,8 @@ from codegraph.core.retrieval.pipeline import ensure_graph_ready
 from codegraph.mcp.prompts import LLM_SYSTEM_PROMPT
 from codegraph.utils.config import parse_signal_weights
 from codegraph.mcp.tools import (
-    find_dead_code_impl,
-    get_graph_stats_impl,
     get_relevant_context_impl,
     query_dependencies_impl,
-    execute_cypher_query_impl,
-    find_callers_impl,
-    find_callees_impl,
-    visualize_query_impl,
-    analyze_complexity_impl,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,6 +49,7 @@ def _resolve_config_path(cli_arg: str | None = None) -> Path:
         return Path(env_path).resolve()
     return _DEFAULT_CONFIG_PATH
 
+
 @dataclass
 class ServerState:
     """Long-lived resources initialized at startup."""
@@ -67,16 +61,17 @@ class ServerState:
     default_token_budget: int
     default_top_k: int
 
+
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     """Initialize Neo4j and GDS on startup."""
     logger.info("CodeGraph MCP server starting up")
     config_path = _resolve_config_path()
     logger.info("Using config: %s", config_path)
-    
+
     db_manager = get_database_manager()
     db_manager.initialize(str(config_path))
-    
+
     raw_config = load_full_config(config_path)
 
     ppr_section = raw_config.get("ppr", {})
@@ -121,13 +116,15 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     finally:
         db_manager.close_driver()
 
+
 mcp = FastMCP(
     name="codegraph",
     instructions=LLM_SYSTEM_PROMPT,
     lifespan=_lifespan,
 )
 
-@mcp.tool()
+
+@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
 def get_relevant_context(
     task_description: str,
     mentioned_entities: list[str] | None,
@@ -136,97 +133,71 @@ def get_relevant_context(
     token_budget: int,
     ctx: Context,
 ) -> str:
-    """Find structurally relevant code for a task using graph-based ranking."""
+    """Return structurally relevant source code for a task using Personalized PageRank.
+
+    ALWAYS call this first when the user asks about code, asks you to write code, or asks
+    you to refactor. Do NOT guess at file locations or function signatures — retrieve them.
+
+    Returns a JSON object:
+      summary.result_count   — number of items returned
+      summary.total_tokens   — tokens consumed across all results
+      results[].entity_name  — short name (e.g. "authenticate")
+      results[].entity_type  — "Function", "Class", "Method", or "File"
+      results[].file_path    — relative path from project root
+      results[].lines        — [start, end] line numbers
+      results[].relevance_score — PPR-derived rank score (higher = more relevant)
+      results[].source_code  — full source text of the entity
+
+    Parameters:
+      task_description  — plain-English description of what you are trying to do
+      mentioned_entities — list of exact entity names the user mentioned (e.g. ["AuthService"])
+                           pass [] or null if no specific entities were named
+      current_file      — relative path of the file currently open (weak seed hint); null if unknown
+      top_k             — max results to return; 0 = server default (~15); raise to 20–30 for
+                          broad refactors, keep at 0 for focused lookups
+      token_budget      — max total tokens across all results; 0 = server default (~6000)
+
+    Does NOT search comments, docstrings, or git history — use task_description for those signals.
+    Does NOT return test files unless the task is about testing.
+    """
     state = ctx.request_context.lifespan_context
     return get_relevant_context_impl(
         task_description, mentioned_entities, current_file, top_k, token_budget, state
     )
 
-@mcp.tool()
+
+@mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
 def query_dependencies(
     entity_name: str,
     direction: str,
     depth: int,
     ctx: Context,
 ) -> str:
-    """Get dependency relationships for a specific code entity."""
+    """Return callers, callees, and imports for a specific code entity.
+
+    Use this AFTER get_relevant_context when you need to understand:
+    - Who calls a function before you change its signature (direction="upstream")
+    - What a function calls internally (direction="downstream")
+    - The full dependency fan in both directions (direction="both")
+
+    Do NOT use this as the first tool — you need to confirm entity names exist first
+    via get_relevant_context.
+
+    Returns a JSON array, each item:
+      qualified_name    — fully qualified identifier (e.g. "src/auth.py::AuthService.login")
+      name              — short name
+      label             — "Function", "Class", "Method", or "File"
+      file_path         — relative path from project root
+      relationship_type — "CALLS", "IMPORTS", "INHERITS_FROM", or "CONTAINS"
+
+    Parameters:
+      entity_name — name or qualified_name of the entity; partial matches are accepted
+      direction   — "upstream" (who calls/imports this), "downstream" (what this calls/imports),
+                    or "both" (all relationships)
+      depth       — 1 for direct relationships only; 2 for two-hop traversal (can be large)
+    """
     state = ctx.request_context.lifespan_context
     return query_dependencies_impl(entity_name, direction, depth, state)
-
-@mcp.tool()
-def get_graph_stats(ctx: Context) -> str:
-    """Return statistics about the code dependency graph."""
-    state = ctx.request_context.lifespan_context
-    return get_graph_stats_impl(state)
-
-@mcp.tool()
-def execute_cypher_query(cypher_query: str, ctx: Context) -> str:
-    """Fallback tool to run a direct, read-only Cypher query against the code graph.
-    
-    Use this for complex questions not covered by other tools. The graph contains nodes representing code structures and relationships between them.
-    **Schema Overview:**
-    - **Nodes:** `Repository`, `File`, `Module`, `Class`, `Function`, `Method`.
-    - **Properties:** Nodes have properties like `name`, `qualified_name`, `file_path`, `line_number`, and `end_line`.
-    - **Relationships:** `CONTAINS` (e.g., File-[:CONTAINS]->Function), `CALLS` (Function-[:CALLS]->Function), `IMPORTS` (File-[:IMPORTS]->Module), `INHERITS_FROM` (Class-[:INHERITS_FROM]->Class).
-    """
-    state = ctx.request_context.lifespan_context
-    return execute_cypher_query_impl(cypher_query, state)
-
-@mcp.tool()
-def find_dead_code(limit: int, ctx: Context) -> str:
-    """Find functions and methods that are never called by other code in the graph.
-
-    Returns candidates for dead code (zero incoming CALLS edges). Note: this may
-    include public API entry points, route handlers, and test functions.
-    """
-    state = ctx.request_context.lifespan_context
-    return find_dead_code_impl(limit, state)
-
-@mcp.tool()
-def find_callers(entity_name: str, ctx: Context) -> str:
-    """Find all entities that call the specified function, method, or class."""
-    state = ctx.request_context.lifespan_context
-    return find_callers_impl(entity_name, state)
-
-
-@mcp.tool()
-def find_callees(entity_name: str, ctx: Context) -> str:
-    """Find all entities called by the specified function or method."""
-    state = ctx.request_context.lifespan_context
-    return find_callees_impl(entity_name, state)
-
-
-@mcp.tool()
-def visualize_query(
-    task_description: str,
-    top_k: int,
-    ctx: Context,
-) -> str:
-    """Run retrieval and open the interactive visualization. Returns URL and instructions."""
-    state = ctx.request_context.lifespan_context
-    return visualize_query_impl(task_description, top_k, state)
-
-
-@mcp.tool()
-def analyze_complexity(
-    file_path: str,
-    threshold: int,
-    ctx: Context,
-) -> str:
-    """Calculate cyclomatic complexity for functions and methods in the given path."""
-    state = ctx.request_context.lifespan_context
-    return analyze_complexity_impl(file_path, threshold, state)
-
-
-@mcp.tool()
-def watch_directory(action: str, ctx: Context) -> str:
-    """Control file watching. Actions: start, stop, status.
-
-    Returns JSON with watch state and pending changes.
-    """
-    from codegraph.mcp.tools import watch_directory_impl
-    state = ctx.request_context.lifespan_context
-    return watch_directory_impl(action, state)
 
 
 def main() -> None:
