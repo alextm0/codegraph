@@ -45,9 +45,9 @@ For each module: read the code, trace one real query end-to-end through it, then
 - [ ] Empty graph detection in MCP — return actionable hint ("run codegraph rebuild") not a bare empty result
 
 ### Week 3 — Documentation
-- [ ] Rewrite README to match current state: 2 MCP tools, ~10 CLI commands, actual setup flow (currently describes old 10-tool surface)
-- [ ] Add "how it works" section — one page a skeptical developer can read in 3 minutes
-- [ ] Frame README around the 3 use cases: UC1 agent context, UC2 explainability, UC3 operations
+- [ ] **Update CLAUDE.md** — reflect current state: 2 MCP tools, simplified CLI (~10 commands), removed surfaces (no find/complexity/pipeline/comparison/explorer); update MCP tools section, commands list, and project structure; commit and push (CLAUDE.md is gitignored — check first)
+- [ ] **Update AGENTS.md** — same as CLAUDE.md; ensure any AI agent picking up this repo gets an accurate picture of what exists
+- [ ] **Rewrite README** — match current state: 2 MCP tools, ~10 CLI commands, actual setup flow (currently describes old 10-tool surface); add "how it works" section (one page a skeptical developer can read in 3 minutes); frame around 3 use cases: UC1 agent context, UC2 explainability, UC3 operations; commit and push
 - [ ] Link visualizer from MCP response summary — when agent gets results, include the visualizer URL so a developer can debug/verify via `codegraph visualize`
 
 ### If time allows — robustness
