@@ -17,9 +17,6 @@ from codegraph.cli.cli_helpers import (
     visualize_helper,
     init_helper,
     watch_helper,
-    analyze_complexity_helper,
-    find_name_helper,
-    find_pattern_helper,
     _initialize_db
 )
 
@@ -42,7 +39,7 @@ def callback(
     if not config_path.exists():
         # Try local project config if not absolute
         config_path = Path.cwd() / "config.yaml"
-    
+
     # Store config_path in context for subcommands
     # But for simplicity, we'll just initialize DB here if it's a command that needs it
     pass
@@ -143,8 +140,7 @@ def visualize(
     """
     Start the interactive CodeGraph visualizer in your browser.
 
-    Shows a D3 force graph with PPR heat scores, seed nodes, reasoning paths,
-    and a side-by-side comparison with BM25 results.
+    Shows a D3 force graph with PPR heat scores, seed nodes, and reasoning paths.
     """
     config_path = get_config_path(ctx)
     _initialize_db(config_path)
@@ -164,120 +160,41 @@ def serve(
     from codegraph.mcp.server import main as serve_main
     serve_main()
 
-# Find command group
-find_app = typer.Typer(help="Search for entities in the code graph.")
-app.add_typer(find_app, name="find")
-
-@find_app.command("name")
-def find_name(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Name of the entity to find")
-):
-    """Find an entity by its exact name."""
-    config_path = get_config_path(ctx)
-    _initialize_db(config_path)
-    find_name_helper(name)
-
-@find_app.command("pattern")
-def find_pattern(
-    ctx: typer.Context,
-    pattern: str = typer.Argument(..., help="Pattern to search for (substring match)")
-):
-    """Find entities matching a substring pattern."""
-    config_path = get_config_path(ctx)
-    _initialize_db(config_path)
-    find_pattern_helper(pattern)
-
 # Analyze command group
 analyze_app = typer.Typer(help="Analyze relationships and dependencies.")
 app.add_typer(analyze_app, name="analyze")
-
-@analyze_app.command("callers")
-def analyze_callers(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Qualified name or name of the entity"),
-    viz: bool = typer.Option(False, "--viz", help="Open visualizer for results"),
-):
-    """Find all entities that call the specified function/method."""
-    config_path = get_config_path(ctx)
-    _initialize_db(config_path)
-    from codegraph.core.graph.queries import find_callers
-    from rich.table import Table
-    import rich.box as box
-    
-    db_manager = _initialize_db(config_path)
-    results = find_callers(db_manager.get_driver(), name)
-    if not results:
-        console.print(f"[yellow]No callers found for '{name}'[/yellow]")
-        return
-    
-    table = Table(title=f"Callers of '{name}'", box=box.ROUNDED)
-    table.add_column("Qualified Name", style="cyan")
-    table.add_column("Type", style="magenta")
-    table.add_column("File Path", style="blue")
-    for res in results:
-        table.add_row(res.qualified_name, res.label, res.file_path)
-    console.print(table)
-
-    if viz:
-        visualize_helper(config_path, port=8474, no_browser=False)
-
-@analyze_app.command("callees")
-def analyze_callees(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Qualified name or name of the entity"),
-    viz: bool = typer.Option(False, "--viz", help="Open visualizer for results"),
-):
-    """Find all entities called by the specified function/method."""
-    config_path = get_config_path(ctx)
-    db_manager = _initialize_db(config_path)
-    from codegraph.core.graph.queries import find_callees
-    from rich.table import Table
-    import rich.box as box
-    
-    results = find_callees(db_manager.get_driver(), name)
-    if not results:
-        console.print(f"[yellow]No callees found for '{name}'[/yellow]")
-        return
-    
-    table = Table(title=f"Callees of '{name}'", box=box.ROUNDED)
-    table.add_column("Qualified Name", style="cyan")
-    table.add_column("Type", style="magenta")
-    table.add_column("File Path", style="blue")
-    for res in results:
-        table.add_row(res.qualified_name, res.label, res.file_path)
-    console.print(table)
-
-    if viz:
-        visualize_helper(config_path, port=8474, no_browser=False)
 
 @analyze_app.command("deps")
 def analyze_deps(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Entity name to find dependencies for"),
-    direction: str = typer.Option("both", "--direction", "-d", help="upsteam, downstream, or both"),
+    direction: str = typer.Option("both", "--direction", "-d", help="upstream, downstream, or both"),
     depth: int = typer.Option(1, "--depth", help="Search depth (1 or 2)"),
     viz: bool = typer.Option(False, "--viz", help="Open visualizer for results"),
 ):
-    """Analyze dependencies and imports for an entity."""
+    """Analyze callers, callees, and imports for an entity.
+
+    Use --direction upstream to find callers, downstream for callees, both for all.
+    """
     config_path = get_config_path(ctx)
     db_manager = _initialize_db(config_path)
     from codegraph.core.graph.queries import query_entity_dependencies
     from rich.table import Table
     import rich.box as box
-    
+
     try:
         results = query_entity_dependencies(db_manager.get_driver(), name, direction, depth)
         if not results:
             console.print(f"[yellow]No dependencies found for '{name}'[/yellow]")
             return
-        
+
         table = Table(title=f"Dependencies of '{name}' ({direction}, depth {depth})", box=box.ROUNDED)
         table.add_column("Qualified Name", style="cyan")
         table.add_column("Type", style="magenta")
+        table.add_column("Relationship", style="yellow")
         table.add_column("File Path", style="blue")
         for res in results:
-            table.add_row(res.qualified_name, res.label, res.file_path)
+            table.add_row(res.qualified_name, res.label, res.relationship_type or "", res.file_path)
         console.print(table)
 
         if viz:
@@ -296,12 +213,12 @@ def analyze_dead(
     from codegraph.core.graph.queries import find_dead_code
     from rich.table import Table
     import rich.box as box
-    
+
     results = find_dead_code(db_manager.get_driver(), limit)
     if not results:
         console.print("[green]No potential dead code found![/green]")
         return
-    
+
     table = Table(title="Potential Dead Code", box=box.ROUNDED)
     table.add_column("Qualified Name", style="cyan")
     table.add_column("Type", style="magenta")
@@ -309,16 +226,6 @@ def analyze_dead(
     for res in results:
         table.add_row(res.qualified_name, res.label, res.file_path)
     console.print(table)
-
-@analyze_app.command("complexity")
-def analyze_complexity(
-    ctx: typer.Context,
-    path: str = typer.Argument(".", help="File or directory to analyze"),
-    threshold: int = typer.Option(10, "--threshold", "-t", help="Complexity threshold")
-):
-    """Analyze cyclomatic complexity of functions and methods."""
-    config_path = get_config_path(ctx)
-    analyze_complexity_helper(config_path, path, threshold)
 
 def cli():
     app()

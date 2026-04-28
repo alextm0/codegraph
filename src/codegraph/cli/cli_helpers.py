@@ -19,15 +19,10 @@ from codegraph.utils.logging import setup_logging
 from codegraph.utils.ignore import load_ignore_patterns
 from codegraph.core.graph import clear_database, build_graph, get_database_manager, load_full_config
 from codegraph.core.graph.queries import (
-    count_nodes_by_label, 
-    count_edges_by_type, 
+    count_nodes_by_label,
+    count_edges_by_type,
     get_most_connected_files,
-    find_node_by_name,
-    find_node_by_pattern,
-    find_callers,
-    find_callees,
-    get_inheritance_chain,
-    find_dead_code
+    find_dead_code,
 )
 from codegraph.core.parser import create_parser, parse_directory
 
@@ -587,65 +582,6 @@ def _print_results_table(
     console.print(results_table)
     console.print()
 
-def analyze_complexity_helper(config_path: Path, path: str, threshold: int = 10) -> None:
-    """Analyze cyclomatic complexity for a file or directory."""
-    from codegraph.core.parser.complexity import analyze_file_complexity
-    
-    raw_config = load_raw_config(config_path)
-    project_root = resolve_project_root(raw_config, config_path)
-    target = (project_root / path).resolve()
-    
-    if not target.exists():
-        console.print(f"[red]Path not found:[/red] {target}")
-        return
-
-    files = []
-    if target.is_file():
-        if target.suffix == '.py':
-            files.append(target)
-    else:
-        files = list(target.rglob("*.py"))
-        # Filter exclusions
-        exclude = raw_config.get("parser", {}).get("exclude_patterns", [])
-        files = [f for f in files if not any(ex in str(f) for ex in exclude)]
-
-    if not files:
-        console.print("[yellow]No Python files found for analysis.[/yellow]")
-        return
-
-    table = Table(title=f"Cyclomatic Complexity (threshold: {threshold})", box=box.ROUNDED)
-    table.add_column("Complexity", justify="right", style="bold")
-    table.add_column("Type", style="magenta")
-    table.add_column("Entity", style="cyan")
-    table.add_column("Location", style="dim")
-    
-    found = 0
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-        task = progress.add_task("Analyzing complexity...", total=len(files))
-        for f in files:
-            progress.update(task, description=f"Analyzing {f.name}")
-            try:
-                results = analyze_file_complexity(str(f))
-                for res in sorted(results, key=lambda x: x['complexity'], reverse=True):
-                    if res['complexity'] >= threshold:
-                        rel_path = f.relative_to(project_root)
-                        table.add_row(
-                            str(res['complexity']),
-                            res['type'],
-                            res['name'],
-                            f"{rel_path}:{res['line']}"
-                        )
-                        found += 1
-                progress.advance(task)
-            except Exception as e:
-                console.print(f"[red]Error analyzing {f.name}:[/red] {e}")
-
-    if found > 0:
-        console.print(table)
-    else:
-        console.print(f"[green]+ All entities are below complexity threshold {threshold}.[/green]")
-
-
 def watch_helper(config_path: Path) -> None:
     """Watch for file changes and update the graph incrementally."""
     from codegraph.watcher.file_watcher import CodeGraphWatcher
@@ -687,44 +623,3 @@ def watch_helper(config_path: Path) -> None:
         console.print("\n[yellow]Stopped watching.[/yellow]")
 
 
-def find_name_helper(name: str):
-    """Find nodes by name."""
-    setup_logging(level=logging.WARNING)
-    db_manager = get_database_manager()
-    try:
-        results = find_node_by_name(db_manager.get_driver(), name)
-        if not results:
-            console.print(f"[yellow]No nodes found with name '{name}'[/yellow]")
-            return
-        
-        table = Table(title=f"Matches for '{name}'", box=box.ROUNDED)
-        table.add_column("Qualified Name", style="cyan")
-        table.add_column("Type", style="magenta")
-        table.add_column("File Path", style="blue")
-        
-        for res in results:
-            table.add_row(res.qualified_name, res.label, res.file_path)
-        console.print(table)
-    except Exception as e:
-        console.print(f"[bold red]Error finding node:[/bold red] {e}")
-
-def find_pattern_helper(pattern: str):
-    """Find nodes by pattern."""
-    setup_logging(level=logging.WARNING)
-    db_manager = get_database_manager()
-    try:
-        results = find_node_by_pattern(db_manager.get_driver(), pattern)
-        if not results:
-            console.print(f"[yellow]No nodes found matching pattern '{pattern}'[/yellow]")
-            return
-        
-        table = Table(title=f"Matches for pattern '{pattern}'", box=box.ROUNDED)
-        table.add_column("Qualified Name", style="cyan")
-        table.add_column("Type", style="magenta")
-        table.add_column("File Path", style="blue")
-        
-        for res in results:
-            table.add_row(res.qualified_name, res.label, res.file_path)
-        console.print(table)
-    except Exception as e:
-        console.print(f"[bold red]Error finding node by pattern:[/bold red] {e}")

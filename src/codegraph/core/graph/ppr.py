@@ -66,7 +66,8 @@ def create_gds_client(driver: Driver) -> GraphDataScience:
     return gds
 
 
-_ALL_RELATIONSHIP_TYPES = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM", "CO_LOCATED"]
+_ALL_RELATIONSHIP_TYPES = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM"]
+
 
 
 def project_graph(
