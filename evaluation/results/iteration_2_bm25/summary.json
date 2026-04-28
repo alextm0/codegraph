@@ -1,0 +1,19 @@
+{
+  "n_instances": 300,
+  "mean_recall_at_5": 0.4666666666666667,
+  "median_recall_at_5": 0.0,
+  "mean_recall_at_10": 0.58,
+  "median_recall_at_10": 1.0,
+  "mean_mrr": 0.3539895048726061,
+  "median_mrr": 0.14285714285714285,
+  "instances_with_zero_recall": 126,
+  "success_only": null,
+  "ablation": "baseline",
+  "retriever": "bm25",
+  "grouping": {
+    "strategy": "repo_commit",
+    "n_groups": 297,
+    "mean_group_size": 1.01,
+    "max_group_size": 2
+  }
+}

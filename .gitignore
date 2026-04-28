@@ -8,7 +8,6 @@ site/
 AGENTS.md
 CLAUDE.md
 docs/DECISIONS.md
-TODO.md
 memory/
 
 # Python environment
@@ -33,7 +32,6 @@ logs/
 
 # Benchmark runner cache and results
 .codegraph_cache/
-evaluation/results/
 demo/requests/
 
 # IDEs
