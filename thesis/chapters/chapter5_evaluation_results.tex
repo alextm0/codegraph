@@ -1,2 +1,510 @@
+% ============================================================
+%  Chapter 5 — Evaluation and Results
+% ============================================================
 \chapter{Evaluation and Results}
-\label{chap:evaluation}
+\label{ch:evaluation}
+
+This chapter addresses the central empirical question of the thesis: does graph-structured retrieval improve an AI agent's ability to identify the source files it must examine to resolve a real software engineering issue? We answer this question through three iterative evaluation rounds on SWE-bench Lite, a benchmark of 300 real GitHub issues. \Cref{sec:eval-setup} defines the evaluation framework; \cref{sec:eval-iter1,sec:eval-iter2,sec:eval-iter3} report successive iterations and their findings; \cref{sec:eval-ablations,sec:eval-per-repo,sec:eval-taxonomy} synthesise the results through controlled comparisons, per-repository breakdown, and a systematic failure taxonomy.
+
+% ============================================================
+\section{Experimental Setup}
+\label{sec:eval-setup}
+% ============================================================
+
+This section defines the dataset, evaluation procedure, metrics, and baselines used across all three iterations. A recall figure is meaningful only when the reader knows what is being recalled, from what corpus, and under what protocol.
+
+% ------------------------------------------------------------
+\subsection{SWE-bench Lite as a Retrieval Benchmark}
+\label{sec:eval-swebench}
+% ------------------------------------------------------------
+
+\paragraph{Why repository-level benchmarks.}
+Earlier code generation benchmarks presented isolated function signatures and asked a model to produce an implementation. These tasks measure whether a model can write code from a specification---a valuable capability, but one that does not capture the dominant challenge in real engineering work: navigating a large, unfamiliar codebase to identify which component is broken and where a fix belongs. Real bug reports arrive as natural-language descriptions of observed failures, not as documented function stubs. The relevant fix often spans multiple files connected through non-obvious dependency paths.
+
+SWE-bench~\cite{yang2024swebench} was introduced to measure this harder task. Every instance is drawn from a real, merged GitHub pull request: a developer noticed a problem, reported it as an issue, wrote a patch that fixed it, and the patch was accepted by project maintainers. This pipeline guarantees that each instance corresponds to a real bug with a verified solution. There are no synthetic problems, no simplified APIs, and no toy repositories. SWE-bench is therefore the closest available proxy for what a coding agent deployed on a real engineering team would face.
+
+\paragraph{Dataset construction.}
+The full SWE-bench dataset contains 2{,}294 instances collected from 12 open-source Python repositories. For each instance, the benchmark records three artefacts: (1) the issue text as posted by the reporter, (2) a snapshot of the repository at the commit immediately preceding the merged fix, and (3) the patch---a diff identifying exactly which files and lines were modified. A separate automated test suite verifies whether a generated patch resolves the issue end to end.
+
+SWE-bench Lite~\cite{yang2024swebench} is a curated 300-instance subset selected for three properties: the problem statement is self-contained (no external links required to understand the issue), the patch modifies a bounded number of files, and test suite execution completes in a reasonable time window. The Lite subset preserves the realism of the full benchmark while being tractable to evaluate many configurations---each full run of 300 instances takes approximately 12--14 hours, and the iterative methodology in this thesis requires dozens of ablation runs.
+
+\Cref{tab:repo-characteristics} summarises the 12 repositories. Django and SymPy together account for over 63\% of all instances; this concentration is important for interpreting per-repository failure rates in \cref{sec:eval-per-repo}.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Repositories in SWE-bench Lite by instance count. The dataset spans six domain categories and ranges from 3 to 114 instances per repository.}
+    \label{tab:repo-characteristics}
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{4.0cm} >{\RaggedRight\arraybackslash}p{1.8cm} >{\RaggedRight\arraybackslash}X @{}}
+        \toprule
+        \textbf{Repository} & \textbf{Instances} & \textbf{Domain} \\
+        \midrule
+        django/django & 114 & Web framework \\
+        sympy/sympy & 77 & Symbolic mathematics \\
+        matplotlib/matplotlib & 23 & Scientific visualisation \\
+        scikit-learn & 23 & Machine learning \\
+        pytest-dev/pytest & 17 & Testing framework \\
+        sphinx-doc/sphinx & 16 & Documentation generation \\
+        astropy/astropy & 6 & Astronomy computing \\
+        psf/requests & 6 & HTTP client library \\
+        pylint-dev/pylint & 6 & Static analysis \\
+        pydata/xarray & 5 & N-dimensional arrays \\
+        mwaskom/seaborn & 4 & Statistical visualisation \\
+        pallets/flask & 3 & Micro web framework \\
+        \midrule
+        \textbf{Total} & \textbf{300} & \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\paragraph{How this thesis uses SWE-bench.}
+The benchmark's official evaluation metric is \emph{resolution rate}: the proportion of instances for which a generated patch passes the provided tests. Computing this metric requires a full agent pipeline---an LLM generates a patch, the patch is applied to the repository, and the test suite is executed---which is expensive, non-deterministic, and conflates retrieval quality with generation quality.
+
+This thesis measures a cheaper and more interpretable proxy: \emph{file-level retrieval accuracy}. Given the issue text and the pre-patch repository, does the retrieval system return the file modified by the ground-truth patch? This proxy is justified by two observations. First, retrieval is a \emph{necessary} precondition for resolution: an agent cannot patch a file it was never shown. Second, empirical studies confirm that retrieval quality, not reasoning quality, is the dominant bottleneck for current agents on this benchmark~\cite{yang2024swebench}.
+
+This choice has a concrete limitation: retrieval accuracy does not bound resolution rate from above. An agent that retrieves the correct file may still fail to generate a correct patch. This thesis measures only the retrieval stage; \cref{ch:discussion} discusses the implications and proposes connecting CodeGraph to a full resolution pipeline as future work.
+
+\paragraph{Ground truth.}
+For each instance, the ground-truth set is the primary file in the verified patch---the file with the largest number of changed lines. Many instances modify only one file; for those that modify several, the primary file is where the core change lives. Recall is measured at cut-offs $k = 5$ and $k = 10$.
+
+% ------------------------------------------------------------
+\subsection{Evaluation Protocol}
+\label{sec:eval-protocol}
+% ------------------------------------------------------------
+
+For each SWE-bench Lite instance, the evaluation procedure is:
+\begin{enumerate}
+    \item Build the CodeGraph dependency graph for the repository at the instance's base commit, if it has not already been built for a prior instance sharing the same commit.
+    \item Run the retrieval pipeline---seed extraction, Personalized PageRank (PPR), post-processing---with the instance's issue text as the query.
+    \item Compare the returned ranked file list against the ground-truth primary file.
+    \item Record per-instance recall, rank, and reciprocal rank.
+\end{enumerate}
+
+Instances sharing the same repository and base commit reuse the same graph. This matches the intended deployment scenario: the graph is built once and queried repeatedly for different tasks on the same codebase.
+
+The retrieval pipeline is invoked at the graph level, not through the MCP server, to avoid the file-budget truncation applied by the MCP layer. A pilot run, \texttt{pilot\_001}, revealed that MCP-level truncation caused all instances to report zero recall because the retrieved file list was cut before scoring. The evaluation runner calls \texttt{run\_ppr\_from\_node\_ids} directly, receiving the full ranked list.
+
+\Cref{fig:eval-pipeline} illustrates the evaluation procedure.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            box/.style={draw, rectangle, rounded corners=3pt, fill=blue!8, text width=2.5cm,
+                align=center, minimum height=0.8cm, font=\scriptsize\sffamily},
+            goldbox/.style={draw, rectangle, rounded corners=3pt, fill=green!10, text width=2.2cm,
+                align=center, minimum height=0.8cm, font=\scriptsize\sffamily},
+            metricbox/.style={draw, rectangle, rounded corners=3pt, fill=orange!10, text width=2.5cm,
+                align=center, minimum height=0.8cm, font=\scriptsize\sffamily},
+            arrow/.style={-{Stealth[length=5pt]}, semithick, draw=gray!80},
+        ]
+        \node[box]       (issue)  at (0.0, 0)    {Issue text\\(bug report)};
+        \node[box]       (seeds)  at (3.2, 0)    {Seed extraction\\(BM25)};
+        \node[box]       (ppr)    at (6.4, 0)    {Personalized\\PageRank};
+        \node[box]       (topk)   at (9.6, 0)    {Top-$k$ file\\list};
+        \node[goldbox]   (gold)   at (9.6, -1.8) {Gold file\\(from patch)};
+        \node[metricbox] (metric) at (6.4, -1.8) {Recall@5,\\Recall@10, MRR};
+        \draw[arrow] (issue)  -- (seeds);
+        \draw[arrow] (seeds)  -- (ppr);
+        \draw[arrow] (ppr)    -- (topk);
+        \draw[arrow] (topk)   -- (metric);
+        \draw[arrow] (gold)   -- (metric);
+    \end{tikzpicture}
+    \caption{Evaluation procedure for each SWE-bench Lite instance. The retrieval system receives the issue text and returns a ranked file list; recall metrics are computed by comparing that list against the ground-truth file identified in the verified patch.}
+    \label{fig:eval-pipeline}
+\end{figure}
+
+% ------------------------------------------------------------
+\subsection{Metrics}
+\label{sec:eval-metrics}
+% ------------------------------------------------------------
+
+Three metrics are reported across all experiments.
+
+\textbf{Recall@$k$ (R@$k$).} An instance contributes 1 to R@$k$ if the gold file appears among the top-$k$ returned files, and 0 otherwise. R@10 is the headline metric: it represents a realistic context budget for an AI coding agent and is the primary target of each iteration. R@5 is also reported to reveal ranking quality within the retrieved set.
+
+\textbf{Mean Reciprocal Rank (MRR).} MRR is the mean over all instances of the reciprocal of the gold file's rank; instances where the gold file is not returned contribute 0. MRR penalises systems that find the correct file but rank it low. An MRR of 0.44 corresponds roughly to the gold file ranked at position 2--3 for the instances where it is found.
+
+\textbf{Zero-recall count.} The number of instances with R@10 = 0. Each zero-recall instance is a complete failure: the agent has no path to a correct solution. Reducing this count is the dominant objective of each iteration.
+
+% ------------------------------------------------------------
+\subsection{Baselines}
+\label{sec:eval-baselines}
+% ------------------------------------------------------------
+
+Three baselines are reported.
+
+\textbf{Random retrieval} returns $k$ files chosen uniformly at random from the repository, establishing the floor.
+
+\textbf{BM25-only retrieval} uses the same compound-tokenised BM25 index as CodeGraph's seed selection step but returns the top-$k$ files directly by BM25 score without any graph re-ranking. This isolates the marginal contribution of the graph over the best available pure-text approach.
+
+\textbf{One-hop ego-graph retrieval} returns all files reachable within one graph hop from the BM25-matched seed nodes. It confirms that na\"ive unranked expansion does not improve over the BM25 baseline.
+
+% ============================================================
+\section{Iteration 1: Baseline and the Bimodal Discovery}
+\label{sec:eval-iter1}
+% ============================================================
+
+This section presents the initial evaluation of CodeGraph and, more importantly, the diagnostic finding that reframes the rest of the chapter. The initial results are surprising---the graph-based system underperforms the BM25 baseline---but an examination of the per-instance distribution reveals the structural reason why, and points directly to the dominant improvement of the entire evaluation.
+
+\subsection*{Initial results}
+
+The initial CodeGraph configuration uses weighted PPR restart: entity matches receive restart weight 0.6, BM25 scores contribute 0.3, and structural signals 0.1. This produces 42.0\% R@10, 37.0\% R@5, MRR 0.228, and 174 out of 300 instances with zero recall. The BM25-only baseline achieves 49.7\% R@10---meaning the system that uses no graph structure outperforms the graph-based system by 7.7 percentage points.
+
+This result demands an explanation. The graph system uses strictly more information than BM25, yet performs worse. The investigation of this anomaly produces the most important structural finding of the thesis.
+
+\subsection*{The bimodal distribution}
+
+Examining the per-instance results reveals a striking pattern, shown in \cref{fig:bimodal-distribution}. Most instances that succeed have the gold file in the top 5 results (R@5 = 37.0\%, 111 instances). Only 15 instances (5\%) have the gold file in ranks 6--10. The remaining 174 instances (58\%) have the gold file completely absent from the top 10. The distribution is not smooth: almost no instances occupy the middle ground between ``retrieved reliably'' and ``not retrieved at all.''
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            lbl/.style={font=\scriptsize\sffamily, align=center},
+        ]
+        % Scale factor: 174 (max bar) maps to 5.0cm height
+        % 174 -> 5.0cm,  111 -> 3.19cm,  15 -> 0.43cm
+        \fill[red!25]   (0,   0) rectangle (1.6, 5.0);
+        \draw[gray!60]  (0,   0) rectangle (1.6, 5.0);
+        \fill[blue!20]  (2.4, 0) rectangle (4.0, 0.43);
+        \draw[gray!60]  (2.4, 0) rectangle (4.0, 0.43);
+        \fill[green!35] (4.8, 0) rectangle (6.4, 3.19);
+        \draw[gray!60]  (4.8, 0) rectangle (6.4, 3.19);
+
+        % Count labels
+        \node[lbl]                        at (0.8, 5.30) {\textbf{174}};
+        \node[lbl, text=red!60!black]     at (0.8, 4.30) {58\%};
+        \node[lbl]                        at (3.2, 0.73) {\textbf{15}};
+        \node[lbl, text=blue!60!black]    at (3.2, 1.35) {5\%};
+        \node[lbl]                        at (5.6, 3.49) {\textbf{111}};
+        \node[lbl, text=green!60!black]   at (5.6, 2.60) {37\%};
+
+        % X-axis labels
+        \node[lbl] at (0.8, -0.55) {Not retrieved\\(rank $> 10$)};
+        \node[lbl] at (3.2, -0.55) {Rank 6--10};
+        \node[lbl] at (5.6, -0.55) {Rank 1--5};
+
+        % Y-axis
+        \draw[-{Stealth[length=4pt]}, gray!60, semithick] (-0.25, 0) -- (-0.25, 5.8);
+        \node[rotate=90, lbl, text=gray!60!black] at (-0.85, 3.0) {Instances (out of 300)};
+        \draw[gray!40] (-0.25, 0) -- (7.0, 0);
+        % Y ticks
+        \foreach \y/\cnt in {0/0, 1.44/50, 2.87/100, 4.31/150} {
+            \draw[gray!30, thin] (-0.25, \y) -- (7.0, \y);
+            \node[lbl, text=gray!60!black] at (-0.6, \y) {\cnt};
+        }
+    \end{tikzpicture}
+    \caption{Per-instance recall distribution for the iteration~1 weighted PPR baseline (R@10 = 42.0\%). The distribution is strikingly bimodal: 174 instances (58\%) achieve zero recall and 111 instances (37\%) have the gold file in the top~5, with only 15 instances (5\%) in the intermediate rank band of 6--10. Files are either retrieved reliably or missed entirely.}
+    \label{fig:bimodal-distribution}
+\end{figure}
+
+This pattern emerges from the binary nature of PPR reachability. PPR assigns each node a probability by simulating random walks from the seed nodes. If the seed entities land in the structural neighbourhood of the gold file, PPR propagates through that neighbourhood and typically ranks the gold file within the top 5. If no seed lands near the gold file, PPR assigns it zero probability, and it cannot appear in any top-$k$ result regardless of $k$.
+
+The 15 instances in ranks 6--10 are informative: they show that 111 of the 126 retrieved instances (88\%) are ranked in the top 5, not spread across the full 1--10 range. Once the gold file is reachable, PPR typically ranks it high. The ranking problem accounts for at most 15 instances; the reachability problem accounts for 174. Algorithm tuning---changing the damping factor $\alpha$, adjusting edge weights---can only help the 15 instances in ranks 6--10. The bottleneck is whether the seeds reach the right neighbourhood, not how well PPR propagates from them.
+
+\subsection*{Why the graph system underperforms BM25}
+
+The weighted configuration multiplies restart weight by 0.6 for entity matches. A function name like \texttt{update}, \texttt{save}, or \texttt{get} matches dozens of nodes across the codebase. The weighted configuration confidently seeds PPR from those nodes, directing the random walk away from the gold file's neighbourhood. BM25, by contrast, returns file-level scores that at least reflect term overlap with the issue text. It is less expressive, but it is less wrong.
+
+This analysis motivates a fundamental change to the restart distribution.
+
+\subsection*{Uniform PPR: 42.0\% $\to$ 60.7\%}
+
+Changing the restart distribution from weighted to \emph{uniform restart}---equal probability for every matched seed node---improves R@10 from 42.0\% to 60.7\%, a gain of 18.7 percentage points. Under uniform restart, no single seed can dominate the random walk. If one seed is in the wrong neighbourhood, its contribution is diluted by the other seeds. Files that accumulate probability through multiple convergent paths rise to the top; files reachable only from a single mismatched entity do not. The improvement comes entirely from reducing false-positive amplification caused by ambiguous entity matches.
+
+% ============================================================
+\section{Iteration 2: Systematic Improvements}
+\label{sec:eval-iter2}
+% ============================================================
+
+Iteration 2 implements five targeted improvements derived from the failure analysis of iteration~1. Together they improve R@10 from 42.0\% to 74.0\%---a 32-percentage-point gain. This section presents each improvement, the controlled comparisons that isolate each contribution, and the central attribution finding: seed quality is the dominant factor, contributing approximately four times as much as the PPR algorithm change.
+
+\subsection*{The five improvements}
+
+\begin{enumerate}
+    \item \textbf{Uniform PPR restart (formalised as default).} As established in \cref{sec:eval-iter1}, equal seed weights let graph topology arbitrate between competing signals. This is the largest single improvement at +18.7pp from the baseline.
+
+    \item \textbf{Compound tokenisation.} Standard tokenisation treats \texttt{SQLCompiler} and \texttt{get\_absolute\_url} as atomic tokens. Compound tokenisation splits these into constituent words---\texttt{sql compiler} and \texttt{get absolute url}---before building the BM25 index. A query mentioning ``SQL compilation'' or ``absolute URL'' now matches the corresponding identifiers, recovering matches invisible under atomic tokenisation.
+
+    \item \textbf{Expanded BM25 corpus.} The original corpus indexed only function and method docstrings. The expanded corpus adds file path tokens (e.g.\ \texttt{django/db/models/sql/compiler.py} contributes \texttt{django}, \texttt{db}, \texttt{models}, \texttt{sql}, \texttt{compiler}), class names, and qualified method names. Queries mentioning module paths or class names can now reach the corresponding graph nodes.
+
+    \item \textbf{Inverse-frequency entity weighting.} Short or common names such as \texttt{update}, \texttt{save}, and \texttt{\_\_init\_\_} appear in dozens of files, producing many false seed candidates. Seed weights are penalised by $1/\log_2(n+1)$, where $n$ is the number of files containing the entity's short name. This prevents high-frequency names from dominating the personalisation vector.
+
+    \item \textbf{Top-$k = 30$.} Increasing the number of returned candidates from 20 to 30 recovers 5 additional instances where the gold file was ranked 21--30 under the prior configuration. This is not a ranking improvement---those files were already reachable---it is a cut-off adjustment.
+\end{enumerate}
+
+\Cref{tab:iter2-results} presents the full results across all configurations tested in both iterations.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Results for all configurations evaluated in iterations 1 and 2. The final row (Top $k$=30) is the iteration~2 best. ``New seeds'' denotes the expanded, compound-tokenised BM25 corpus with inverse-frequency weighting.}
+    \label{tab:iter2-results}
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}p{1.2cm} >{\RaggedRight\arraybackslash}p{1.2cm} >{\RaggedRight\arraybackslash}p{1.2cm} >{\RaggedRight\arraybackslash}p{1.6cm} @{}}
+        \toprule
+        \textbf{Configuration} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{Zero-recall} \\
+        \midrule
+        Weighted PPR (baseline)          & 37.0\% & 42.0\% & 0.228 & 174 \\
+        One-hop ego-graph                & 37.7\% & 41.3\% & 0.232 & 176 \\
+        No IDF weighting                 & 37.3\% & 42.3\% & 0.227 & 173 \\
+        BM25 only                        & 37.7\% & 49.7\% & 0.248 & 151 \\
+        Uniform PPR (old seeds)          & 55.3\% & 60.7\% & 0.344 & 118 \\
+        BM25 only (new seeds)            & 46.7\% & 58.0\% & 0.354 & 126 \\
+        Weighted PPR (new seeds)         & 58.3\% & 66.7\% & 0.421 & 100 \\
+        Uniform PPR (new seeds), $\alpha$=0.85 & 60.7\% & 72.3\% & 0.439 & 83 \\
+        Uniform PPR (new seeds), $\alpha$=0.70 & 63.7\% & 72.3\% & 0.441 & 83 \\
+        No structural expansion          & 60.7\% & 72.3\% & 0.439 & 83 \\
+        \textbf{Top $k$=30}              & \textbf{60.7\%} & \textbf{74.0\%} & \textbf{0.442} & \textbf{78} \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\Cref{fig:iteration-trajectory} shows the key R@10 milestones as a trajectory, providing an at-a-glance summary of the improvement path.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            lbl/.style={font=\scriptsize\sffamily, align=center},
+        ]
+        % Scale: 1% R@10 = 0.07cm height; bars 1.2cm wide, 1.8cm gap between centres
+        \pgfmathsetmacro{\hA}{42.0*0.07}  % 2.94
+        \pgfmathsetmacro{\hB}{49.7*0.07}  % 3.479
+        \pgfmathsetmacro{\hC}{60.7*0.07}  % 4.249
+        \pgfmathsetmacro{\hD}{72.3*0.07}  % 5.061
+        \pgfmathsetmacro{\hE}{74.0*0.07}  % 5.18
+
+        % Bars (centres at 0.6, 2.4, 4.2, 6.0, 7.8)
+        \fill[blue!15, draw=gray!60] (0,   0) rectangle (1.2, \hA);
+        \fill[gray!20, draw=gray!60] (1.8, 0) rectangle (3.0, \hB);
+        \fill[blue!30, draw=gray!60] (3.6, 0) rectangle (4.8, \hC);
+        \fill[blue!50, draw=gray!60] (5.4, 0) rectangle (6.6, \hD);
+        \fill[blue!70, draw=gray!60] (7.2, 0) rectangle (8.4, \hE);
+
+        % Value labels
+        \node[lbl] at (0.6,  \hA+0.25) {42.0\%};
+        \node[lbl] at (2.4,  \hB+0.25) {49.7\%};
+        \node[lbl] at (4.2,  \hC+0.25) {60.7\%};
+        \node[lbl] at (6.0,  \hD+0.25) {72.3\%};
+        \node[lbl, text=blue!70!black, font=\scriptsize\sffamily\bfseries]
+              at (7.8,  \hE+0.25) {74.0\%};
+
+        % X labels
+        \node[lbl, text width=1.6cm] at (0.6,  -0.65) {Weighted\\PPR};
+        \node[lbl, text width=1.6cm] at (2.4,  -0.65) {BM25\\baseline};
+        \node[lbl, text width=1.6cm] at (4.2,  -0.65) {Uniform\\PPR};
+        \node[lbl, text width=1.8cm] at (6.0,  -0.65) {+\,Improved\\seeds};
+        \node[lbl, text width=1.6cm] at (7.8,  -0.65) {+\,Top-$k$\\$=30$};
+
+        % Y-axis and gridlines
+        \draw[-{Stealth[length=4pt]}, gray!60, semithick] (-0.3, 0) -- (-0.3, 5.9);
+        \node[rotate=90, lbl, text=gray!60!black] at (-0.9, 3.0) {Recall@10};
+        \foreach \y/\pct in {0/0, 2.1/30, 3.5/50, 5.25/75} {
+            \draw[gray!30, thin] (-0.3, \y) -- (9.2, \y);
+            \node[lbl, text=gray!60!black] at (-0.65, \y) {\pct\%};
+        }
+        \draw[gray!50] (-0.3, 0) -- (9.2, 0);
+    \end{tikzpicture}
+    \caption{R@10 across the five key configurations from iterations 1 and 2. The largest single gain (+18.7pp) comes from switching to uniform PPR restart. Improved seed quality (compound tokenisation, expanded corpus, inverse-frequency weighting) contributes a further +11.6pp. Increasing the candidate count to $k=30$ adds a final +1.7pp to reach the iteration~2 best of 74.0\%.}
+    \label{fig:iteration-trajectory}
+\end{figure}
+
+\subsection*{Attribution analysis}
+
+\Cref{tab:attribution} isolates the contribution of seed quality versus the PPR algorithm change by holding one factor constant and varying the other.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Attribution of the total +32pp improvement. Each row holds one factor constant and varies the other.}
+    \label{tab:attribution}
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}p{2.2cm} >{\RaggedRight\arraybackslash}p{2.2cm} >{\RaggedRight\arraybackslash}p{1.4cm} @{}}
+        \toprule
+        \textbf{Comparison} & \textbf{Run A} & \textbf{Run B} & \textbf{$\Delta$R@10} \\
+        \midrule
+        Seed quality (PPR mode fixed: weighted) & Old seeds: 42.0\% & New seeds: 66.7\% & +24.7pp \\
+        PPR mode (seeds fixed: new)             & Weighted: 66.7\%  & Uniform: 72.3\%   & +5.6pp  \\
+        Compound tokenisation (BM25 only)       & Old: 49.7\%       & New: 58.0\%       & +8.3pp  \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Seed quality improvements---compound tokenisation, expanded corpus, and inverse-frequency weighting---contribute 24.7pp when the PPR algorithm is held constant. The PPR mode change contributes 5.6pp on top of improved seeds. The ratio is approximately 4:1 in favour of seed quality.
+
+This is the central empirical finding of the thesis. In a graph-based retrieval system, the algorithm amplifies the input signal: better seeds provide better targets from which PPR propagates. The ceiling is set by where the seeds land, not by the sophistication of the propagation algorithm. Future improvements to the system should prioritise seed extraction quality---through better tokenisation, broader corpora, or semantic matching---over PPR parameter tuning.
+
+\subsection*{Structural expansion: a null result}
+
+The ``No structural expansion'' row in \cref{tab:iter2-results} reports the same result as the best Uniform PPR configuration (72.3\% R@10). Structural expansion---adapted from the SpIDER retrieval method---adds every immediate neighbour via \texttt{CONTAINS} edges (one hop) to the result set after PPR. The result is 0pp improvement.
+
+Two reasons explain this. First, PPR is already a graph traversal algorithm that propagates through \texttt{CONTAINS} edges during the random walk; a post-hoc one-hop BFS over the same edges adds no new information. Second, \texttt{CONTAINS} edges connect \texttt{File}$\to$\texttt{Class} and \texttt{Class}$\to$\texttt{Method} nodes \emph{within} a single file. The zero-recall failures are between sibling files---and \texttt{CONTAINS} edges do not span files. Structural expansion was traversing the wrong dimension. This finding motivates the CO\_LOCATED investigation in iteration~3.
+
+% ============================================================
+\section{Iteration 3: Structural Augmentation (Negative Result)}
+\label{sec:eval-iter3}
+% ============================================================
+
+The 78 zero-recall instances remaining after iteration~2 motivated a targeted structural intervention. This section presents the hypothesis, the implementation, and the results---all three augmented configurations perform at or below the iteration~2 baseline---followed by a two-part analysis of why the intervention failed. The negative result is informative: it characterises the structural limit of PPR-based retrieval and clarifies when structural augmentation helps versus hurts.
+
+\subsection*{Hypothesis}
+
+A spatial analysis of the 78 zero-recall instances reveals that 40 of them (51\%) have at least one seed entity in the same directory as the gold file. These seeds are close to the target, yet the gold file receives zero PPR probability. The cause is straightforward: two files in the same directory share no graph edge unless one explicitly imports or calls the other. A seed in \texttt{django/db/migrations/recorder.py} propagates probability through its import and call edges, but \texttt{django/db/migrations/serializer.py}---which has no dependency relationship with \texttt{recorder.py}---receives none.
+
+The hypothesis is that two complementary features can bridge this gap:
+
+\begin{itemize}
+    \item \textbf{\texttt{CO\_LOCATED} edges.} At graph-build time, create \texttt{File}$\to$\texttt{File} edges between all files in the same parent directory, with weight 0.3 (one-third of standard edge weights). Directories with more than 50 files are excluded to prevent $O(n^2)$ edge explosion. This provides a weak background path for PPR probability to flow across sibling files.
+
+    \item \textbf{Directory injection.} After PPR returns the top-$k$ results, identify the top-3 most represented directories among the returned files. Query all \texttt{File} nodes in those directories from Neo4j. Score candidates not already in the result set by BM25; retain only those with a positive score; add them weighted by the directory's average PPR score scaled by 0.3.
+\end{itemize}
+
+The predicted improvement was 15--25 additional instances resolved, approximately +5--8pp R@10.
+
+\subsection*{Results}
+
+\Cref{tab:iter3-results} presents the results. All three augmented configurations perform at or below the iteration~2 baseline on R@10. The best result (injection only, 73.67\%) is 0.33pp below baseline---approximately one instance of regression. R@5 improves across all three configurations by +2--3pp, but this improvement is accompanied by R@10 regressions.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Iteration~3 results. All three configurations with structural augmentation perform at or below the iteration~2 best (74.0\%). R@5 improves but R@10 regresses---the gain and cost affect different rank bands.}
+    \label{tab:iter3-results}
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{4.6cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
+        \toprule
+        \textbf{Configuration} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{Zero-recall} \\
+        \midrule
+        Iter~2 best (baseline)      & 60.67\% & \textbf{74.0\%} & 0.4417 & 78 \\
+        Injection only              & 63.33\% & 73.67\% & 0.4454 & 79 \\
+        \texttt{CO\_LOCATED} + injection & 63.0\%  & 73.33\% & 0.4431 & 80 \\
+        \texttt{CO\_LOCATED} only   & 63.0\%  & 73.0\%  & 0.4417 & 81 \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection*{Analysis: probability dilution in large directories}
+
+PPR probability is conserved: the total probability mass across all graph nodes sums to 1.0. Adding \texttt{CO\_LOCATED} edges creates new paths through which probability flows between sibling files. In a small, cohesive directory (8--12 files), these paths connect closely related components and can guide probability toward the gold file. In a large, heterogeneous directory---such as \texttt{django/db/models/} with over 25 files covering ORM, SQL compilation, aggregation, and migrations---the new edges create a dense subgraph. Probability distributes across many semantically unrelated neighbours, reducing the gold file's share. Files that were ranked just within the top-30 boundary may drop below it.
+
+The R@5 improvement across all three configurations confirms this mechanism. \texttt{CO\_LOCATED} edges re-rank files within the reachable set: in small-directory instances, the gold file moves from rank 6--10 toward rank 1--5. But simultaneously, in large-directory instances, the gold file moves from rank 25--30 to rank 31+, falling outside the top-$k$ threshold. R@5 captures the first effect; R@10 captures both. Because 55 of the 78 zero-recall failures come from Django and SymPy---which have large, heterogeneous directories---the second effect dominates.
+
+\subsection*{Analysis: the seeds-in-right-directory condition was weaker than assumed}
+
+The 40 structural failures were identified by directory co-location: seed files and gold file share a parent directory. This category conflates two structurally different sub-cases.
+
+The first sub-case comprises small, cohesive directories where all files implement related functionality. Here, \texttt{CO\_LOCATED} edges provide a small, well-targeted candidate set and BM25 can discriminate among a short list. The approach works as intended.
+
+The second sub-case comprises large, heterogeneous directories where files cover multiple distinct functional areas. Here the candidate set under \texttt{CO\_LOCATED} edges is large, and BM25 cannot reliably rank the gold file above all other vocabulary-similar files in the directory. The 40 failures skew toward this harder sub-case. The net result across both sub-cases is negative.
+
+\subsection*{What the result proves}
+
+The iteration~3 result contributes a precise characterisation of when structural augmentation helps graph-based retrieval. Related systems---such as SpIDER---add structural graph traversal to a graph-blind dense retriever, where every added edge provides genuinely new information invisible to the base retrieval mechanism. For CodeGraph, PPR already operates on the graph; adding edges redistributes existing probability rather than injecting new signal. This empirically confirms that augmentation strategies designed for graph-blind retrievers do not transfer directly to graph-aware retrievers. The appropriate intervention for a graph-aware retriever must address the seed quality bottleneck identified in iteration~2, not the graph structure.
+
+% ============================================================
+\section{Ablation Studies}
+\label{sec:eval-ablations}
+% ============================================================
+
+This section consolidates the controlled comparisons from all three iterations into a single table, organised by the question each ablation answers rather than the parameter it varies. \Cref{tab:ablations} summarises eight key ablations; the paragraphs below interpret each cluster.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Key ablation results, organised by the question each comparison answers. Each row contrasts two configurations that differ in exactly one variable.}
+    \label{tab:ablations}
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\arraybackslash}p{3.2cm} >{\RaggedRight\arraybackslash}p{2.4cm} >{\RaggedRight\arraybackslash}p{2.4cm} >{\RaggedRight\arraybackslash}p{1.3cm} >{\RaggedRight\arraybackslash}X @{}}
+        \toprule
+        \textbf{Ablation} & \textbf{Run A} & \textbf{Run B} & \textbf{$\Delta$R@10} & \textbf{What it proves} \\
+        \midrule
+        Uniform vs.\ weighted PPR (old seeds) & Weighted: 42.0\% & Uniform: 60.7\% & +18.7pp & Uniform better when seeds are noisy \\
+        Uniform vs.\ weighted PPR (new seeds) & Weighted: 66.7\% & Uniform: 72.3\% & +5.6pp  & Uniform better even with good seeds \\
+        Seed quality (mode fixed: weighted)   & Old: 42.0\%      & New: 66.7\%     & +24.7pp & Seeds dominate algorithm 4:1 \\
+        Compound tokenisation (BM25 only)     & Old: 49.7\%      & New: 58.0\%     & +8.3pp  & Vocabulary mismatch is first-order \\
+        Structural expansion                  & With: 72.3\%     & Without: 72.3\% & 0pp     & Post-hoc BFS is redundant for PPR \\
+        Top-$k$ sweep (20 vs.\ 30)            & $k$=20: 72.3\%   & $k$=30: 74.0\%  & +1.7pp  & Some instances need more candidates \\
+        Damping factor (0.85 vs.\ 0.70)       & R@5: 60.7\%      & R@5: 63.7\%     & 0pp R@10, +3pp R@5 & Damping reshuffles within reachable set \\
+        \texttt{CO\_LOCATED} edges            & Without: 74.0\%  & With: 73.0\%    & $-$1.0pp & Structural augmentation harms graph-aware retriever \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\paragraph{PPR mode.}
+The two PPR mode comparisons---with old seeds (+18.7pp) and with new seeds (+5.6pp)---consistently favour uniform restart. The gain is largest when seeds are noisiest: under the original seed extraction, equal weights improve R@10 by 18.7pp because they prevent the dominant ambiguous entity match from dictating the random walk. With improved seeds the margin narrows to 5.6pp, confirming that better seeds reduce but do not eliminate the advantage of uniform restart. Graph topology consistently provides better arbitration than manually assigned confidence scores.
+
+\paragraph{Seed quality versus algorithm.}
+The +24.7pp gap between old and new seeds, holding the PPR mode constant at weighted, is four times larger than the +5.6pp gap between weighted and uniform PPR, holding seeds constant at new. The seed improvements are all preprocessing changes---tokenisation, corpus expansion, inverse-frequency weighting---with no modification to the graph or the PPR algorithm. The conclusion is direct: the retrieval ceiling is set by seed quality, not PPR sophistication.
+
+\paragraph{Parameter sweeps.}
+Increasing top-$k$ from 20 to 30 resolves 5 additional instances (+1.7pp) whose gold files were at ranks 21--30---already correctly identified by PPR but outside the prior cut-off. Decreasing the damping factor $\alpha$ from 0.85 to 0.70 improves R@5 by 3pp without changing R@10. A lower $\alpha$ keeps the random walk closer to the seeds, improving early-rank placement without expanding the reachable set. Both observations support the conclusion from the bimodal analysis: the bottleneck is reachability, not ranking quality within the retrieved set.
+
+\paragraph{Structural augmentation.}
+Post-hoc structural expansion contributes 0pp; \texttt{CO\_LOCATED} edges contribute $-$1.0pp. These two results together confirm that the structural augmentation strategies successful for graph-blind retrieval systems do not transfer to PPR-based retrieval. PPR already traverses the same edges that post-hoc expansion would add; \texttt{CO\_LOCATED} edges redistribute probability in ways that harm large-directory cases more than they help small-directory cases.
+
+% ============================================================
+\section{Per-Repository Analysis}
+\label{sec:eval-per-repo}
+% ============================================================
+
+Aggregate recall figures conceal systematic variation across repositories. This section examines the per-repository failure rates in \cref{tab:per-repo-failures} and argues that failure mode distribution is tied to codebase structure, not retrieval algorithm quality. The same retrieval system achieves near-perfect recall on some repositories and fails on the majority of instances in others.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Zero-recall failure rates by repository for the iteration~2 best configuration (R@10 = 74.0\%). Sorted by failure rate. The five remaining repositories (astropy, requests, xarray, seaborn, flask) together contribute 3 zero-recall instances across 24 instances.}
+    \label{tab:per-repo-failures}
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{4.2cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
+        \toprule
+        \textbf{Repository} & \textbf{Instances} & \textbf{Zero-recall} & \textbf{Failure rate} \\
+        \midrule
+        pylint-dev/pylint & 6  & 5  & 83\% \\
+        pytest-dev/pytest & 17 & 6  & 35\% \\
+        sympy/sympy       & 77 & 24 & 31\% \\
+        django/django     & 114 & 31 & 27\% \\
+        sphinx-doc/sphinx & 16 & 4  & 25\% \\
+        matplotlib/matplotlib & 23 & 3 & 13\% \\
+        scikit-learn      & 23 & 2  & 9\%  \\
+        \midrule
+        Other (5 repos)   & 24 & 3  & 13\% \\
+        \textbf{Total}    & \textbf{300} & \textbf{78} & \textbf{26\%} \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\paragraph{Why scikit-learn is easy (9\% failure rate).}
+Scikit-learn's architecture separates functionality into distinct subpackages---\texttt{decomposition}, \texttt{linear\_model}, \texttt{preprocessing}, \texttt{ensemble}---each with a clear, non-overlapping domain. Bug reports tend to name specific estimators or transformers by class name, and the compound tokeniser handles scikit-learn's naming conventions well: \texttt{GradientBoostingClassifier} and \texttt{StandardScaler} produce distinct, matchable tokens. BM25 maps bug report terms to the correct subpackage with high precision, and PPR amplifies those seeds within the correct module cluster.
+
+\paragraph{Why matplotlib performs well (13\% failure rate).}
+Matplotlib's bug reports are often visually descriptive---``tick labels overlap when using log scale'', ``colorbar has incorrect aspect ratio''---and mention specific plot elements corresponding to specific modules: axes, ticks, formatters, colorbars. This alignment between bug report vocabulary and module organisation means seeds land in the correct area reliably.
+
+\paragraph{Why Django and SymPy are hard (27\% and 31\%).}
+Both repositories have large, functionally heterogeneous directories. Django's \texttt{db/models/} alone contains over 25 files spanning ORM, SQL compilation, aggregation, and migration serialisation. A bug report about a database query issue might plausibly describe any of a dozen files in that directory, and all those files share similar vocabulary. SymPy's \texttt{core/} directory presents the same challenge: many files with overlapping mathematical terminology. When seeds land in the right directory but the wrong file, and no explicit dependency edges connect sibling files, the gold file receives zero PPR probability. Django and SymPy together account for 55 of the 78 zero-recall instances.
+
+\paragraph{Why pylint is hardest (83\% failure rate, 5/6 instances).}
+Pylint's failure rate is dominated by the semantic vocabulary gap. Pylint bugs typically describe abstract linting behaviour---``checker X reports incorrect warning Y for pattern Z''---without naming the specific checker implementation file. A bug report about false positives in class inheritance detection does not mention \texttt{checkers/classes/}, which contains the relevant checker; it describes the linting symptom in terms that match general documentation and configuration files. Seeds systematically land in the wrong module cluster, and no amount of graph propagation can bridge a gap that begins in the wrong area. The small sample size (6 instances) means this figure should be interpreted with caution, but the failure pattern is consistent across all 5 failing instances.
+
+% ============================================================
+\section{Error Taxonomy and the Structural Limit}
+\label{sec:eval-taxonomy}
+% ============================================================
+
+Having examined aggregate results, iteration-level improvements, and per-repository patterns, this section provides a precise characterisation of the 78 zero-recall instances remaining after iteration~2. A spatial analysis of seed locations relative to gold file locations identifies two distinct failure modes that admit different remedies---and one that admits no remedy within the current architecture.
+
+\paragraph{Failure Mode~1: Structural connectivity gap (40 instances).}
+The seed entities are in the same directory as the gold file, but the gold file receives zero PPR probability. The root cause is the absence of edges between sibling files that have no explicit import or call relationship.
+
+\emph{Example}: a bug report mentioning \texttt{MigrationRecorder} generates seeds in \texttt{django/db/migrations/recorder.py}. PPR propagates outward through \texttt{recorder.py}'s explicit imports and calls, but \texttt{django/db/migrations/serializer.py}---which has no dependency edge with \texttt{recorder.py}---receives zero probability. The gold file is two graph steps from the seed through a path that does not exist in the current schema.
+
+This failure mode is structural: it results from a gap in the graph schema, not from incorrect seed selection. It was the target of the \texttt{CO\_LOCATED} and injection features in iteration~3. The negative result establishes that addressing this mode in large, heterogeneous directories is harder than it appears: \texttt{CO\_LOCATED} edges cause probability dilution that regresses other instances, and the net improvement is zero.
+
+\paragraph{Failure Mode~2: Semantic vocabulary gap (38 instances).}
+The seed entities are in the wrong area of the repository because the bug report does not mention any code entity, file, or concept that appears near the gold file. Bridging the gap requires semantic reasoning about the relationship between symptoms and root causes.
+
+\emph{Example}: a bug described as ``incorrect timezone offset in formatted dates'' generates seeds in formatting-related files, because ``format'' and ``date'' are high-frequency terms in the BM25 corpus. The gold file is \texttt{django/utils/timezone.py}, which contains the root cause but is not mentioned by name or concept in the bug report. No graph-based approach can bridge this gap: the graph can propagate relevance along explicit structural connections, but it cannot infer that timezone offset problems imply looking at timezone utilities.
+
+Addressing this failure mode requires capabilities beyond graph-based retrieval: LLM-based extraction of implicit code references from bug reports, or dense embedding similarity that can match natural language descriptions to semantically related code entities.
+
+\paragraph{The structural limit.}
+The two failure modes define the structural limits of the CodeGraph approach. Approximately 13\% of SWE-bench Lite instances---38 out of 300---require semantic reasoning capabilities that are beyond the scope of graph-based retrieval. The remaining failures (40 structural-connectivity instances) are addressable in principle, but the iteration~3 experiments establish that straightforward graph-schema fixes do not work at scale due to PPR probability conservation in large directories. Both failure modes, and the interventions they suggest, are discussed further in \cref{ch:discussion}.

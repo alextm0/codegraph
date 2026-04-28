@@ -2,13 +2,43 @@
 %  Chapter 2 — Background and Related Work
 % ============================================================
 \chapter{Background and Related Work}
-\label{chap:background}
+\label{ch:background}
 
-This chapter identifies the fundamental constraints of code retrieval for LLM-based agents. We define the retrieval problem, establish its requirements, and survey established methodological families.
+This chapter identifies the fundamental constraints of code retrieval for LLM-based agents. It provides technical background on the foundational technologies necessary for structural code analysis---specifically static parsing, graph databases, and ranking algorithms---and surveys established methodological families within the literature.
 
 % ============================================================
-\section{Code Retrieval for AI Agents}
-\label{sec:code-retrieval}
+\section{Background}
+\label{sec:background}
+% ============================================================
+
+\subsection{Tree-sitter and Static Analysis}
+\label{sec:treesitter-bg}
+
+Source code structure can be extracted through \emph{static analysis}, which examines source text without program execution. Modern static analysis tools leverage incremental parsing libraries such as \texttt{tree-sitter}~\cite{treesitter}. Unlike traditional compiler-based parsers, \texttt{tree-sitter} is designed to be:
+\begin{itemize}
+    \item \textbf{General:} It supports a wide range of programming languages through a unified grammar system.
+    \item \textbf{Robust:} It can parse syntactically incomplete or erroneous code, which is common in active development environments.
+    \item \textbf{Fast:} It builds an initial concrete syntax tree (CST) in sub-millisecond time and can incrementally update the tree as the file is modified.
+\end{itemize}
+Such parsers can serve as the foundational engine for a structural indexer, converting raw source code into high-fidelity syntax trees from which dependencies (calls, imports, inheritance) are extracted.
+
+\subsection{Graph Databases and Neo4j}
+\label{sec:neo4j-bg}
+
+The interconnected nature of source code---where files import modules, classes inherit from others, and functions call each other---is naturally modelled as a directed, typed graph. Relationally representing this structure in a standard SQL database requires complex joins that perform poorly for multi-hop traversals.
+
+Graph databases, specifically property graph models like \texttt{Neo4j}, are designed to store and query highly connected data. In \texttt{Neo4j}, entities are represented as \textit{nodes} and relationships as \textit{edges}, both of which can store key-value properties. This allows for efficient execution of graph algorithms like Personalized PageRank, which must traverse the entire topology of the repository.
+
+\subsection{PageRank and Ranking Algorithms}
+\label{sec:pagerank-bg}
+
+PageRank~\cite{page1999pagerank} is a link-analysis algorithm originally designed by Google to rank web pages by their structural importance. The algorithm models a "random walker" who traverses the graph by following edges. A node's importance is determined by the number and quality of links pointing to it.
+
+While standard PageRank provides a global importance score for every node, \emph{Personalized PageRank} (PPR) modifies the random walk to bias it toward specific "seed" nodes. This variation is critical for retrieval: an agent does not need to know which files are globally important, but rather which files are structurally relevant to a specific query. PPR propagates relevance from query-matched seeds to their structural neighbours, making it an ideal candidate for software repository retrieval.
+
+% ============================================================
+\section{Code Retrieval for LLM Agents}
+\label{sec:related-work}
 % ============================================================
 
 LLM-based coding agents face a fundamental selection problem: given a natural language task description and a large code repository, which source files should the agent examine? This section defines this retrieval problem, establishes its constraints, and surveys three classes of methods---sparse, dense, and graph-based---that represent increasingly structural approaches to solving it.
@@ -36,7 +66,7 @@ RAG for code faces a fundamental challenge: bridging the modal gap between natur
 \label{sec:retrieval-families}
 % ------------------------------------------------------------
 
-We now examine three classes of retrieval methods in turn, analyzing their strengths and fundamental limitations.
+This section examines three classes of retrieval methods in turn, analyzing their strengths and fundamental limitations.
 The key characteristics of these families are summarized in \cref{tab:retrieval-comparison}, and their respective conceptual workflows are illustrated in \cref{fig:retrieval-flow}.
 
 \paragraph{Sparse retrieval.}
@@ -54,7 +84,7 @@ Graph-based retrieval methods represent code relationships as edges in a typed d
     \caption{Comparison of code retrieval methodologies along key performance and implementation dimensions.}
     \label{tab:retrieval-comparison}
     \renewcommand{\arraystretch}{1.6}
-    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{2.4cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{2.1cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
         \toprule
         & \textbf{Sparse} & \textbf{Dense} & \textbf{Graph-based} \\
         \midrule
@@ -115,3 +145,196 @@ Graph-based retrieval methods represent code relationships as edges in a typed d
     \caption{Conceptual retrieval workflows. Sparse methods rely on keyword matching; Dense methods leverage semantic embeddings; Graph-based methods traverse structural dependencies to recover coupled code entities.}
     \label{fig:retrieval-flow}
 \end{figure}
+
+% ============================================================
+\section{Graph-Based Code Retrieval Systems}
+\label{sec:graph-systems}
+% ============================================================
+
+Having motivated graph-based retrieval as a family in \cref{sec:retrieval-families}, this section examines four concrete systems that represent the current state of the art. Each treats a repository as a typed directed graph, but differs in how the graph is constructed, how seeds are chosen, and how relevance is propagated through the graph. \Cref{tab:graph-systems} in \cref{sec:gaps} summarises their design choices side by side; the following subsections describe each system individually and identify the core limitation that each leaves unresolved.
+
+% ------------------------------------------------------------
+\subsection{RepoGraph: Line-Level Ego-Graph Retrieval}
+\label{sec:repograph}
+% ------------------------------------------------------------
+
+RepoGraph~\cite{ouyang2025repograph} constructs a line-level dependency graph of a repository, in which each node corresponds to a single line of source code and edges encode references between symbols defined or used on those lines. At retrieval time, RepoGraph identifies a set of seed lines from the task description and returns the $k$-hop \emph{ego-graph} around those seeds---that is, every line reachable within $k$ edges. Integrated into an agentic framework for SWE-bench Lite, the authors report a 32.8\% relative improvement in task resolution rate over a text-only baseline.
+
+The central limitation of RepoGraph is that $k$-hop expansion is \emph{unranked}. Every node within $k$ hops is returned with equal standing, which creates a sharp tension between recall and context budget: $k=1$ is often too narrow to reach the relevant file, while $k=2$ typically explodes into dozens of nodes that must all be fitted into a fixed LLM context window. \Cref{fig:khop-explosion} illustrates this tension on a small graph: the relevant target lies outside the $k{=}1$ neighbourhood, but expanding to $k{=}2$ retrieves it alongside ten additional nodes with no signal to distinguish the target from the rest. The authors explicitly acknowledge this trade-off.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            seed/.style={draw, circle, fill=orange!40, minimum size=0.85cm, font=\footnotesize\sffamily\bfseries},
+            k1node/.style={draw, circle, fill=blue!20, minimum size=0.7cm, font=\scriptsize\sffamily},
+            k2node/.style={draw, circle, fill=gray!15, minimum size=0.7cm, font=\scriptsize\sffamily},
+            target/.style={draw, circle, fill=green!45, double, minimum size=0.85cm, font=\footnotesize\sffamily\bfseries},
+            dep/.style={-{Stealth[length=4pt]}, semithick, draw=gray!65},
+            ring/.style={dotted, thick, draw=gray!60},
+            ringlbl/.style={font=\scriptsize\sffamily, fill=white, inner sep=1pt},
+        ]
+        % Seed
+        \node[seed] (s) at (0, 0) {S};
+
+        % k=1 neighbours
+        \node[k1node] (a) at (-1.5, 0.8) {};
+        \node[k1node] (b) at (1.5, 0.8) {};
+        \node[k1node] (c) at (0, -1.5) {};
+
+        % k=2 neighbours
+        \node[k2node] (d1) at (-2.8, 1.5) {};
+        \node[k2node] (d2) at (-2.5, 0.3) {};
+        \node[k2node] (d3) at (-1.8, 2.4) {};
+        \node[k2node] (d4) at (1.8, 2.4) {};
+        \node[k2node] (d5) at (2.8, 1.5) {};
+        \node[k2node] (d6) at (2.5, 0.3) {};
+        \node[target]  (t)  at (-1.1, -2.7) {T};
+        \node[k2node] (d7) at (1.0, -2.8) {};
+        \node[k2node] (d8) at (-2.4, -1.8) {};
+        \node[k2node] (d9) at (2.4, -1.8) {};
+
+        % Seed → k=1
+        \draw[dep] (s) -- (a);
+        \draw[dep] (s) -- (b);
+        \draw[dep] (s) -- (c);
+
+        % k=1 → k=2
+        \draw[dep] (a) -- (d1);
+        \draw[dep] (a) -- (d2);
+        \draw[dep] (a) -- (d3);
+        \draw[dep] (b) -- (d4);
+        \draw[dep] (b) -- (d5);
+        \draw[dep] (b) -- (d6);
+        \draw[dep] (c) -- (t);
+        \draw[dep] (c) -- (d7);
+        \draw[dep] (c) -- (d8);
+        \draw[dep] (c) -- (d9);
+
+        % Concentric hop boundaries
+        \draw[ring, draw=blue!60] (0,0) circle (2.05);
+        \draw[ring, draw=gray!70] (0,0) circle (3.35);
+
+        \node[ringlbl, text=blue!70!black] at (1.45, 1.45) {$k{=}1$};
+        \node[ringlbl, text=gray!70!black] at (2.45, 2.35) {$k{=}2$};
+
+        % Right-side annotations
+        \node[font=\scriptsize\sffamily, align=left, text width=3.9cm, anchor=west]
+            at (4.0, 1.1) {\textbf{$k{=}1$:} returns 3 nodes.\\Target \textbf{T} not reached.\\(false negative)};
+        \node[font=\scriptsize\sffamily, align=left, text width=3.9cm, anchor=west]
+            at (4.0, -1.2) {\textbf{$k{=}2$:} returns 13 nodes.\\Target \textbf{T} found, but\\context is diluted $4\times$.};
+    \end{tikzpicture}
+    \caption{The $k$-hop expansion tradeoff faced by unranked graph retrieval. Starting from a seed node \textbf{S}, $k{=}1$ retrieval returns three immediate neighbours and misses the target \textbf{T}. Expanding to $k{=}2$ reaches \textbf{T} but also pulls in ten additional unrelated nodes. Because every node within the ring is returned with equal standing, the agent has no signal to distinguish \textbf{T} from the rest.}
+    \label{fig:khop-explosion}
+\end{figure}
+
+The absence of ranking under a fixed context budget is examined as Gap~1 in \cref{sec:gaps}.
+
+% ------------------------------------------------------------
+\subsection{LocAgent: BFS Traversal with Sparse Rescoring}
+\label{sec:locagent}
+% ------------------------------------------------------------
+
+LocAgent~\cite{chen2025locagent} targets the narrower problem of \emph{issue-to-file localisation}: given a bug report, identify which file must be modified. It builds an entity-level graph (files, classes, functions) and combines a breadth-first traversal from query-matched seeds with a BM25 re-ranking step over the nodes visited during the traversal. On their benchmark, LocAgent reports 92.7\% file-level localisation accuracy.
+
+LocAgent demonstrates that graph structure improves localisation even when combined with conventional sparse scoring. However, its BFS-based traversal is inherently local: relevance is determined by proximity to the seed set, not by global graph structure. A file that is structurally central to the repository---for example, a core utility module transitively involved in many code paths---receives no signal from BFS unless it happens to lie within the traversal radius. This locality constraint means that no fixed-radius traversal alone can capture the global structural importance of the repository's most connected entities.
+
+% ------------------------------------------------------------
+\subsection{CodexGraph: LLM-Generated Cypher Queries}
+\label{sec:codexgraph}
+% ------------------------------------------------------------
+
+CodexGraph~\cite{liu2024codexgraph} takes a different route to graph-based retrieval. Rather than defining a fixed retrieval algorithm, it exposes a Neo4j graph of the repository to an LLM agent and asks the agent to \emph{write Cypher queries} to navigate it. The graph schema---nodes for files, classes, and methods, with edges for \texttt{contains}, \texttt{inherits}, \texttt{has\_method}, and \texttt{uses}---closely mirrors the entity-level structure that several systems in this family adopt. Retrieval, however, is expressed as natural language translated to graph queries on the fly.
+
+This design elegantly reuses the LLM's reasoning ability, but pays a cost on every retrieval query: each round requires an additional LLM call to produce the Cypher expression, and incorrect queries must be detected and retried. Latency, token cost, and query correctness all depend on the language model. A retrieval step that is deterministic and query-time cheap would sidestep these costs entirely.
+
+% ------------------------------------------------------------
+\subsection{GraphCoder: Code Context Graphs and Subgraph Matching}
+\label{sec:graphcoder}
+% ------------------------------------------------------------
+
+GraphCoder~\cite{liu2024graphcoder} targets repository-level code \emph{completion} rather than issue resolution. It represents each function as a Code Context Graph (CCG) that combines control-flow and data-dependence edges at the statement level, and retrieves candidate snippets by computing subgraph edit distance between the current completion context and candidate graphs in the repository. GraphCoder reports a 6.06\% improvement in exact-match accuracy over strong RAG baselines.
+
+GraphCoder validates that fine-grained structural signals (control flow, data flow) improve code retrieval, but subgraph edit distance is an expensive operation: in the worst case it is NP-hard, and even approximate variants scale poorly with graph size. This restricts GraphCoder to narrow, local matching scenarios and makes it unsuitable for interactive, repository-scale retrieval. The key insight --- that structural edges carry retrieval signal --- stands even if the specific matching algorithm is replaced by a cheaper alternative.
+
+% ============================================================
+\section{Research Gaps}
+\label{sec:gaps}
+% ============================================================
+
+The systems surveyed in \cref{sec:related-work,sec:graph-systems} collectively define the state of the art in code retrieval for LLM agents. Read together, they also reveal a consistent set of limitations. This section makes those limitations explicit by staying in diagnostic mode---describing what the literature does not yet offer---and defers any discussion of how this thesis addresses them to \Cref{ch:design}.
+
+\Cref{tab:graph-systems} summarises the four graph-based systems along the design axes that most directly expose these limitations: graph granularity, retrieval mechanism, whether the output is globally ranked, and whether the retrieval step is deterministic and cheap.
+
+\begin{table}[H]
+    \centering
+    \small
+    \caption{Design axes of the surveyed graph-based code retrieval systems. Each system improves on one or two axes at the expense of others; none covers all four simultaneously.}
+    \label{tab:graph-systems}
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{2.3cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
+        \toprule
+        \textbf{System} & \textbf{Granularity} & \textbf{Retrieval} & \textbf{Globally ranked?} & \textbf{Deterministic \& cheap?} \\
+        \midrule
+        RepoGraph & Line & $k$-hop ego-graph & No & Yes \\
+        LocAgent & Entity & BFS + BM25 rescoring & Partial (sparse rescore) & Yes \\
+        CodexGraph & Symbol & LLM-generated Cypher & No & No (LLM in the loop) \\
+        GraphCoder & Statement & Subgraph edit distance & Yes & No (NP-hard matching) \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\Cref{fig:design-space} projects the surveyed systems onto the two axes from \cref{tab:graph-systems} that most directly shape retrieval behaviour: whether the retrieval output is globally ranked, and whether the retrieval step is deterministic and cheap. Each system improves along one axis at the expense of the other; the upper-right quadrant---where retrieval would be both globally ranked and deterministic---is empty.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            axis/.style={-{Stealth[length=5pt]}, thick, draw=black},
+            sysbox/.style={draw, rounded corners=2pt, fill=blue!10, inner sep=3pt, font=\scriptsize\sffamily, align=center},
+            gapbox/.style={draw, dashed, thick, fill=red!8, draw=red!60, rounded corners=4pt},
+            tick/.style={font=\tiny\sffamily, text=gray!70!black},
+        ]
+        % Axes
+        \draw[axis] (0, 0) -- (9.0, 0)
+            node[right, font=\scriptsize\sffamily] {Deterministic \& cheap};
+        \draw[axis] (0, 0) -- (0, 5.6)
+            node[above, font=\scriptsize\sffamily] {Globally ranked};
+
+        % Axis ticks
+        \node[tick] at (0.4, -0.28) {no};
+        \node[tick] at (8.2, -0.28) {yes};
+        \node[tick, rotate=90] at (-0.3, 0.5) {no};
+        \node[tick, rotate=90] at (-0.3, 4.9) {yes};
+
+        % Empty gap region in the upper-right quadrant
+        \draw[gapbox] (4.6, 3.0) rectangle (8.6, 5.2);
+        \node[font=\scriptsize\sffamily\bfseries, red!70!black, align=center]
+            at (6.6, 4.1) {\textsc{Research gap}\\\scriptsize no surveyed system};
+
+        % System placements
+        \node[sysbox] (rg) at (6.5, 0.7) {RepoGraph\\\tiny(line, $k$-hop)};
+        \node[sysbox] (la) at (7.0, 2.1) {LocAgent\\\tiny(entity, BFS\,+\,BM25)};
+        \node[sysbox] (cg) at (1.6, 0.8) {CodexGraph\\\tiny(symbol, LLM Cypher)};
+        \node[sysbox] (gc) at (2.0, 4.1) {GraphCoder\\\tiny(statement, SED)};
+
+    \end{tikzpicture}
+    \caption{Design space of the surveyed graph-based code retrieval systems along two axes: whether the retrieval output is globally ranked (vertical), and whether the retrieval step is deterministic and cheap (horizontal). Each system occupies one side of the plane. The upper-right quadrant---retrieval that is simultaneously ranked and cheap---contains no surveyed system. This empty region is the central gap analysed in \cref{sec:gaps}.}
+    \label{fig:design-space}
+\end{figure}
+
+From \cref{tab:graph-systems}, \cref{fig:design-space}, and the broader survey of sparse, dense, and graph-based families in \cref{sec:retrieval-families}, four gaps emerge.
+
+\paragraph{Gap 1: Ranked structural retrieval under a fixed context budget.}
+Every modern LLM enforces a hard token limit, so retrieval must produce a \emph{ranked} output that the agent can truncate at top-$k$ without losing the relevant item. Sparse and dense methods rank their outputs but ignore structure. Graph-based methods capture structure but fall into one of three failure modes: unranked $k$-hop expansion that explodes at $k=2$ (RepoGraph); expensive subgraph matching that does not scale to repository-sized graphs (GraphCoder); or LLM-generated queries whose output is neither ranked nor cheap (CodexGraph). No surveyed system provides cheap, globally ranked, structure-aware retrieval under the hard token budget of modern agents.
+
+\paragraph{Gap 2: Lexical, semantic, and structural signals treated in isolation.}
+Each retrieval family excels at one signal and is blind to the others. Sparse methods see tokens, dense methods see embeddings, graph methods see edges. In real repository tasks all three matter simultaneously: a bug report is written in natural-language prose, the relevant code identifiers carry semantic content, and the file that must be modified is structurally coupled to whatever the seed nodes happen to match. The surveyed systems combine these signals only in serial stages---LocAgent, for example, runs BM25 as a rescoring step on top of BFS---rather than as a unified relevance score. The literature offers no principled way to let a strong structural signal lift a weak lexical seed, or vice versa.
+
+\paragraph{Gap 3: Non-determinism and cost in the retrieval loop.}
+CodexGraph places an LLM \emph{inside} the retrieval loop: every retrieval query invokes a language model to generate a Cypher expression. This inherits the LLM's latency, monetary cost, and non-determinism for a core pipeline operation. Determinism is rarely stated as an explicit design property in the surveyed systems, but it is a practical requirement for three distinct reasons: interactive use (users expect sub-second responses), scientific evaluation (reproducibility requires that the same input produce the same output), and debugging (a retrieval failure must be diagnosable without replaying an LLM sample). This property is absent from the most flexible graph-based system in the literature and not examined in the others.
+
+\paragraph{Gap 4: Evaluation on end-to-end repository-level tasks.}
+GraphCoder reports exact-match accuracy on code completion; LocAgent reports file-level localisation accuracy. Both are surrogate metrics that measure a single stage of a longer pipeline. Repository-level benchmarks such as SWE-bench~\cite{yang2024swebench} measure whether an agent can resolve a real GitHub issue end to end, and retrieval is only one component of that score. Few graph-based systems isolate the contribution of retrieval alone on such benchmarks, which leaves open the empirical question of whether structural retrieval helps where it matters most---on realistic, repository-level engineering tasks.
+
+\medskip
+
+These four gaps are mutually reinforcing. A system that addresses only one---say, producing a ranked output---while ignoring the others---say, still relying on an LLM in the retrieval loop---does not meaningfully close the overall problem. Any retrieval method that aims to serve LLM agents on real repository-level tasks must provide, at a minimum: a globally ranked output, a unified treatment of lexical and structural signals, deterministic and cheap execution, and an evaluation that isolates retrieval quality on end-to-end tasks. \Cref{ch:design} returns to these four requirements and uses them to motivate the design of the system proposed in this thesis.
