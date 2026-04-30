@@ -24,32 +24,6 @@ For each module: read the code, trace one real query end-to-end through it, then
 
 ---
 
-## Demo polish (before July defense)
-
-- [ ] `codegraph install` — one command writes `.mcp.json` or updates `~/.claude.json`, detects Claude Code vs Desktop, confirms server is reachable (replaces manual `.mcp.json` setup)
-- [ ] Stability pass — run the full demo flow on a fresh repo, fix whatever breaks
-- [ ] Re-index against a clean example repo before any live demo (current graph is indexed against benchmark cache)
-
----
-
-## Tooling quality — make it actually usable (priority before any algorithm work)
-
-### Week 1 — Frictionless setup
-- [ ] `codegraph install` wizard — finish it; writes `.mcp.json` or `~/.claude.json`, detects Claude Code vs Desktop, confirms server reachable
-- [ ] Improve `codegraph init` — interactive Neo4j setup walkthrough, not just config file generation
-- [ ] `codegraph doctor` should fix, not just diagnose — "Neo4j not running, start it? [Y/n]"
-
-### Week 2 — Harden failure paths
-- [ ] Audit every error surface (MCP tool errors, CLI errors, empty graph) — every failure should tell the user exactly what to do next; no stack traces reaching the user
-- [ ] `codegraph status` command — what repo is indexed, node/edge counts, when last built, whether MCP server is registered; single command for "what is the current state"
-- [ ] Empty graph detection in MCP — return actionable hint ("run codegraph rebuild") not a bare empty result
-
-### Week 3 — Documentation
-- [ ] **Update CLAUDE.md** — reflect current state: 2 MCP tools, simplified CLI (~10 commands), removed surfaces (no find/complexity/pipeline/comparison/explorer); update MCP tools section, commands list, and project structure; commit and push (CLAUDE.md is gitignored — check first)
-- [ ] **Update AGENTS.md** — same as CLAUDE.md; ensure any AI agent picking up this repo gets an accurate picture of what exists
-- [ ] **Rewrite README** — match current state: 2 MCP tools, ~10 CLI commands, actual setup flow (currently describes old 10-tool surface); add "how it works" section (one page a skeptical developer can read in 3 minutes); frame around 3 use cases: UC1 agent context, UC2 explainability, UC3 operations; commit and push
-- [ ] Link visualizer from MCP response summary — when agent gets results, include the visualizer URL so a developer can debug/verify via `codegraph visualize`
-
 ### If time allows — robustness
 - [ ] Edge case testing: empty repos, repos with syntax errors, very large repos, circular imports
 - [ ] Happy path tests exist; failure mode coverage is thin
@@ -72,7 +46,6 @@ For each module: read the code, trace one real query end-to-end through it, then
 
 - [ ] **Embedded graph DB (Kuzu)** — swap Neo4j for [Kuzu](https://kuzudb.com/); embeddable, zero server setup, runs in-process, stores state in a local file; PPR ports directly; drops the biggest adoption barrier from "install + configure Neo4j" to just `pip install codegraph`
 - [ ] **Auto-index on first use** — if graph is empty when `get_relevant_context` is called, detect it and run indexing automatically; fall back to BM25-only while graph builds in background
-- [ ] **`codegraph install` wizard** — see Demo polish above; same item
 
 ---
 

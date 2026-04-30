@@ -1,11 +1,15 @@
 """Tests for src/mcp_server.py.
 
-Tests are organized in two groups:
+Tests are organized in three groups:
 
   1. No-Neo4j tests — verify server structure (tool registration, tool names)
      without needing a running database. These always run.
 
-  2. Neo4j-backed tests — verify tool output using the user_auth fixture.
+  2. Mocked-state tool tests — verify the full JSON contract of both MCP tools
+     via get_relevant_context_impl and query_dependencies_impl with mocked state.
+     These always run (no Neo4j needed).
+
+  3. Neo4j-backed tests — verify tool output using the user_auth fixture.
      These skip gracefully when Neo4j is not running.
 
 We test MCP tools by importing the server module and calling mcp.call_tool()
@@ -16,8 +20,9 @@ subprocess.
 
 import dataclasses
 import json
+import threading
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -113,6 +118,9 @@ class TestServerState:
             signal_weights={},
             default_token_budget=6000,
             default_top_k=15,
+            config_path="/some/root/config.yaml",
+            indexing_lock=threading.Lock(),
+            indexing_in_progress=False,
         )
         assert state.project_root == "/some/root"
         assert state.default_token_budget == 6000
@@ -120,89 +128,189 @@ class TestServerState:
 
 
 # ---------------------------------------------------------------------------
-# get_graph_stats tool tests (Neo4j required)
+# MCP tool contract tests with mocked state (no Neo4j required)
 # ---------------------------------------------------------------------------
 
-@neo4j_required
-class TestGetGraphStats:
-    """Test the get_graph_stats tool against a real populated graph."""
+def _make_mock_state(project_root="/project", default_top_k=15, default_token_budget=6000):
+    """Build a minimal ServerState mock for tool testing."""
+    from codegraph.core.graph.ppr import PPRConfig
+    from codegraph.mcp.server import ServerState
 
-    @pytest.fixture(scope="class")
-    def populated_driver(self, neo4j_driver):
-        """Populate the graph with user_auth fixture for this test class."""
-        from codegraph.core.parser.python_parser import create_parser, parse_directory
-        from codegraph.core.graph.graph_builder import build_graph, clear_database
+    return ServerState(
+        driver=MagicMock(),
+        gds=MagicMock(),
+        project_root=project_root,
+        ppr_config=PPRConfig(),
+        signal_weights={},
+        default_token_budget=default_token_budget,
+        default_top_k=default_top_k,
+        config_path="/project/config.yaml",
+        indexing_lock=threading.Lock(),
+        indexing_in_progress=False,
+    )
 
-        parser = create_parser()
-        entities = parse_directory(USER_AUTH_DIR, parser)
-        clear_database(neo4j_driver)
-        build_graph(neo4j_driver, entities)
-        yield neo4j_driver
-        clear_database(neo4j_driver)
 
-    def test_returns_valid_json(self, populated_driver):
-        """get_graph_stats must return valid JSON."""
-        from codegraph.core.graph.queries import (
-            count_nodes_by_label,
-            count_edges_by_type,
-            get_most_connected_files,
+class TestMCPToolsWithMockedState:
+    """Verify the JSON contract of both MCP tools using mocked ServerState.
+
+    These tests exercise the full tool implementation path without Neo4j.
+    """
+
+    def test_get_relevant_context_returns_summary_and_results(self):
+        """get_relevant_context_impl must return JSON with summary + results."""
+        from codegraph.mcp.tools import get_relevant_context_impl
+        from codegraph.core.retrieval.post_processing import ContextResult
+
+        state = _make_mock_state()
+        result = ContextResult(
+            entity_name="login",
+            entity_type="Function",
+            qualified_name="/project/auth.py::login",
+            file_path="/project/auth.py",
+            line_start=1,
+            line_end=10,
+            relevance_score=0.95,
+            source_code="def login(): pass",
+            token_count=50,
         )
 
-        node_counts = count_nodes_by_label(populated_driver)
-        edge_counts = count_edges_by_type(populated_driver)
-        most_connected = get_most_connected_files(populated_driver, limit=10)
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]),
+        ):
+            output = get_relevant_context_impl("fix auth", None, None, 0, 0, state)
 
-        # Assemble the same dict the tool would return.
-        stats = {
-            "node_counts": node_counts,
-            "edge_counts": edge_counts,
-            "total_nodes": sum(node_counts.values()),
-            "total_edges": sum(edge_counts.values()),
-            "most_connected_files": most_connected,
-        }
-        json_output = json.dumps(stats, indent=2)
-        parsed = json.loads(json_output)
-        assert isinstance(parsed, dict)
+        payload = json.loads(output)
+        assert payload["summary"]["result_count"] == 1
+        assert len(payload["results"]) == 1
+        assert payload["results"][0]["entity_name"] == "login"
 
-    def test_node_counts_present(self, populated_driver):
-        """Stats must include node_counts with at least some entries."""
-        from codegraph.core.graph.queries import count_nodes_by_label
-        node_counts = count_nodes_by_label(populated_driver)
-        assert len(node_counts) > 0
+    def test_get_relevant_context_empty_graph_returns_error(self):
+        """get_relevant_context_impl on empty graph must return error JSON."""
+        from codegraph.mcp.tools import get_relevant_context_impl
 
-    def test_edge_counts_present(self, populated_driver):
-        """Stats must include edge_counts with at least some entries."""
-        from codegraph.core.graph.queries import count_edges_by_type
-        edge_counts = count_edges_by_type(populated_driver)
-        assert len(edge_counts) > 0
+        state = _make_mock_state()
 
-    def test_total_nodes_matches_sum(self, populated_driver):
-        """total_nodes must equal the sum of individual label counts."""
-        from codegraph.core.graph.queries import count_nodes_by_label
-        node_counts = count_nodes_by_label(populated_driver)
-        total = sum(node_counts.values())
-        assert total > 0
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=True),
+            patch("codegraph.mcp.tools._start_background_index"),
+        ):
+            output = get_relevant_context_impl("task", None, None, 0, 0, state)
 
-    def test_most_connected_files_is_list(self, populated_driver):
-        """most_connected_files must be a list of dicts."""
-        from codegraph.core.graph.queries import get_most_connected_files
-        most_connected = get_most_connected_files(populated_driver, limit=10)
-        assert isinstance(most_connected, list)
-        for entry in most_connected:
-            assert "file_path" in entry
-            assert "entity_count" in entry
+        payload = json.loads(output)
+        assert "error" in payload
 
-    def test_most_connected_files_ordered_descending(self, populated_driver):
-        """Files must be ordered by entity_count descending."""
-        from codegraph.core.graph.queries import get_most_connected_files
-        most_connected = get_most_connected_files(populated_driver, limit=10)
-        if len(most_connected) < 2:
-            pytest.skip("Need at least 2 files to verify ordering")
-        counts = [entry["entity_count"] for entry in most_connected]
-        for i in range(len(counts) - 1):
-            assert counts[i] >= counts[i + 1], (
-                f"Files not ordered by entity_count: {counts[i]} < {counts[i + 1]}"
-            )
+    def test_get_relevant_context_no_results_returns_hint(self):
+        """get_relevant_context_impl with zero results must include a hint."""
+        from codegraph.mcp.tools import get_relevant_context_impl
+
+        state = _make_mock_state()
+
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[]),
+        ):
+            output = get_relevant_context_impl("task", None, None, 0, 0, state)
+
+        payload = json.loads(output)
+        assert payload["results"] == []
+        assert "hint" in payload
+
+    def test_get_relevant_context_result_fields(self):
+        """Each result entry must contain all required fields."""
+        from codegraph.mcp.tools import get_relevant_context_impl
+        from codegraph.core.retrieval.post_processing import ContextResult
+
+        state = _make_mock_state()
+        result = ContextResult(
+            entity_name="register",
+            entity_type="Method",
+            qualified_name="/project/auth.py::AuthService.register",
+            file_path="/project/auth.py",
+            line_start=20,
+            line_end=35,
+            relevance_score=0.8,
+            source_code="def register(self): ...",
+            token_count=120,
+        )
+
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]),
+        ):
+            output = get_relevant_context_impl("register user", None, None, 0, 0, state)
+
+        item = json.loads(output)["results"][0]
+        required_fields = {"entity_name", "entity_type", "qualified_name", "file_path", "lines", "relevance_score", "token_count", "source_code"}
+        missing = required_fields - item.keys()
+        assert not missing, f"Missing fields: {missing}"
+
+    def test_query_dependencies_returns_result_count_and_results(self):
+        """query_dependencies_impl must return result_count + results list."""
+        from codegraph.mcp.tools import query_dependencies_impl
+        from codegraph.core.graph.queries import NodeInfoWithRel
+
+        state = _make_mock_state()
+        node = NodeInfoWithRel(
+            qualified_name="/project/auth.py::validate",
+            name="validate",
+            label="Function",
+            file_path="/project/auth.py",
+            relationship_type="CALLS",
+        )
+
+        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]):
+            output = query_dependencies_impl("login", "downstream", 1, state)
+
+        payload = json.loads(output)
+        assert payload["result_count"] == 1
+        assert payload["results"][0]["relationship_type"] == "CALLS"
+
+    def test_query_dependencies_invalid_direction_returns_error(self):
+        """query_dependencies_impl with invalid direction must return error JSON."""
+        from codegraph.mcp.tools import query_dependencies_impl
+
+        state = _make_mock_state()
+
+        with patch("codegraph.mcp.tools.query_entity_dependencies", side_effect=ValueError("Invalid direction")):
+            output = query_dependencies_impl("login", "sideways", 1, state)
+
+        payload = json.loads(output)
+        assert "error" in payload
+
+    def test_query_dependencies_unknown_entity_returns_hint(self):
+        """query_dependencies_impl with no results must include a hint."""
+        from codegraph.mcp.tools import query_dependencies_impl
+
+        state = _make_mock_state()
+
+        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[]):
+            output = query_dependencies_impl("GhostEntity", "both", 1, state)
+
+        payload = json.loads(output)
+        assert payload["result_count"] == 0
+        assert "hint" in payload
+
+    def test_query_dependencies_result_paths_are_relative(self):
+        """query_dependencies_impl must return relative file paths."""
+        from codegraph.mcp.tools import query_dependencies_impl
+        from codegraph.core.graph.queries import NodeInfoWithRel
+
+        state = _make_mock_state(project_root="/project")
+        node = NodeInfoWithRel(
+            qualified_name="/project/src/auth.py::login",
+            name="login",
+            label="Function",
+            file_path="/project/src/auth.py",
+            relationship_type="IMPORTS",
+        )
+
+        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]):
+            output = query_dependencies_impl("login", "upstream", 1, state)
+
+        payload = json.loads(output)
+        fp = payload["results"][0]["file_path"]
+        assert not fp.startswith("/project"), f"Expected relative path, got: {fp}"
 
 
 # ---------------------------------------------------------------------------

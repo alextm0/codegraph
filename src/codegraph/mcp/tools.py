@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from typing import TYPE_CHECKING
 
 from codegraph.core.graph.ppr import PPRConfig
-from codegraph.core.graph.queries import query_entity_dependencies
+from codegraph.core.graph.queries import count_nodes_by_label, query_entity_dependencies
 from codegraph.core.retrieval.pipeline import run_retrieval_pipeline
 from codegraph.utils.paths import make_relative_path, make_relative_qualified_name
 
@@ -22,6 +23,55 @@ if TYPE_CHECKING:
     from codegraph.mcp.server import ServerState
 
 logger = logging.getLogger(__name__)
+
+
+def _graph_is_empty(state: ServerState) -> bool:
+    """Return True if the Neo4j graph has no indexed nodes."""
+    try:
+        counts = count_nodes_by_label(state.driver)
+        return sum(counts.values()) == 0
+    except Exception:
+        return False
+
+
+def _start_background_index(state: ServerState) -> None:
+    """Spawn a background thread to index the project if one is not already running."""
+    with state.indexing_lock:
+        if state.indexing_in_progress:
+            return
+        state.indexing_in_progress = True
+
+    def _index() -> None:
+        try:
+            logger.info("Auto-index: starting background indexing of %s", state.project_root)
+            from codegraph.utils.ignore import load_ignore_patterns
+            from codegraph.utils.config import load_raw_config
+            from codegraph.core.graph import clear_database, build_graph
+            from codegraph.core.parser import create_parser, parse_directory
+
+            raw_config = load_raw_config(state.config_path)
+            exclude = raw_config.get("parser", {}).get("exclude_patterns", [])
+            exclude += raw_config.get("exclude_patterns", [])
+
+            from pathlib import Path
+            ignore_file = Path(state.project_root) / ".cgignore"
+            if ignore_file.exists():
+                exclude.extend(load_ignore_patterns(ignore_file))
+
+            parser = create_parser()
+            all_entities = parse_directory(state.project_root, parser, exclude_patterns=exclude)
+            clear_database(state.driver)
+            counts = build_graph(state.driver, all_entities)
+            total = sum(v for k, v in counts.items() if k in ("File", "Function", "Class", "Method"))
+            logger.info("Auto-index: complete — %d nodes indexed", total)
+        except Exception:
+            logger.exception("Auto-index: background indexing failed")
+        finally:
+            with state.indexing_lock:
+                state.indexing_in_progress = False
+
+    thread = threading.Thread(target=_index, daemon=True, name="codegraph-auto-index")
+    thread.start()
 
 
 def get_relevant_context_impl(
@@ -52,17 +102,34 @@ def get_relevant_context_impl(
         effective_budget,
     )
 
-    context_items = run_retrieval_pipeline(
-        driver=state.driver,
-        gds=state.gds,
-        task_description=task_description,
-        project_root=state.project_root,
-        mentioned_entities=mentioned_entities,
-        current_file=current_file,
-        ppr_config=ppr_config,
-        signal_weights=state.signal_weights or None,
-        token_budget=effective_budget,
-    )
+    if _graph_is_empty(state):
+        logger.warning("get_relevant_context: graph is empty — triggering auto-index")
+        _start_background_index(state)
+        return json.dumps({
+            "error": "Graph index is empty — indexing is now running in the background.",
+            "action": "Wait for indexing to complete, then call get_relevant_context again.",
+            "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
+        })
+
+    try:
+        context_items = run_retrieval_pipeline(
+            driver=state.driver,
+            gds=state.gds,
+            task_description=task_description,
+            project_root=state.project_root,
+            mentioned_entities=mentioned_entities,
+            current_file=current_file,
+            ppr_config=ppr_config,
+            signal_weights=state.signal_weights or None,
+            token_budget=effective_budget,
+        )
+    except Exception as exc:
+        logger.exception("get_relevant_context pipeline failed")
+        return json.dumps({
+            "error": "Retrieval pipeline failed",
+            "detail": str(exc),
+            "hint": "Run 'codegraph doctor' to check system health, or 'codegraph rebuild' to re-index.",
+        })
 
     if not context_items:
         return json.dumps({
@@ -92,6 +159,7 @@ def get_relevant_context_impl(
             "result_count": len(results),
             "total_tokens": total_tokens,
             "token_budget": effective_budget,
+            "visualizer_url": "http://localhost:8474",
         },
         "results": results,
     }
@@ -123,6 +191,13 @@ def query_dependencies_impl(
         return json.dumps({
             "error": str(exc),
             "hint": "Entity not found. Use get_relevant_context first to confirm the entity name exists.",
+        })
+    except Exception as exc:
+        logger.exception("query_dependencies failed")
+        return json.dumps({
+            "error": "Dependency query failed",
+            "detail": str(exc),
+            "hint": "Run 'codegraph doctor' to check system health.",
         })
 
     if not nodes:

@@ -11,9 +11,10 @@ Design notes:
 import logging
 import os
 import sys
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -56,10 +57,13 @@ class ServerState:
     driver: Driver
     gds: GraphDataScience
     project_root: str
+    config_path: Path
     ppr_config: PPRConfig
     signal_weights: dict[str, float]
     default_token_budget: int
     default_top_k: int
+    indexing_lock: threading.Lock = field(default_factory=threading.Lock)
+    indexing_in_progress: bool = False
 
 
 @asynccontextmanager
@@ -79,10 +83,10 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
     seed_section = raw_config.get("seed_selection", {})
 
     ppr_config = PPRConfig(
-        damping_factor=ppr_section.get("damping_factor", 0.85),
+        damping_factor=ppr_section.get("damping_factor", 0.70),
         max_iterations=ppr_section.get("max_iterations", 20),
         tolerance=ppr_section.get("tolerance", 1e-7),
-        top_k=ppr_section.get("top_k", 20),
+        top_k=ppr_section.get("top_k", 30),
     )
 
     raw_project_root = raw_config.get("project_root", ".")
@@ -105,6 +109,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[ServerState]:
         driver=driver,
         gds=gds,
         project_root=project_root,
+        config_path=config_path,
         ppr_config=ppr_config,
         signal_weights=signal_weights,
         default_token_budget=mcp_section.get("default_token_budget", 6000),

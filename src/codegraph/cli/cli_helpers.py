@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -45,50 +46,81 @@ def init_helper(config_path: Path) -> None:
 
     # 1. Neo4j Settings
     console.print("\n[bold]1. Database Connection[/bold]")
+    console.print("   [dim]CodeGraph requires Neo4j 5.x with the GDS plugin.[/dim]")
+    console.print("   [dim]Download: https://neo4j.com/deployment-center/ (Community Edition is free)[/dim]\n")
     uri = Prompt.ask("Neo4j URI", default="neo4j://localhost:7687")
     user = Prompt.ask("Neo4j Username", default="neo4j")
     password = Prompt.ask("Neo4j Password", password=True)
 
     # Test connectivity
+    connected = False
     with console.status("[yellow]Testing connectivity..."):
-        from codegraph.core.graph.connection import Neo4jConfig
-        from codegraph.core.graph.database import DatabaseManager
-        test_config = Neo4jConfig(uri=uri, username=user, password=password, database="neo4j")
-        test_mgr = DatabaseManager()
-        test_mgr._config = test_config # Hack to test without full init
-        connected = test_mgr.is_connected()
+        try:
+            from codegraph.core.graph.connection import Neo4jConfig
+            from codegraph.core.graph.database import DatabaseManager
+            test_config = Neo4jConfig(uri=uri, username=user, password=password, database="neo4j")
+            test_mgr = DatabaseManager()
+            test_mgr._config = test_config
+            connected = test_mgr.is_connected()
+        except Exception:
+            connected = False
 
     if connected:
         console.print("   [green]+[/green] Connected successfully!")
     else:
-        console.print("   [red]-[/red] Connection failed. Please check your credentials.")
-        if not Confirm.ask("Continue anyway?"):
+        console.print("   [red]-[/red] Connection failed.")
+        console.print("   [dim]Make sure Neo4j is running: check Neo4j Desktop or run 'neo4j start'[/dim]")
+        console.print("   [dim]Then verify credentials at http://localhost:7474[/dim]")
+        if not Confirm.ask("Continue and save config anyway?"):
             return
 
     # 2. Project Settings
     console.print("\n[bold]2. Project Settings[/bold]")
-    project_root = Prompt.ask("Project root directory (absolute or relative to config)", default=".")
-    
+    while True:
+        project_root = Prompt.ask("Project root directory (absolute or relative to config)", default=".")
+        resolved = (config_path.parent / project_root).resolve() if not Path(project_root).is_absolute() else Path(project_root)
+        if resolved.exists():
+            break
+        console.print(f"   [red]-[/red] Directory not found: {resolved}")
+        if not Confirm.ask("Use it anyway?"):
+            continue
+        break
+
     # 3. Exclude Patterns
     exclude = [".git", "__pycache__", ".venv", "node_modules", ".pytest_cache"]
     console.print(f"\n[bold]3. Default exclusions:[/bold] [dim]{', '.join(exclude)}[/dim]")
-    
+
+    # Write password to .env, not config.yaml
+    env_file = config_path.parent / ".env"
+    _write_env_password(env_file, password)
+    console.print(f"   [green]+[/green] Password written to [blue]{env_file.name}[/blue] (not stored in config.yaml)")
+
     config_data = {
         "neo4j": {
             "uri": uri,
             "username": user,
-            "password": password
         },
         "project_root": project_root,
-        "parser": {
-            "exclude_patterns": exclude
-        },
+        "exclude_patterns": exclude,
         "ppr": {
-            "top_k": 20
+            "damping_factor": 0.70,
+            "max_iterations": 20,
+            "tolerance": 1.0e-7,
+            "top_k": 30,
+            "retrieval_mode": "uniform",
+        },
+        "seed_selection": {
+            "entity_match_weight": 0.6,
+            "bm25_weight": 0.3,
+            "current_file_weight": 0.1,
+            "bm25_top_n": 10,
+            "exclude_seed_paths": ["tests/", "test_"],
         },
         "mcp": {
-            "default_token_budget": 8000
-        }
+            "server_name": "codegraph",
+            "default_token_budget": 6000,
+            "default_top_k": 15,
+        },
     }
 
     save_raw_config(config_path, config_data)
@@ -107,6 +139,18 @@ def init_helper(config_path: Path) -> None:
 
     if Confirm.ask("\nRun [bold]codegraph rebuild[/bold] now?"):
         rebuild_helper(config_path)
+
+
+def _write_env_password(env_file: Path, password: str) -> None:
+    """Write NEO4J_PASSWORD to .env, preserving other existing entries."""
+    lines: list[str] = []
+    if env_file.exists():
+        with open(env_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    new_lines = [l for l in lines if not l.startswith("NEO4J_PASSWORD=")]
+    new_lines.append(f"NEO4J_PASSWORD={password}\n")
+    with open(env_file, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
 
 def visualize_helper(config_path: Path, port: int, no_browser: bool, dev: bool = False, watch: bool = False, initial_task: str | None = None) -> None:
     """Start the FastAPI visualizer server and (optionally) open the browser."""
@@ -216,6 +260,7 @@ def rebuild_helper(config_path: Path) -> None:
 
         total_nodes = sum(v for k, v in counts.items() if k in ("File", "Function", "Class", "Method"))
         total_edges = sum(v for k, v in counts.items() if k in ("CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM"))
+        _write_build_timestamp(config_path)
         console.print(f"\n[bold green]Graph rebuild complete:[/bold green] {total_nodes} nodes, {total_edges} edges.")
     except Exception as e:
         console.print(f"[bold red]Error during rebuild:[/bold red] {e}")
@@ -275,29 +320,74 @@ def stats_helper() -> None:
         console.print()
     except Exception as e:
         console.print(f"[bold red]Error fetching stats:[/bold red] {e}")
+        sys.exit(1)
 
-def doctor_helper() -> None:
-    """Run health checks on Neo4j, GDS, and config."""
+def doctor_helper(config_path: Path | None = None) -> None:
+    """Run health checks on config, Neo4j, GDS, and dependencies."""
     setup_logging(level=logging.WARNING)
     ok = True
 
-    db_manager = get_database_manager()
-    
     console.print("[bold cyan]Running CodeGraph Diagnostics...[/bold cyan]\n")
-    
+
+    # 0. Config file
+    console.print("[bold]0. Checking Configuration...[/bold]")
+    config_ok = False
+    if config_path is None or not config_path.exists():
+        console.print(f"   [red]-[/red] config.yaml not found at {config_path or 'unknown'}")
+        console.print("       [dim]Fix: run [bold]codegraph init[/bold] to create it[/dim]")
+        ok = False
+    else:
+        raw = {}
+        try:
+            raw = load_raw_config(config_path)
+            config_ok = True
+            console.print(f"   [green]+[/green] Config found at {config_path}")
+        except Exception as exc:
+            console.print(f"   [red]-[/red] Could not read config: {exc}")
+            ok = False
+
+        if config_ok:
+            proj_root = resolve_project_root(raw, config_path)
+            if proj_root.exists():
+                console.print(f"   [green]+[/green] Project root exists: {proj_root}")
+            else:
+                console.print(f"   [red]-[/red] Project root not found: {proj_root}")
+                console.print("       [dim]Fix: update project_root in config.yaml[/dim]")
+                ok = False
+
+            # Check password is available
+            import os
+            has_password = bool(
+                os.getenv("NEO4J_PASSWORD")
+                or raw.get("neo4j", {}).get("password")
+            )
+            if not has_password:
+                console.print("   [red]-[/red] Neo4j password not set")
+                console.print("       [dim]Fix: set NEO4J_PASSWORD in .env or run [bold]codegraph init[/bold][/dim]")
+                ok = False
+            else:
+                console.print("   [green]+[/green] Neo4j password available")
+
+    db_manager = get_database_manager()
+    connected = False
+
     # 1. Neo4j connectivity
-    console.print("[bold]1. Checking Neo4j Connectivity...[/bold]")
+    console.print("\n[bold]1. Checking Neo4j Connectivity...[/bold]")
     try:
         connected = db_manager.is_connected()
         if connected:
-            console.print(f"   [green]+[/green] Connected to {db_manager._config.uri if db_manager._config else 'Neo4j'}")
+            uri = db_manager._config.uri if db_manager._config else "Neo4j"
+            console.print(f"   [green]+[/green] Connected to {uri}")
         else:
-            console.print(f"   [red]-[/red] Cannot reach Neo4j at {db_manager._config.uri if db_manager._config else 'unknown'}")
+            uri = db_manager._config.uri if db_manager._config else "neo4j://localhost:7687"
+            console.print(f"   [red]-[/red] Cannot reach Neo4j at {uri}")
+            console.print("       [dim]Fix: start Neo4j (Neo4j Desktop → Start, or: neo4j start)[/dim]")
+            console.print(f"       [dim]Then verify at http://localhost:7474[/dim]")
             ok = False
     except Exception as exc:
         console.print(f"   [red]-[/red] Connection error: {exc}")
+        console.print("       [dim]Fix: check Neo4j is running and credentials are correct[/dim]")
         ok = False
-        connected = False
 
     # 2. GDS plugin
     console.print("\n[bold]2. Checking GDS Plugin...[/bold]")
@@ -309,13 +399,31 @@ def doctor_helper() -> None:
             console.print(f"   [green]+[/green] GDS Plugin installed (version: {version})")
         except Exception as exc:
             console.print(f"   [red]-[/red] GDS check failed: {exc}")
-            console.print("       [dim]Note: GDS is required for Personalized PageRank (PPR) retrieval.[/dim]")
+            console.print("       [dim]Fix: install GDS in Neo4j Desktop → Plugins, or add to neo4j.conf[/dim]")
+            console.print("       [dim]GDS is required for Personalized PageRank retrieval[/dim]")
             ok = False
     else:
         console.print("   [yellow]![/yellow] SKIP (Neo4j not reachable)")
 
-    # 3. tree-sitter installation
-    console.print("\n[bold]3. Checking Tree-Sitter Installation...[/bold]")
+    # 3. Graph is indexed
+    console.print("\n[bold]3. Checking Graph Index...[/bold]")
+    if connected:
+        try:
+            from codegraph.core.graph.queries import count_nodes_by_label
+            node_counts = count_nodes_by_label(db_manager.get_driver())
+            total = sum(node_counts.values())
+            if total > 0:
+                console.print(f"   [green]+[/green] Graph has {total} nodes")
+            else:
+                console.print("   [yellow]![/yellow] Graph is empty")
+                console.print("       [dim]Fix: run [bold]codegraph rebuild[/bold] to index your project[/dim]")
+        except Exception as exc:
+            console.print(f"   [yellow]![/yellow] Could not check graph: {exc}")
+    else:
+        console.print("   [yellow]![/yellow] SKIP (Neo4j not reachable)")
+
+    # 4. tree-sitter installation
+    console.print("\n[bold]4. Checking Tree-Sitter Installation...[/bold]")
     try:
         from tree_sitter import Language, Parser
         import tree_sitter_python
@@ -323,13 +431,14 @@ def doctor_helper() -> None:
         console.print("   [green]+[/green] python parser is available")
     except ImportError as e:
         console.print(f"   [red]-[/red] tree-sitter check failed: {e}")
+        console.print("       [dim]Fix: pip install tree-sitter tree-sitter-python[/dim]")
         ok = False
 
     console.print("\n" + "=" * 40)
     if ok:
         console.print("[bold green]+ All diagnostics passed! System is healthy.[/bold green]")
     else:
-        console.print("[bold yellow]!  Some issues detected. Please review the output above.[/bold yellow]")
+        console.print("[bold yellow]!  Some issues detected. See fix hints above.[/bold yellow]")
     console.print("=" * 40 + "\n")
 
 def query_helper(
@@ -363,10 +472,10 @@ def query_helper(
         seed_section = raw_config.get("seed_selection", {})
 
         ppr_config = PPRConfig(
-            damping_factor=ppr_section.get("damping_factor", 0.85),
+            damping_factor=ppr_section.get("damping_factor", 0.70),
             max_iterations=ppr_section.get("max_iterations", 20),
             tolerance=ppr_section.get("tolerance", 1e-7),
-            top_k=top_k if top_k > 0 else ppr_section.get("top_k", 20),
+            top_k=top_k if top_k > 0 else ppr_section.get("top_k", 30),
         )
         effective_budget = token_budget if token_budget > 0 else mcp_section.get("default_token_budget", 6000)
 
@@ -623,3 +732,221 @@ def watch_helper(config_path: Path) -> None:
         console.print("\n[yellow]Stopped watching.[/yellow]")
 
 
+# ---------------------------------------------------------------------------
+# Timestamp helpers (used by rebuild and status)
+# ---------------------------------------------------------------------------
+
+_TIMESTAMP_FILE_NAME = ".codegraph_last_built"
+
+
+def _write_build_timestamp(config_path: Path) -> None:
+    """Write current UTC timestamp next to config.yaml after a successful rebuild."""
+    import datetime
+    ts_file = config_path.parent / _TIMESTAMP_FILE_NAME
+    ts_file.write_text(datetime.datetime.now(datetime.UTC).isoformat(), encoding="utf-8")
+
+
+def _read_build_timestamp(config_path: Path) -> str | None:
+    """Return ISO timestamp string of last rebuild, or None if not found."""
+    ts_file = config_path.parent / _TIMESTAMP_FILE_NAME
+    if ts_file.exists():
+        return ts_file.read_text(encoding="utf-8").strip()
+    return None
+
+
+# ---------------------------------------------------------------------------
+# codegraph status
+# ---------------------------------------------------------------------------
+
+def status_helper(config_path: Path) -> None:
+    """Show current CodeGraph state: project root, graph counts, last build, MCP registration."""
+    setup_logging(level=logging.WARNING)
+
+    console.print("\n[bold cyan]=== CodeGraph Status ===[/bold cyan]\n")
+
+    # Config
+    if not config_path.exists():
+        console.print(f"[red]-[/red] No config found at {config_path}")
+        console.print("  Run [bold]codegraph init[/bold] to set up.\n")
+        return
+
+    raw = load_raw_config(config_path)
+    project_root = resolve_project_root(raw, config_path)
+    console.print(f"[bold]Config:[/bold]    {config_path}")
+    console.print(f"[bold]Project:[/bold]   {project_root}")
+
+    # Last build timestamp
+    ts = _read_build_timestamp(config_path)
+    if ts:
+        console.print(f"[bold]Last build:[/bold] {ts} UTC")
+    else:
+        console.print("[bold]Last build:[/bold] [yellow]unknown (run codegraph rebuild)[/yellow]")
+
+    # Neo4j graph stats
+    console.print()
+    db_manager = get_database_manager()
+    try:
+        connected = db_manager.is_connected()
+    except Exception:
+        connected = False
+
+    if connected:
+        try:
+            driver = db_manager.get_driver()
+            node_counts = count_nodes_by_label(driver)
+            edge_counts = count_edges_by_type(driver)
+            total_nodes = sum(node_counts.values())
+            total_edges = sum(edge_counts.values())
+            console.print(f"[bold]Graph:[/bold]     {total_nodes} nodes, {total_edges} edges")
+            if total_nodes == 0:
+                console.print("             [yellow]Graph is empty — run codegraph rebuild[/yellow]")
+        except Exception as e:
+            console.print(f"[bold]Graph:[/bold]     [yellow]could not fetch counts: {e}[/yellow]")
+    else:
+        console.print("[bold]Graph:[/bold]     [yellow]Neo4j not reachable — run codegraph doctor[/yellow]")
+
+    # MCP registration
+    console.print()
+    mcp_locations = _find_mcp_registrations(config_path)
+    if mcp_locations:
+        for loc in mcp_locations:
+            console.print(f"[bold]MCP:[/bold]       [green]registered[/green] in {loc}")
+    else:
+        console.print("[bold]MCP:[/bold]       [yellow]not registered — run codegraph install[/yellow]")
+
+    console.print()
+
+
+def _find_mcp_registrations(config_path: Path) -> list[str]:
+    """Return list of config file paths where codegraph MCP server is registered."""
+    found: list[str] = []
+
+    # Project-level .mcp.json
+    project_mcp = config_path.parent / ".mcp.json"
+    if _mcp_json_has_codegraph(project_mcp):
+        found.append(str(project_mcp))
+
+    # Claude Desktop global config
+    for candidate in _claude_desktop_config_paths():
+        if _claude_json_has_codegraph(candidate):
+            found.append(str(candidate))
+
+    return found
+
+
+def _mcp_json_has_codegraph(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return "codegraph" in data.get("mcpServers", {})
+    except Exception:
+        return False
+
+
+def _claude_json_has_codegraph(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return "codegraph" in data.get("mcpServers", {})
+    except Exception:
+        return False
+
+
+def _claude_desktop_config_paths() -> list[Path]:
+    """Return candidate paths for Claude Desktop's claude.json on all platforms."""
+    import platform
+    system = platform.system()
+    if system == "Darwin":
+        return [Path.home() / "Library" / "Application Support" / "Claude" / "claude.json"]
+    if system == "Windows":
+        appdata = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming")))
+        return [appdata / "Claude" / "claude.json"]
+    # Linux
+    xdg = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+    return [xdg / "Claude" / "claude.json"]
+
+
+# ---------------------------------------------------------------------------
+# codegraph install
+# ---------------------------------------------------------------------------
+
+def install_helper(config_path: Path) -> None:
+    """Write MCP server registration for Claude Code or Claude Desktop."""
+    import platform
+    import shutil
+
+    console.print("\n[bold cyan]CodeGraph MCP Install Wizard[/bold cyan]\n")
+
+    if not config_path.exists():
+        console.print("[red]-[/red] config.yaml not found. Run [bold]codegraph init[/bold] first.")
+        return
+
+    # Resolve codegraph executable path
+    codegraph_exe = shutil.which("codegraph") or "codegraph"
+
+    console.print("Which AI assistant do you want to configure?\n")
+    console.print("  [bold]1[/bold]  Claude Code  (project-level .mcp.json — recommended)")
+    console.print("  [bold]2[/bold]  Claude Desktop  (global ~/.../claude.json)")
+    console.print("  [bold]3[/bold]  Both\n")
+
+    choice = Prompt.ask("Choice", choices=["1", "2", "3"], default="1")
+
+    server_entry = {
+        "command": codegraph_exe,
+        "args": ["serve", "--config", str(config_path.resolve())],
+        "env": {},
+    }
+
+    if choice in ("1", "3"):
+        _write_project_mcp_json(config_path.parent / ".mcp.json", server_entry)
+
+    if choice in ("2", "3"):
+        desktop_path = _claude_desktop_config_paths()[0]
+        _write_claude_desktop_json(desktop_path, server_entry)
+
+    # Verify reachability
+    console.print("\n[bold]Verifying server can start...[/bold]")
+    try:
+        db_manager = get_database_manager()
+        if db_manager.is_connected():
+            console.print("   [green]+[/green] Neo4j reachable — server should start correctly")
+        else:
+            console.print("   [yellow]![/yellow] Neo4j not reachable — server will fail at startup")
+            console.print("      Start Neo4j first, then reload your AI assistant.")
+    except Exception as e:
+        console.print(f"   [yellow]![/yellow] Could not verify: {e}")
+
+    console.print("\n[bold green]Done.[/bold green] Restart your AI assistant to pick up the changes.\n")
+
+
+def _write_project_mcp_json(mcp_path: Path, server_entry: dict) -> None:
+    """Write or update .mcp.json in the project directory."""
+    data: dict = {}
+    if mcp_path.exists():
+        try:
+            data = json.loads(mcp_path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+
+    data.setdefault("mcpServers", {})["codegraph"] = server_entry
+    mcp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    console.print(f"   [green]+[/green] Written to {mcp_path}")
+    console.print("      Reload Claude Code (or open a new session) to activate.\n")
+
+
+def _write_claude_desktop_json(desktop_path: Path, server_entry: dict) -> None:
+    """Write or update Claude Desktop's claude.json."""
+    desktop_path.parent.mkdir(parents=True, exist_ok=True)
+    data: dict = {}
+    if desktop_path.exists():
+        try:
+            data = json.loads(desktop_path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+
+    data.setdefault("mcpServers", {})["codegraph"] = server_entry
+    desktop_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    console.print(f"   [green]+[/green] Written to {desktop_path}")
+    console.print("      Restart Claude Desktop to activate.\n")

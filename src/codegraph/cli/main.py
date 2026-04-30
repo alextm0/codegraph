@@ -16,6 +16,8 @@ from codegraph.cli.cli_helpers import (
     explain_helper,
     visualize_helper,
     init_helper,
+    install_helper,
+    status_helper,
     watch_helper,
     _initialize_db
 )
@@ -68,6 +70,31 @@ def init(ctx: typer.Context):
     init_helper(config_path)
 
 @app.command()
+def install(ctx: typer.Context):
+    """
+    Register CodeGraph MCP server with Claude Code or Claude Desktop.
+
+    Writes .mcp.json (Claude Code) or updates the global claude.json (Claude Desktop).
+    Run this once after codegraph init to make the server visible to your AI assistant.
+    """
+    config_path = get_config_path(ctx)
+    install_helper(config_path)
+
+
+@app.command()
+def status(ctx: typer.Context):
+    """
+    Show current CodeGraph state: project, graph counts, last build, MCP registration.
+    """
+    config_path = get_config_path(ctx)
+    try:
+        _initialize_db(config_path)
+    except ValueError:
+        pass  # status_helper will show what's missing
+    status_helper(config_path)
+
+
+@app.command()
 def watch(ctx: typer.Context):
     """
     Watch for file changes and update the graph incrementally.
@@ -81,7 +108,12 @@ def stats(ctx: typer.Context):
     Show statistics about the current graph (nodes, edges, etc.).
     """
     config_path = get_config_path(ctx)
-    _initialize_db(config_path)
+    try:
+        _initialize_db(config_path)
+    except ValueError as e:
+        console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        raise typer.Exit(1)
     stats_helper()
 
 @app.command()
@@ -90,8 +122,11 @@ def doctor(ctx: typer.Context):
     Run diagnostics to check system health and configuration.
     """
     config_path = get_config_path(ctx)
-    _initialize_db(config_path)
-    doctor_helper()
+    try:
+        _initialize_db(config_path)
+    except ValueError:
+        pass  # doctor_helper will report the missing credentials itself
+    doctor_helper(config_path)
 
 @app.command()
 def query(
@@ -109,7 +144,12 @@ def query(
     Run the retrieval pipeline to get context for a specific task.
     """
     config_path = get_config_path(ctx)
-    _initialize_db(config_path)
+    try:
+        _initialize_db(config_path)
+    except ValueError as e:
+        console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        raise typer.Exit(1)
     query_helper(config_path, task, entities, file, top_k, budget, json_out=json_out, compact=compact)
 
     if viz:
@@ -125,7 +165,12 @@ def explain(
     Explain why PPR returned specific files for a task — shows seeds and reasoning paths.
     """
     config_path = get_config_path(ctx)
-    _initialize_db(config_path)
+    try:
+        _initialize_db(config_path)
+    except ValueError as e:
+        console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        raise typer.Exit(1)
     explain_helper(config_path, task, top_k)
 
 
@@ -177,7 +222,12 @@ def analyze_deps(
     Use --direction upstream to find callers, downstream for callees, both for all.
     """
     config_path = get_config_path(ctx)
-    db_manager = _initialize_db(config_path)
+    try:
+        db_manager = _initialize_db(config_path)
+    except ValueError as e:
+        console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        raise typer.Exit(1)
     from codegraph.core.graph.queries import query_entity_dependencies
     from rich.table import Table
     import rich.box as box
@@ -201,6 +251,10 @@ def analyze_deps(
             visualize_helper(config_path, port=8474, no_browser=False)
     except ValueError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
+        console.print("[dim]Use [bold]codegraph query[/bold] to confirm the entity name exists[/dim]")
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(1)
 
 @analyze_app.command("dead-code")
 def analyze_dead(
@@ -209,12 +263,22 @@ def analyze_dead(
 ):
     """Find functions and methods that are never called (potential dead code)."""
     config_path = get_config_path(ctx)
-    db_manager = _initialize_db(config_path)
+    try:
+        db_manager = _initialize_db(config_path)
+    except ValueError as e:
+        console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        raise typer.Exit(1)
     from codegraph.core.graph.queries import find_dead_code
     from rich.table import Table
     import rich.box as box
 
-    results = find_dead_code(db_manager.get_driver(), limit)
+    try:
+        results = find_dead_code(db_manager.get_driver(), limit)
+    except Exception as e:
+        console.print(f"[bold red]Error running dead code analysis:[/bold red] {e}")
+        raise typer.Exit(1)
+
     if not results:
         console.print("[green]No potential dead code found![/green]")
         return
