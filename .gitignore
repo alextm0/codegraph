@@ -5,8 +5,6 @@ site/
 # AI Agents
 .agents/
 .claude/
-AGENTS.md
-CLAUDE.md
 docs/DECISIONS.md
 memory/
 
