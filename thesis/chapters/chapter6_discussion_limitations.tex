@@ -1,2 +1,53 @@
+% =============================================================================
+% Chapter 6: Discussion and Limitations
+% =============================================================================
+
 \chapter{Discussion and Limitations}
 \label{ch:discussion}
+
+The results presented in \cref{ch:evaluation} established that CodeGraph provides a significant performance gain over standard lexical baselines. 
+ However, the metrics alone do not fully capture the qualitative lessons learned during the system's development. This chapter interprets what these results tell us about the nature of graph-based retrieval, discusses the implications for AI coding agents, and identifies the practical boundaries that limit the system's generalizability.
+
+% =============================================================================
+\section{Interpretation of Results}
+\label{sec:interpretation}
+% =============================================================================
+
+The primary success of CodeGraph lies in its ability to improve seed extraction: the challenge of translating abstract natural language symptoms into precise starting nodes in a code graph. By analyzing the trajectory of the system's performance, we can identify the specific factors that drive retrieval success.
+
+\subsection{Seed Quality as the Dominant Bottleneck}
+The evaluation shows that seed quality, not algorithm tuning, is the primary bottleneck in CodeGraph. The most substantial performance jump, rising from 42.0\% to the final 74.0\% Recall@10, was driven by refinements to the seed extraction process, such as compound tokenization and inverse-frequency weighting. Our observation of a bimodal distribution in the results further supports this: when the seeds land near the correct region, the structural propagation stage almost always pushes the target file into the top ranks. This suggests that the retrieval ceiling is set by the reachability of the target from the initial seeds, rather than by the finesse of the ranking algorithm.
+
+\subsection{PPR as Signal Amplification}
+Personalized PageRank behaves like a filter that boosts consistent structural signals and suppresses noise from misleading seeds. Our finding that uniform restart outperforms weighted restart confirms that the graph topology itself is often more reliable than the raw BM25 scores of individual seeds. By treating all seeds equally, we allow the graph's connectivity to decide which starting points are most likely to be relevant. PPR effectively amplifies the regions where multiple independent signals converge, while diluting the influence of outlier seeds that have no structural support in the codebase.
+
+\subsection{When Graph Structure Helps}
+The effectiveness of CodeGraph is tied to both the style of the bug report and the organization of the repository. The system is strongest when bug descriptions name specific functions or modules, providing clear lexical anchors. Structurally, it performs best in repositories with clear module boundaries and cohesive directories. It is weakest in description-impoverished cases where symptoms are abstract (e.g., the app crashes), or in repositories with very large, heterogeneous directories where many unrelated files share a similar vocabulary. These failures, categorized as semantic gaps, indicate where pure lexical-structural retrieval reaches its limit.
+
+% =============================================================================
+\section{Implications for AI Coding Agents}
+\label{sec:implications}
+% =============================================================================
+
+The high retrieval rate achieved by the system fundamentally changes the workflow for an AI coding agent. By accurately surfacing the target file in the majority of cases, CodeGraph shifts the bottleneck from search to reasoning. Agents can spend more of their finite context window and compute budget on understanding the bug and writing the fix, rather than hunting for where the logic lives. 
+
+Furthermore, deterministic, graph-based navigation reduces the risk of path hallucinations. By working within a concrete map of actual files and edges through the Model Context Protocol, the agent is grounded in the reality of the implementation. This structure provides a verifiable environment for the agent, ensuring that its navigation steps are based on existing code relationships rather than speculative guesses.
+
+% =============================================================================
+\section{Technical Boundaries and Generalizability}
+\label{sec:technical-limitations}
+% =============================================================================
+
+While CodeGraph demonstrates high practical efficiency, its effectiveness is subject to several technical and methodological constraints that must be considered when applying the system to broader contexts.
+
+\paragraph{Static Analysis Boundary.} 
+CodeGraph cannot see dynamic behaviors like runtime module loading or monkey-patching. These dynamic patterns create missing edges in the static graph, contributing to connectivity gaps where a target file is structurally isolated from its seeds. Without runtime signals, the graph remains an incomplete map of the program's actual execution flow.
+
+\paragraph{Ecosystem and Language Scope.} 
+The current system is Python-specific. Adapting it to other languages would require significant investment in new parsers and resolution logic. Furthermore, the evaluation used SWE-bench Lite, which consists of popular, well-structured open-source projects. The performance of CodeGraph on proprietary or legacy codebases, which may feature poorer naming conventions, more dynamic patterns, or monolithic directories with weak boundaries, might be lower than what we observed in this benchmark.
+
+\paragraph{Metric Proxies.}
+The use of Recall@10 assumes that retrieving the correct file is equivalent to solving the retrieval portion of the task. While this is a standard proxy, it does not measure whether the agent can correctly interpret the file or if the bug requires edits across many files that are not as easily ranked. We also evaluate only the first retrieval step, which does not capture the human-like iterative pattern of an agent exploring a repository over multiple turns.
+
+\paragraph{Scalability.} 
+While PPR is efficient at the scale of typical SWE-bench repositories, million-node graphs and real-time incremental rebuilds remain open engineering problems. Maintaining low-latency responses while the underlying codebase is being modified by an agent is critical for a seamless interactive experience.

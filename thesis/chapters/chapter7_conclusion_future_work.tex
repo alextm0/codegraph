@@ -1,2 +1,44 @@
-\chapter{Conclusion and Future Work}
+% =============================================================================
+% Chapter 7: Future Work and Conclusion
+% =============================================================================
+
+\chapter{Future Work and Conclusion}
 \label{ch:conclusion}
+
+This thesis addressed the challenge of repository-level code retrieval by developing a system that combines lexical anchoring with structural graph propagation. Based on the findings discussed in \cref{ch:evaluation,ch:discussion}, this final chapter outlines the most promising directions for future research and summarizes the core contributions and findings of this work.
+
+% =============================================================================
+\section{Future Work}
+\label{sec:future-work}
+% =============================================================================
+
+The failure modes and technical boundaries identified in the preceding chapters suggest five primary directions for extending the CodeGraph architecture.
+
+\paragraph{LLM-based Seed Extraction.} 
+To address semantic gap failures, future work should investigate using an LLM to preprocess issue descriptions. Instead of relying on raw text, an LLM could suggest likely module names or technical entities that augment the BM25 seeds. This would improve the translation of abstract symptoms into code identifiers, though it introduces a trade-off between higher recall and increased compute cost.
+
+\paragraph{Embedding-based Retrieval as Seed Source.} 
+A more systematic way to address vocabulary mismatch is through dense retrieval. By using vector embeddings for both code and task descriptions, we could propose seed nodes that do not share any exact keywords with the query. This would create a powerful hybrid architecture consisting of a semantic front-end for initial discovery and a structural graph amplifier for high-fidelity ranking.
+
+\paragraph{Selective Structural Features.} 
+Our experiments showed that global structural additions like directory-level edges can be harmful. Future work should explore more targeted features, such as adding co-location edges only within small, cohesive directories or incorporating co-change histories from version control. These soft signals could capture dependencies that are invisible to static analysis.
+
+\paragraph{Multi-language and Multi-repo Support.} 
+The use of tree-sitter makes extending CodeGraph to other languages feasible. Supporting TypeScript and JavaScript is a natural next step given their prevalence in modern agent tasks. Furthermore, extending the graph schema to handle cross-repository dependencies or monorepos would allow the system to be applied to larger, more complex industrial systems.
+
+\paragraph{End-to-end Agent Evaluation.} 
+Finally, the most critical extension is to move from measuring retrieval quality to measuring task resolution. Plugging CodeGraph into a complete SWE-bench resolution pipeline would allow us to quantify how often an agent produces a correct patch with vs. without structural context. This would establish the direct link between retrieval improvements and end-user productivity.
+
+% =============================================================================
+\section{Conclusion}
+\label{sec:final-conclusion}
+% =============================================================================
+
+\paragraph{Summary of Contributions.}
+This thesis introduced CodeGraph, a graph-based retrieval system designed specifically for AI coding agents. We developed a unified pipeline that pairs lexical seed extraction with Personalized PageRank over a deterministic code dependency graph. Our work identified seed extraction as the primary bottleneck in code retrieval and demonstrated how a systematic approach to seed quality can unlock the potential of graph-based ranking.
+
+\paragraph{Final Results and the Structural Limit.}
+The research achieved a substantial performance improvement over the initial baseline. Our error analysis identified a clear structural limit: a reachable portion where seed and algorithm refinements are highly effective, and a residual portion where failures are fundamentally semantic or structurally disconnected. This finding confirms that the retrieval ceiling is determined more by the graph schema and seed mapping than by further tuning of the ranking algorithm.
+
+\paragraph{Broader Implications.}
+The core conclusion of this research is that explicit graph structure is a powerful but underused signal for code retrieval. By grounding simple lexical methods in the concrete topology of a codebase, we can transform an ambiguous search into a guided navigation of a logical graph. This thesis shows that for repository-level tasks, the synergy between anchoring and propagation provides a deterministic foundation that significantly outperforms traditional text-based search. As AI coding agents continue to evolve, the integration of structural context will remain a vital component for moving beyond shallow keyword matching toward true repository-level understanding.
