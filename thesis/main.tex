@@ -19,6 +19,7 @@
 \usepackage{amssymb}        % math symbols
 \usepackage{enumitem}       % list customization
 \usepackage{listings}       % code listings
+\usepackage[ruled, vlined, linesnumbered]{algorithm2e} % formal algorithms
 \usepackage{xcolor}         % colors for listings
 
 % Code listing style — shared across all chapters
@@ -107,9 +108,9 @@
 \hrule
 \vspace{0.5cm}
 
-The effectiveness of AI-driven software engineering agents is often limited by the quality of the retrieved code context. Current retrieval methods typically rely on pure lexical matching or dense embeddings, which frequently fail to capture the complex, multi-file structural dependencies of large repositories. This thesis introduces CodeGraph, a hybrid retrieval system that pairs lexical seed extraction with structural graph traversal. By modeling a repository as a directed dependency graph and employing the Personalized PageRank algorithm to propagate relevance from task-specific starting points, we provide agents with a deterministic, structurally-grounded view of the codebase.
+LLM-based coding agents are increasingly capable of resolving real software engineering tasks, moving beyond simple code generation to the autonomous management of entire repositories. However, as codebases grow to millions of tokens, the effectiveness of these agents is strictly limited by their ability to navigate complex file structures. Traditional retrieval methods, such as keyword search or dense embeddings, treat code as flat text and often fail to bridge the gap between a natural-language issue and its structural root cause. This thesis introduces CodeGraph, a hybrid retrieval system that leverages the inherent graph structure of source code to facilitate agentic navigation. By extracting lexical seeds from task descriptions and propagating relevance through a dependency graph using Personalized PageRank, CodeGraph provides agents with a deterministic and structurally-grounded view of the codebase.
 
-Empirical evaluation on the SWE-bench Lite dataset shows that CodeGraph achieves a 74.0\% Recall@10 rate. This result represents a 32 percentage point improvement over lexical baselines. Our analysis identifies initial seed extraction as the primary bottleneck in repository-level retrieval. We demonstrate that systematic improvements to seed quality are more effective than increasing graph density. These results confirm that explicit structural context allows AI agents to navigate codebases through deterministic paths rather than ambiguous search.
+The system was validated on SWE-bench Lite, a benchmark of 300 real-world software issues. CodeGraph achieved a 74.0\% Recall@10, marking a substantial 32-percentage-point increase over traditional lexical search. These results prove that while initial seed quality is a critical bottleneck, leveraging the structural dependency graph of the source code allows agents to pinpoint relevant files within complex repositories. By transforming a codebase into a navigable map of logical links, this work establishes that explicit structural context is a fundamental requirement for the next generation of autonomous coding agents.
 
 \tableofcontents
 

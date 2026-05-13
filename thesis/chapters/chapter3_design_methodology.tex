@@ -926,11 +926,11 @@ CodeGraph implements an MCP server that wraps the entire retrieval pipeline as a
 \subsection{Tool Interface}
 \label{sec:tool-interface}
 
-\Cref{tab:mcp-tools} lists the five core tools exposed by the MCP server. The primary entry point is \texttt{get\_relevant\_context}, which accepts a task description and runs the full retrieval pipeline (seed selection $\to$ PPR $\to$ post-processing). The remaining tools provide complementary capabilities for dependency exploration, graph inspection, and ad-hoc querying.
+\Cref{tab:mcp-tools} lists the primary tools exposed by the MCP server. The entry point is \texttt{get\_relevant\_context}, which runs the full retrieval pipeline (seed selection $\to$ PPR $\to$ post-processing). Additionally, \texttt{query\_dependencies} allows for targeted exploration of the dependency neighborhood.
 
 \begin{table}[H]
     \centering
-    \caption[MCP tool reference]{The five core tools exposed by the CodeGraph MCP server. Each accepts structured parameters and returns a JSON result. The primary tool (highlighted) runs the full retrieval pipeline; the remaining tools support targeted exploration and debugging.}
+    \caption[MCP tool reference]{The core tools exposed by the CodeGraph MCP server. Each accepts structured parameters and returns a JSON result.}
     \label{tab:mcp-tools}
     \renewcommand{\arraystretch}{1.3}
     \small
@@ -947,22 +947,11 @@ CodeGraph implements an MCP server that wraps the entire retrieval pipeline as a
             Full retrieval pipeline; returns ranked source files. Primary entry point. \\[4pt]
         \texttt{query\_dependencies} &
             \texttt{entity\_name},\newline \texttt{direction} (up/down),\newline \texttt{depth} (opt.) &
-            Explores the dependency neighborhood of a given entity. \\[4pt]
-        \texttt{get\_graph\_stats} &
-            (none) &
-            Returns node/edge counts by type and connected file count. \\[4pt]
-        \texttt{find\_dead\_code} &
-            (none) &
-            Lists entities with no incoming \texttt{CALLS} or \texttt{IMPORTS} edges. \\[4pt]
-        \texttt{execute\_cypher\_query} &
-            \texttt{query} (str) &
-            Raw Cypher access for custom graph traversal. \\
+            Explores the dependency neighborhood of a given entity. \\
         \bottomrule
     \end{tabularx}
     \normalsize
 \end{table}
-
-In addition to the five core tools, the server exposes five supplementary tools (\texttt{find\_callers}, \texttt{find\_callees}, \texttt{visualize\_query}, \texttt{analyze\_complexity}, \texttt{watch\_directory}) for more targeted analysis during interactive development sessions.
 
 
 \subsection{Agent Workflow}
