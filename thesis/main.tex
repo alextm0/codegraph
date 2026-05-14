@@ -29,6 +29,13 @@
 \definecolor{codegreen}{rgb}{0,0.5,0}
 \definecolor{backcolour}{rgb}{0.97,0.97,0.97}
 
+% Lattice Design System Colors
+\definecolor{latticeblue}{HTML}{2563EB}
+\definecolor{latticegreen}{HTML}{059669}
+\definecolor{latticered}{HTML}{DC2626}
+\definecolor{latticeorange}{HTML}{F59E0B}
+\definecolor{latticegray}{HTML}{6B7280}
+
 \lstdefinestyle{pythonstyle}{
     backgroundcolor=\color{backcolour},
     commentstyle=\color{codegreen}\itshape,
@@ -76,6 +83,38 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, shapes.geometric, backgrounds, fit, decorations.markings, calc, shadows.blur}
 \usepackage{cleveref}
+
+\tikzset{
+    lattice_stage/.style={
+        draw, 
+        rounded corners=8pt,
+        minimum width=3.2cm, 
+        minimum height=1.6cm,
+        line width=1.2pt, 
+        inner sep=10pt,
+        align=center,
+        fill=white,
+        font=\small\bfseries
+    },
+    lattice_arrow/.style={
+        -{Stealth[length=8pt, width=5pt]}, 
+        line width=1.5pt,
+        latticeblue
+    },
+    lattice_gray_arrow/.style={
+        -{Stealth[length=6pt, width=4pt]}, 
+        line width=1.2pt,
+        latticegray
+    },
+    lattice_badge/.style={
+        circle, 
+        fill=latticeblue, 
+        text=white, 
+        inner sep=2pt, 
+        font=\scriptsize\bfseries,
+        minimum size=14pt
+    }
+}
 
 %\geometry{a4paper,top=2.5cm,left=3cm,right=2.5cm,bottom=2.5cm}
 %in style
