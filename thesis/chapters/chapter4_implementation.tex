@@ -358,6 +358,7 @@ When an AI agent requests context, the engine must extract a ranked list of rele
 
     \vspace{0.5em}
     \begin{small}
+    \begin{adjustbox}{max width=\textwidth}
     \begin{tabular}{ll}
         \toprule
         \textbf{Signal} & \textbf{Weight ($w_i$)} \\
@@ -367,6 +368,7 @@ When an AI agent requests context, the engine must extract a ranked list of rele
         Current File & 0.1 \\
         \bottomrule
     \end{tabular}
+    \end{adjustbox}
     \end{small}
     \vspace{-0.5em}
 
@@ -503,15 +505,48 @@ The interactive components of CodeGraph provide a window into the deterministic 
 
 \subsection{Topological Node Visualization}
 
-The primary visualization pane renders the repository structure dynamically as a topological map. We use a distinct color-coding schema to differentiate the fundamental entity types: blue nodes represent Files, amber nodes represent Functions, and green nodes represent Classes. These entities are interconnected by explicit, typed edges representing \textsc{contains}, \textsc{calls}, and \textsc{imports} relationships. This map provides real-time observability of the graph construction and allows us to visually trace the propagation of Personalized PageRank mass across the codebase.
+The primary visualization pane renders the repository structure dynamically as a topological map (\cref{fig:gui-topological-map}). We use a distinct color-coding schema to differentiate the fundamental entity types: blue nodes represent Files, amber nodes represent Functions, and green nodes represent Classes. These entities are interconnected by explicit, typed edges representing \textsc{contains}, \textsc{calls}, and \textsc{imports} relationships. This map provides real-time observability of the graph construction and allows us to visually trace the propagation of Personalized PageRank mass across the codebase.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{assets/gui_topological_map}
+    \caption[CodeGraph Visualizer: Topological Map]{The Topological Map interface, displaying the extracted repository structure and relationship linkages.}
+    \label{fig:gui-topological-map}
+\end{figure}
 
 \subsection{Seed Signals and Mathematical Traceability}
 
-To ensure the transparency of the ranking engine, the interface includes a dedicated \textsc{seed.signals} panel. This component provides a breakdown of the personalization vector distribution for a given query. It explicitly lists the weights assigned to each identified seed node, separating direct entity matches from lexical BM25 scores. This transparency was instrumental in diagnosing the ``Weighted Restart'' failure mode and validating the effectiveness of the ``Uniform Restart'' paradigm.
+To ensure the transparency of the ranking engine, the interface includes a dedicated \textsc{seed.signals} panel (\cref{fig:gui-seed-signals}). This component provides a breakdown of the personalization vector distribution for a given query. It explicitly lists the weights assigned to each identified seed node, separating direct entity matches from lexical BM25 scores. This transparency was instrumental in diagnosing the ``Weighted Restart'' failure mode and validating the effectiveness of the ``Uniform Restart'' paradigm.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{assets/gui_seed_signals}
+    \caption[CodeGraph Visualizer: Seed Signals]{The SEED.SIGNALS panel, detailing the mathematical distribution of the personalization vector.}
+    \label{fig:gui-seed-signals}
+\end{figure}
 
 \subsection{Node Inspection and Execution Results}
 
-The GUI allows for granular inspection of individual graph nodes through a \textsc{node.inspect} panel. Selecting a node reveals its structural metadata, incoming and outgoing relationships, and its current PPR relevance score. Finally, the \textsc{ranked results} interface displays the exact output package as it would be delivered to an MCP agent, including file-level deduplication and token budget constraints. By integrating these visual tools, we establish a deterministic and observable foundation for repository-scale code retrieval.
+The GUI allows for granular inspection of individual graph nodes through a \textsc{node.inspect} panel (\cref{fig:gui-node-detail}). Selecting a node reveals its structural metadata, incoming and outgoing relationships, and its current PPR relevance score. Finally, the \textsc{ranked results} interface displays the exact output package as it would be delivered to an MCP agent, including file-level deduplication and token budget constraints. By integrating these visual tools, we establish a deterministic and observable foundation for repository-scale code retrieval.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{assets/gui_node_inspect}
+        \caption{NODE.INSPECT panel.}
+        \label{fig:gui-node-inspect}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{assets/gui_ranked_results}
+        \caption{Ranked Results panel.}
+        \label{fig:gui-ranked-results}
+    \end{subfigure}
+    \caption[CodeGraph Visualizer: Node detail and results]{Close-up views of the node inspection and ranked results components.}
+    \label{fig:gui-node-detail}
+\end{figure}
 
 % =============================================================================
 \section{Summary}

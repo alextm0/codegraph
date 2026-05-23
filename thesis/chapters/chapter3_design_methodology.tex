@@ -173,6 +173,7 @@ The design principle this example illustrates is \emph{signal amplification}. Se
     \caption[Per-stage computational complexity]{Computational complexity for each pipeline stage. Symbols: $n$ = number of files; $m$ = average file size in tokens; $|V|,|E|$ = graph nodes and edges; $q$ = query length; $t$ = PPR iterations (empirically 6--10); $k$ = result count.}
     \label{tab:stage-complexity}
     \renewcommand{\arraystretch}{1.2}
+    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.0cm}
                                   >{\centering\arraybackslash}p{1.8cm}
                                   >{\raggedright\arraybackslash}X
@@ -189,9 +190,10 @@ The design principle this example illustrates is \emph{signal amplification}. Se
         Stage 5: Context Delivery & Online & Sort and token budget scan & $O(k \log k)$ \\
         \bottomrule
     \end{tabularx}
+    \end{adjustbox}
 \end{table}
 
-The pipeline degrades gracefully under failure rather than failing hard. A file with a syntax error produces no entities and is simply absent from the graph. Unresolved imports and ambiguous calls are dropped rather than guessed, trading a small amount of recall for graph precision. If seed selection yields an empty personalization vector (for example, when the task description contains no recognizable identifiers and BM25 matches nothing), the pipeline returns an empty result and reports the failure explicitly. The guiding policy is to prefer returning nothing over returning a misleading result.
+The pipeline degrades gracefully under failure rather than failing hard. A file with a syntax error produces no entities and is consequently absent from the graph. Unresolved imports and ambiguous calls are dropped rather than guessed, trading a small amount of recall for graph precision. If seed selection yields an empty personalization vector (for example, when the task description contains no recognizable identifiers and BM25 matches nothing), the pipeline returns an empty result and reports the failure explicitly. The guiding policy is to prefer returning nothing over returning a misleading result.
 
 The following sections examine each stage in detail, beginning with how raw source code is transformed into structured entities.
 
@@ -206,7 +208,7 @@ Graph-based retrieval requires an explicit representation of which code units ex
 
 The granularity at which entities are extracted shapes both graph size and retrieval quality, so it warrants explicit justification. A file-level model is too coarse: if \texttt{auth.py} contains both \texttt{LoginView.authenticate()} and the unrelated helper \texttt{parse\_user\_agent()}, both collapse into a single node and retrieval cannot separate them. Tracking every AST node is the opposite extreme, local variables and expressions inflate the graph into hundreds of thousands of nodes, PPR convergence slows past ten seconds, and local-scope noise overwhelms the structural signal.
 
-The four-entity model (files, classes, functions, methods) occupies the productive middle ground. It captures the cross-file relationships developers actually reason about, such as the \texttt{authenticate} method calling \texttt{hash\_password}, while keeping the graph small enough for sub-second retrieval. These four units also match how Python code is organized: classes, functions, and methods are the importable and callable components, which is the granularity at which dependency-driven retrieval is most effective. \Cref{tab:entity-granularity} compares the three options across graph size, retrieval speed, and recall.
+The four-entity model (files, classes, functions, methods) occupies the productive middle ground. It captures the cross-file relationships developers typically reason about, such as the \texttt{authenticate} method calling \texttt{hash\_password}, while keeping the graph small enough for sub-second retrieval. These four units also match how Python code is organized: classes, functions, and methods are the importable and callable components, which is the granularity at which dependency-driven retrieval is most effective. \Cref{tab:entity-granularity} compares the three options across graph size, retrieval speed, and recall.
 
 \begin{table}[H]
     \centering
@@ -248,6 +250,7 @@ CodeGraph employs Tree-sitter for source code parsing, as introduced in \cref{ch
     \caption[Entity types extracted by the parser]{The four entity types extracted from Python source files. The \texttt{qualified\_name} (double-colon separator) uniquely identifies each entity within the repository.}
     \label{tab:entity-types}
     \renewcommand{\arraystretch}{1.3}
+    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.8cm}
                                   >{\raggedright\arraybackslash}p{4.2cm}
                                   >{\raggedright\arraybackslash}X
@@ -274,6 +277,7 @@ CodeGraph employs Tree-sitter for source code parsing, as introduced in \cref{ch
             \texttt{file::Class.method} \\
         \bottomrule
     \end{tabularx}
+    \end{adjustbox}
 \end{table}
 
 The qualified name scheme ensures global uniqueness across the repository. Two files may each define a function named \texttt{process}, but \texttt{models/user.py::process} and \texttt{utils/http.py::process} are distinct nodes in the graph. This identity scheme serves as the primary node key throughout the system for deduplication, lookup, and cross-referencing.
@@ -380,7 +384,7 @@ Ambiguous calls, those whose callee name matches multiple definitions, are dropp
 
 Three edge cases are worth calling out because they occur in real-world repositories.
 
-\paragraph{Circular imports.} Python permits circular imports at module level as long as symbols are not accessed at import time. CodeGraph handles them correctly because each file is parsed independently: import statements are simply recorded, not followed. The two-pass construction in \cref{sec:two-pass} then creates all \texttt{IMPORTS} edges once every file has been indexed, capturing both directions of a cycle without recursion.
+\paragraph{Circular imports.} Python permits circular imports at module level as long as symbols are not accessed at import time. CodeGraph handles them correctly because each file is parsed independently: import statements are recorded without immediate resolution, not followed. The two-pass construction in \cref{sec:two-pass} then creates all \texttt{IMPORTS} edges once every file has been indexed, capturing both directions of a cycle without recursion.
 
 \paragraph{Dynamic imports.} \texttt{importlib.import\_module()}, \texttt{\_\_import\_\_()}, and plugin-loading frameworks pass module names as runtime strings, which static analysis cannot resolve. These patterns are silently dropped. In heavily plugin-based codebases, the missing edges noticeably shrink the reachable set for queries that traverse them.
 
@@ -461,6 +465,7 @@ Four edge types capture the structural relationships between code entities. \Cre
     \caption[Edge types in the CodeGraph schema]{The four edge types in the code graph. All edges are created with a uniform base weight of 1.0, then overwritten by IDF-based reweighting (\cref{sec:idf-reweighting}) before each PPR computation.}
     \label{tab:edge-types}
     \renewcommand{\arraystretch}{1.3}
+    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.0cm}
                                   >{\raggedright\arraybackslash}p{3.8cm}
                                   >{\raggedright\arraybackslash}X
@@ -483,6 +488,7 @@ Four edge types capture the structural relationships between code entities. \Cre
             A class extends a parent class & 1.0 \\
         \bottomrule
     \end{tabularx}
+    \end{adjustbox}
 \end{table}
 
 \Cref{fig:graph-schema} shows the schema as an entity-relationship diagram. Together the four node types and four edge types capture the primary structural relationships in a Python codebase: containment, invocation, module dependency, and class inheritance.
@@ -1055,7 +1061,7 @@ CodeGraph implements an MCP server that wraps the entire retrieval pipeline as a
     \label{fig:agent-workflow}
 \end{figure}
 
-This workflow integrates naturally into existing agent frameworks that support MCP, including Claude Code, Cursor, and VS~Code Copilot. The agent requires no knowledge of graph algorithms or code parsing, it simply calls a tool with a task description and receives relevant source code in return.
+This workflow integrates naturally into existing agent frameworks that support MCP, including Claude Code, Cursor, and VS~Code Copilot. The agent requires no knowledge of graph algorithms or code parsing; it calls a tool with a task description and receives relevant source code in return.
 
 \subsection{System Prompt and Agent Guidance}
 \label{sec:system-prompt}

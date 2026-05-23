@@ -275,6 +275,7 @@ The systems surveyed in \cref{sec:related-work,sec:graph-systems} collectively d
     \caption{Design axes of the surveyed graph-based code retrieval systems. Each system improves on one or two axes at the expense of others; none covers all four simultaneously.}
     \label{tab:graph-systems}
     \renewcommand{\arraystretch}{1.5}
+    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{2.3cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
         \toprule
         \textbf{System} & \textbf{Granularity} & \textbf{Retrieval} & \textbf{Globally ranked?} & \textbf{Deterministic \& cheap?} \\
@@ -285,6 +286,7 @@ The systems surveyed in \cref{sec:related-work,sec:graph-systems} collectively d
         GraphCoder & Statement & Subgraph edit distance & Yes & No (NP-hard matching) \\
         \bottomrule
     \end{tabularx}
+    \end{adjustbox}
 \end{table}
 
 \Cref{fig:design-space} projects the surveyed systems onto the two axes from \cref{tab:graph-systems} that most directly shape retrieval behaviour: whether the retrieval output is globally ranked, and whether the retrieval step is deterministic and cheap. Each system improves along one axis at the expense of the other; the upper-right quadrant, where retrieval would be both globally ranked and deterministic, is empty.
