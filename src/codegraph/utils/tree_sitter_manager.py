@@ -58,7 +58,9 @@ class TreeSitterManager:
         # corresponding tree-sitter-* package and returns Language(...).
         if lang == "python":
             return Language(tspython.language())
-        raise ValueError(f"Unsupported language: {lang!r}. Supported: {list(self._cache) or ['python']}")
+        raise ValueError(
+            f"Unsupported language: {lang!r}. Supported: {list(self._cache) or ['python']}"
+        )
 
 
 _manager: TreeSitterManager | None = None

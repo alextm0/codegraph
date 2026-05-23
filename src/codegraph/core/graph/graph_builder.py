@@ -101,6 +101,7 @@ def build_graph(
     Returns:
         Dict with creation counts keyed by node/edge type.
     """
+
     def _report(stage: str, count: int) -> None:
         logger.debug("Graph build: %s → %d", stage, count)
         if progress_callback:
@@ -108,8 +109,16 @@ def build_graph(
 
     lookup = _build_entity_lookup(all_entities)
     all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
-    counts: dict[str, int] = {"File": 0, "Function": 0, "Class": 0, "Method": 0,
-                               "CONTAINS": 0, "CALLS": 0, "IMPORTS": 0, "INHERITS_FROM": 0}
+    counts: dict[str, int] = {
+        "File": 0,
+        "Function": 0,
+        "Class": 0,
+        "Method": 0,
+        "CONTAINS": 0,
+        "CALLS": 0,
+        "IMPORTS": 0,
+        "INHERITS_FROM": 0,
+    }
 
     ensure_constraints(driver)
 
@@ -127,16 +136,28 @@ def build_graph(
         _report("Method nodes", counts["Method"])
 
         # --- Edges ---
-        counts["CONTAINS"] += session.execute_write(_create_contains_function_edges, all_entities)
-        counts["CONTAINS"] += session.execute_write(_create_contains_class_edges, all_entities)
-        counts["CONTAINS"] += session.execute_write(_create_contains_method_edges, all_entities)
+        counts["CONTAINS"] += session.execute_write(
+            _create_contains_function_edges, all_entities
+        )
+        counts["CONTAINS"] += session.execute_write(
+            _create_contains_class_edges, all_entities
+        )
+        counts["CONTAINS"] += session.execute_write(
+            _create_contains_method_edges, all_entities
+        )
         _report("CONTAINS edges", counts["CONTAINS"])
         counts["INHERITS_FROM"] = session.execute_write(
-            _create_inherits_edges, all_entities, lookup, all_file_paths,
+            _create_inherits_edges,
+            all_entities,
+            lookup,
+            all_file_paths,
         )
         _report("INHERITS_FROM edges", counts["INHERITS_FROM"])
         counts["CALLS"] = session.execute_write(
-            _create_calls_edges, all_entities, lookup, all_file_paths,
+            _create_calls_edges,
+            all_entities,
+            lookup,
+            all_file_paths,
         )
         _report("CALLS edges", counts["CALLS"])
         counts["IMPORTS"] = session.execute_write(_create_imports_edges, all_entities)
@@ -150,10 +171,17 @@ def build_graph(
 # Private: node creation
 # ---------------------------------------------------------------------------
 
+
 def _create_file_nodes(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
     """Batch-create File nodes."""
-    nodes = [{"qualified_name": normalize_path(fe.file_path), "name": normalize_path(fe.file_path), "file_path": normalize_path(fe.file_path)}
-             for fe in all_entities]
+    nodes = [
+        {
+            "qualified_name": normalize_path(fe.file_path),
+            "name": normalize_path(fe.file_path),
+            "file_path": normalize_path(fe.file_path),
+        }
+        for fe in all_entities
+    ]
     result = tx.run(
         """
         UNWIND $nodes AS n
@@ -167,7 +195,9 @@ def _create_file_nodes(tx: ManagedTransaction, all_entities: list[FileEntities])
     return record["created"] if record else 0
 
 
-def _create_function_nodes(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+def _create_function_nodes(
+    tx: ManagedTransaction, all_entities: list[FileEntities]
+) -> int:
     """Batch-create Function nodes."""
     nodes = [
         {
@@ -199,7 +229,9 @@ def _create_function_nodes(tx: ManagedTransaction, all_entities: list[FileEntiti
     return record["created"] if record else 0
 
 
-def _create_class_nodes(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+def _create_class_nodes(
+    tx: ManagedTransaction, all_entities: list[FileEntities]
+) -> int:
     """Batch-create Class nodes."""
     nodes = [
         {
@@ -230,7 +262,9 @@ def _create_class_nodes(tx: ManagedTransaction, all_entities: list[FileEntities]
     return record["created"] if record else 0
 
 
-def _create_method_nodes(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+def _create_method_nodes(
+    tx: ManagedTransaction, all_entities: list[FileEntities]
+) -> int:
     """Batch-create Method nodes."""
     nodes = [
         {
@@ -267,10 +301,17 @@ def _create_method_nodes(tx: ManagedTransaction, all_entities: list[FileEntities
 # Private: edge creation
 # ---------------------------------------------------------------------------
 
-def _create_contains_function_edges(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+
+def _create_contains_function_edges(
+    tx: ManagedTransaction, all_entities: list[FileEntities]
+) -> int:
     """File -[CONTAINS]-> Function edges."""
     edges = [
-        {"src": normalize_path(fe.file_path), "dst": f"{normalize_path(fn.file_path)}::{fn.name}", "weight": EDGE_WEIGHTS["CONTAINS"]}
+        {
+            "src": normalize_path(fe.file_path),
+            "dst": f"{normalize_path(fn.file_path)}::{fn.name}",
+            "weight": EDGE_WEIGHTS["CONTAINS"],
+        }
         for fe in all_entities
         for fn in fe.functions
     ]
@@ -291,10 +332,16 @@ def _create_contains_function_edges(tx: ManagedTransaction, all_entities: list[F
     return record["created"] if record else 0
 
 
-def _create_contains_class_edges(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+def _create_contains_class_edges(
+    tx: ManagedTransaction, all_entities: list[FileEntities]
+) -> int:
     """File -[CONTAINS]-> Class edges."""
     edges = [
-        {"src": normalize_path(fe.file_path), "dst": f"{normalize_path(cls.file_path)}::{cls.name}", "weight": EDGE_WEIGHTS["CONTAINS"]}
+        {
+            "src": normalize_path(fe.file_path),
+            "dst": f"{normalize_path(cls.file_path)}::{cls.name}",
+            "weight": EDGE_WEIGHTS["CONTAINS"],
+        }
         for fe in all_entities
         for cls in fe.classes
     ]
@@ -315,7 +362,9 @@ def _create_contains_class_edges(tx: ManagedTransaction, all_entities: list[File
     return record["created"] if record else 0
 
 
-def _create_contains_method_edges(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+def _create_contains_method_edges(
+    tx: ManagedTransaction, all_entities: list[FileEntities]
+) -> int:
     """Class -[CONTAINS]-> Method edges."""
     edges = [
         {
@@ -358,9 +407,19 @@ def _create_inherits_edges(
             for base in cls.bases:
                 dst_qname = _resolve_base_class(base, lookup, fe.file_path, import_map)
                 if dst_qname:
-                    edges.append({"src": src_qname, "dst": dst_qname, "weight": EDGE_WEIGHTS["INHERITS_FROM"]})
+                    edges.append(
+                        {
+                            "src": src_qname,
+                            "dst": dst_qname,
+                            "weight": EDGE_WEIGHTS["INHERITS_FROM"],
+                        }
+                    )
                 else:
-                    logger.debug("INHERITS_FROM: could not resolve base '%s' for class '%s'", base, cls.name)
+                    logger.debug(
+                        "INHERITS_FROM: could not resolve base '%s' for class '%s'",
+                        base,
+                        cls.name,
+                    )
     if not edges:
         return 0
     result = tx.run(
@@ -399,7 +458,13 @@ def _create_calls_edges(
             src_qname = _resolve_caller(call.caller_name, fe.file_path)
             dst_qname = _resolve_callee(callee, lookup, fe.file_path, import_map)
             if src_qname and dst_qname:
-                edges.append({"src": src_qname, "dst": dst_qname, "weight": EDGE_WEIGHTS["CALLS"]})
+                edges.append(
+                    {
+                        "src": src_qname,
+                        "dst": dst_qname,
+                        "weight": EDGE_WEIGHTS["CALLS"],
+                    }
+                )
             else:
                 logger.debug(
                     "CALLS: could not resolve '%s' -> '%s'", call.caller_name, callee
@@ -423,7 +488,9 @@ def _create_calls_edges(
     return record["created"] if record else 0
 
 
-def _create_imports_edges(tx: ManagedTransaction, all_entities: list[FileEntities]) -> int:
+def _create_imports_edges(
+    tx: ManagedTransaction, all_entities: list[FileEntities]
+) -> int:
     """File -[IMPORTS]-> File edges (module path -> file path resolution)."""
     all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
     edges = []
@@ -432,9 +499,19 @@ def _create_imports_edges(tx: ManagedTransaction, all_entities: list[FileEntitie
         for imp in fe.imports:
             dst_path = _resolve_import_to_file_path(imp.module_path, all_file_paths)
             if dst_path:
-                edges.append({"src": src_path, "dst": dst_path, "weight": EDGE_WEIGHTS["IMPORTS"]})
+                edges.append(
+                    {
+                        "src": src_path,
+                        "dst": dst_path,
+                        "weight": EDGE_WEIGHTS["IMPORTS"],
+                    }
+                )
             else:
-                logger.debug("IMPORTS: could not resolve module '%s' from '%s'", imp.module_path, fe.file_path)
+                logger.debug(
+                    "IMPORTS: could not resolve module '%s' from '%s'",
+                    imp.module_path,
+                    fe.file_path,
+                )
     if not edges:
         return 0
     result = tx.run(
@@ -450,6 +527,3 @@ def _create_imports_edges(tx: ManagedTransaction, all_entities: list[FileEntitie
     )
     record = result.single()
     return record["created"] if record else 0
-
-
-

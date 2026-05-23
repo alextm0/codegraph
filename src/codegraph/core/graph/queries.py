@@ -68,7 +68,9 @@ def count_edges_by_type(driver: Driver | None = None) -> dict[str, int]:
         return {record["rel_type"]: record["cnt"] for record in result}
 
 
-def get_neighbors(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
+def get_neighbors(
+    driver: Driver | None = None, qualified_name: str = ""
+) -> list[NodeInfo]:
     """Return all nodes directly connected (in either direction) to the given node."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -87,7 +89,9 @@ def get_neighbors(driver: Driver | None = None, qualified_name: str = "") -> lis
         return [_row_to_node_info(r) for r in result]
 
 
-def get_file_contents(driver: Driver | None = None, file_path: str = "") -> list[NodeInfo]:
+def get_file_contents(
+    driver: Driver | None = None, file_path: str = ""
+) -> list[NodeInfo]:
     """Return all entities directly contained in a file."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -106,7 +110,9 @@ def get_file_contents(driver: Driver | None = None, file_path: str = "") -> list
         return [_row_to_node_info(r) for r in result]
 
 
-def find_callers(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
+def find_callers(
+    driver: Driver | None = None, qualified_name: str = ""
+) -> list[NodeInfo]:
     """Return all nodes that call the given node."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -125,7 +131,9 @@ def find_callers(driver: Driver | None = None, qualified_name: str = "") -> list
         return [_row_to_node_info(r) for r in result]
 
 
-def find_callees(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
+def find_callees(
+    driver: Driver | None = None, qualified_name: str = ""
+) -> list[NodeInfo]:
     """Return all nodes called by the given node."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -163,7 +171,9 @@ def find_node_by_name(driver: Driver | None = None, name: str = "") -> list[Node
         return [_row_to_node_info(r) for r in result]
 
 
-def find_node_by_pattern(driver: Driver | None = None, pattern: str = "") -> list[NodeInfo]:
+def find_node_by_pattern(
+    driver: Driver | None = None, pattern: str = ""
+) -> list[NodeInfo]:
     """Return all nodes whose name property contains the given pattern (case-insensitive)."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -184,7 +194,9 @@ def find_node_by_pattern(driver: Driver | None = None, pattern: str = "") -> lis
         return [_row_to_node_info(r) for r in result]
 
 
-def get_inheritance_chain(driver: Driver | None = None, class_qname: str = "") -> list[NodeInfo]:
+def get_inheritance_chain(
+    driver: Driver | None = None, class_qname: str = ""
+) -> list[NodeInfo]:
     """Return the full inheritance chain (ancestors) of a class, ordered from immediate parent upward."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -295,7 +307,9 @@ def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[DeadCo
         ]
 
 
-def get_most_connected_files(driver: Driver | None = None, limit: int = 10) -> list[dict]:
+def get_most_connected_files(
+    driver: Driver | None = None, limit: int = 10
+) -> list[dict]:
     """Return files ranked by number of directly contained entities.
 
     Useful for understanding which files are the most structurally
@@ -327,6 +341,7 @@ def get_most_connected_files(driver: Driver | None = None, limit: int = 10) -> l
 # ---------------------------------------------------------------------------
 # Private helpers for query_entity_dependencies
 # ---------------------------------------------------------------------------
+
 
 def _validate_direction(direction: str) -> None:
     """Raise ValueError if direction is not one of the supported values."""

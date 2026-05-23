@@ -9,7 +9,6 @@ Design notes:
 """
 
 import logging
-import math
 import re
 from dataclasses import dataclass, field
 from neo4j import Driver
@@ -126,7 +125,9 @@ def extract_seeds(
         logger.debug("Current file seeds: %d", len(file_seeds))
 
     if not all_seeds:
-        logger.warning("extract_seeds: no seeds found for task '%s'", task_description[:80])
+        logger.warning(
+            "extract_seeds: no seeds found for task '%s'", task_description[:80]
+        )
         return PersonalizationVector(seeds={})
 
     return _normalize_seeds(all_seeds)
@@ -189,8 +190,13 @@ def prepare_bm25_index(
     # Build corpus: each doc is the tokenized name + file_path + signature + docstring.
     corpus_tokens = [
         tokenize(
-            row["name"] + " " + row["file_path"] + " " +
-            row["signature"] + " " + row["docstring"]
+            row["name"]
+            + " "
+            + row["file_path"]
+            + " "
+            + row["signature"]
+            + " "
+            + row["docstring"]
         )
         for row in rows
     ]
@@ -200,6 +206,7 @@ def prepare_bm25_index(
 # ---------------------------------------------------------------------------
 # Private: signal extractors
 # ---------------------------------------------------------------------------
+
 
 def _match_entities(
     driver: Driver,
@@ -258,7 +265,9 @@ def _match_entities(
         logger.debug("Entity match: no nodes found for %s", mentioned_entities)
     else:
         logger.debug(
-            "Entity match: %d seeds from %d entities", len(seeds), len(matches_by_entity)
+            "Entity match: %d seeds from %d entities",
+            len(seeds),
+            len(matches_by_entity),
         )
     return seeds
 
@@ -289,8 +298,13 @@ def _bm25_search(
             return []
         corpus_tokens = [
             tokenize(
-                row["name"] + " " + row["file_path"] + " " +
-                row["signature"] + " " + row["docstring"]
+                row["name"]
+                + " "
+                + row["file_path"]
+                + " "
+                + row["signature"]
+                + " "
+                + row["docstring"]
             )
             for row in rows
         ]
@@ -362,6 +376,7 @@ def _current_file_seeds(
 # ---------------------------------------------------------------------------
 # Private: normalization and helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalize_seeds(all_seeds: list[SeedNode]) -> PersonalizationVector:
     """Merge duplicate node IDs (sum weights) and normalize to sum to 1.0."""
@@ -447,8 +462,8 @@ def tokenize(text: str) -> list[str]:
         List of lowercase tokens with length > 1 (filters single chars).
     """
     # Split CamelCase: "SQLCompiler" -> "SQL Compiler", "handleSubQuery" -> "handle Sub Query"
-    text = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', text)
-    text = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1 \2', text)
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
     # Split on all non-alphanumeric (underscores split too, unlike before)
     tokens = re.split(r"[^a-z0-9]+", text.lower())
     return [tok for tok in tokens if len(tok) > 1]

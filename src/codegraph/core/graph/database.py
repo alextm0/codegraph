@@ -5,7 +5,7 @@ import threading
 
 from neo4j import GraphDatabase, Driver
 
-from codegraph.core.graph.connection import load_config, Neo4jConfig
+from codegraph.core.graph.connection import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class DatabaseManager:
                     try:
                         self._driver = GraphDatabase.driver(
                             self._config.uri,
-                            auth=(self._config.username, self._config.password)
+                            auth=(self._config.username, self._config.password),
                         )
                         logger.debug("Created Neo4j driver for %s", self._config.uri)
                     except Exception as e:

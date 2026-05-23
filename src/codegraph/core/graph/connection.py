@@ -31,16 +31,19 @@ def load_config(config_path: str | Path) -> Neo4jConfig:
             data = yaml.safe_load(f) or {}
 
     neo4j = data.get("neo4j", {})
-    
+
     uri = os.getenv("NEO4J_URI", neo4j.get("uri"))
     username = os.getenv("NEO4J_USERNAME", neo4j.get("username"))
     password = os.getenv("NEO4J_PASSWORD", neo4j.get("password"))
 
     if not all([uri, username, password]):
         missing = []
-        if not uri: missing.append("NEO4J_URI")
-        if not username: missing.append("NEO4J_USERNAME")
-        if not password: missing.append("NEO4J_PASSWORD")
+        if not uri:
+            missing.append("NEO4J_URI")
+        if not username:
+            missing.append("NEO4J_USERNAME")
+        if not password:
+            missing.append("NEO4J_PASSWORD")
         raise ValueError(f"Missing mandatory Neo4j configuration: {', '.join(missing)}")
 
     return Neo4jConfig(

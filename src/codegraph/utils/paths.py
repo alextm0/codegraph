@@ -23,6 +23,6 @@ def make_relative_qualified_name(
     Returns qualified_name unchanged if it doesn't start with abs_file_path.
     """
     if abs_file_path and qualified_name.startswith(abs_file_path):
-        suffix = qualified_name[len(abs_file_path):]
+        suffix = qualified_name[len(abs_file_path) :]
         return rel_file_path + suffix
     return qualified_name

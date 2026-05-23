@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 # Load .env file if present
 load_dotenv()
 
+
 def load_raw_config(config_path: str | Path) -> dict:
     """Load the entire config.yaml as a dictionary."""
     path = Path(config_path)
@@ -13,6 +14,7 @@ def load_raw_config(config_path: str | Path) -> dict:
         return {}
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
+
 
 def resolve_project_root(config: dict, config_path: Path) -> Path:
     """Resolve the absolute project root path."""

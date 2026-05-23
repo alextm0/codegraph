@@ -31,6 +31,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 # Pydantic models — must be at module level so FastAPI can resolve annotations
 # ---------------------------------------------------------------------------
 
+
 class QueryRequest(BaseModel):
     task: str
     top_k: int = 10
@@ -88,6 +89,7 @@ class SubgraphResponse(BaseModel):
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _fetch_seed_names(driver: Driver, seed_ids: list[int]) -> dict[int, str]:
     """Return {node_id: display_name} for a list of seed node IDs."""
     names: dict[int, str] = {}
@@ -130,8 +132,16 @@ def _run_query(
     top_k: int,
 ) -> QueryResponse:
     """Core logic: run PPR + BM25 + subgraph, return a QueryResponse."""
-    from codegraph.core.retrieval.seed_selection import extract_seeds, prepare_bm25_index, extract_entity_names
-    from codegraph.core.graph.ppr import PPRConfig, create_gds_client, run_ppr_from_node_ids
+    from codegraph.core.retrieval.seed_selection import (
+        extract_seeds,
+        prepare_bm25_index,
+        extract_entity_names,
+    )
+    from codegraph.core.graph.ppr import (
+        PPRConfig,
+        create_gds_client,
+        run_ppr_from_node_ids,
+    )
     from codegraph.core.retrieval.pipeline import ensure_graph_ready
     from codegraph.core.graph.queries import trace_path_to_seed, get_subgraph_for_nodes
     from codegraph.utils.config import parse_signal_weights
@@ -140,11 +150,13 @@ def _run_query(
     seed_section = raw_config.get("seed_selection", {})
     exclude_seed_paths = seed_section.get("exclude_seed_paths") or None
     signal_weights = parse_signal_weights(seed_section)
-    
+
     # Auto-augment mentioned_entities from task text
     auto_entities = extract_entity_names(task)
-    
-    bm25_index, searchable_nodes = prepare_bm25_index(driver, exclude_paths=exclude_seed_paths)
+
+    bm25_index, searchable_nodes = prepare_bm25_index(
+        driver, exclude_paths=exclude_seed_paths
+    )
     seeds = extract_seeds(
         driver,
         task_description=task,
@@ -163,7 +175,9 @@ def _run_query(
         SeedInfo(
             id=seeds.metadata[nid]["qname"],
             name=seed_names.get(nid, str(nid)),
-            signal="entity" if seeds.metadata[nid]["source"] == "entity_match" else "bm25",
+            signal="entity"
+            if seeds.metadata[nid]["source"] == "entity_match"
+            else "bm25",
             weight=round(weight, 4),
         )
         for nid, weight in sorted(seeds.seeds.items(), key=lambda x: -x[1])
@@ -180,14 +194,16 @@ def _run_query(
     )
     gds = create_gds_client(driver)
     ensure_graph_ready(driver, gds)
-    
+
     # Step 3: Run PPR
     ppr_results_raw = run_ppr_from_node_ids(gds, driver, seeds.seeds, ppr_config)
 
     # Deduplicate by file_path for the list view (keeps UI clean)
     best_per_file: dict[str, float] = {}
     for r in ppr_results_raw:
-        if r.file_path and (r.file_path not in best_per_file or r.score > best_per_file[r.file_path]):
+        if r.file_path and (
+            r.file_path not in best_per_file or r.score > best_per_file[r.file_path]
+        ):
             best_per_file[r.file_path] = r.score
     top_files = sorted(best_per_file.items(), key=lambda x: -x[1])[:top_k]
 
@@ -211,8 +227,12 @@ def _run_query(
 
     subgraph = get_subgraph_for_nodes(driver, all_qnames)
 
-    ppr_score_by_qname = {r.qualified_name: r.score for r in ppr_results_raw if r.qualified_name}
-    seed_weight_by_qname = {seeds.metadata[nid]["qname"]: weight for nid, weight in seeds.seeds.items()}
+    ppr_score_by_qname = {
+        r.qualified_name: r.score for r in ppr_results_raw if r.qualified_name
+    }
+    seed_weight_by_qname = {
+        seeds.metadata[nid]["qname"]: weight for nid, weight in seeds.seeds.items()
+    }
 
     annotated_nodes = [
         {
@@ -230,13 +250,14 @@ def _run_query(
         bm25_results=[],  # Removed BM25 comparison as per user request
         graph={"nodes": annotated_nodes, "edges": subgraph["edges"]},
         damping_factor=damping_factor,
-        top_k=top_k
+        top_k=top_k,
     )
 
 
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
+
 
 def create_app(
     driver: Driver,
@@ -326,26 +347,27 @@ def create_app(
         """Return full detail for a single node."""
         try:
             from codegraph.core.graph.queries import get_node_detail
+
             detail = get_node_detail(driver, qname)
             if not detail:
                 raise HTTPException(status_code=404, detail=f"Node '{qname}' not found")
-            
+
             source_snippet = None
             file_path = detail["node"].get("file_path")
             line_start = detail["node"].get("line_number", 0)
             line_end = detail["node"].get("end_line", 0)
-            
+
             if file_path and project_root:
                 full_path = Path(project_root) / file_path
                 if full_path.exists() and line_start > 0:
                     try:
                         with open(full_path, "r", encoding="utf-8") as f:
                             lines = f.readlines()
-                            snippet_lines = lines[max(0, line_start-1):line_end]
+                            snippet_lines = lines[max(0, line_start - 1) : line_end]
                             source_snippet = "".join(snippet_lines)
                     except Exception:
                         pass
-            
+
             detail["source_snippet"] = source_snippet
             return detail
         except HTTPException:
@@ -359,6 +381,7 @@ def create_app(
         """Return a subgraph filtered by file_path prefix."""
         try:
             from codegraph.core.graph.queries import get_subgraph_by_prefix
+
             data = get_subgraph_by_prefix(driver, focus)
             return SubgraphResponse(graph=data, focus_path=focus)
         except Exception as e:

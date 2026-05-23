@@ -12,7 +12,12 @@ from graphdatascience import GraphDataScience
 from graphdatascience.graph.graph_object import Graph
 from neo4j import Driver
 
-from codegraph.core.graph.ppr import PPRConfig, drop_projection, project_graph, run_ppr_from_node_ids
+from codegraph.core.graph.ppr import (
+    PPRConfig,
+    drop_projection,
+    project_graph,
+    run_ppr_from_node_ids,
+)
 from codegraph.core.retrieval.post_processing import (
     ContextResult,
     apply_idf_weights,
@@ -20,7 +25,6 @@ from codegraph.core.retrieval.post_processing import (
     reset_base_weights,
 )
 from codegraph.core.retrieval.seed_selection import (
-    PersonalizationVector,
     extract_entity_names,
     extract_seeds,
     prepare_bm25_index,
@@ -56,7 +60,9 @@ def run_retrieval_pipeline(
     ]
 
     # Pre-build BM25 index once for reuse in seed selection and directory injection.
-    bm25_index, searchable_nodes = prepare_bm25_index(driver, exclude_paths=exclude_seed_paths)
+    bm25_index, searchable_nodes = prepare_bm25_index(
+        driver, exclude_paths=exclude_seed_paths
+    )
 
     # Step 1: Extract seeds from the task description.
     seeds = extract_seeds(
@@ -126,7 +132,9 @@ def ensure_graph_ready(
 
     logger.info("Refreshing GDS projection with updated weights...")
     drop_projection(gds)
-    projection = project_graph(gds, relationship_types=relationship_types, orientation=orientation)
+    projection = project_graph(
+        gds, relationship_types=relationship_types, orientation=orientation
+    )
 
     logger.info(
         "GDS projection ready: %d nodes, %d relationships",

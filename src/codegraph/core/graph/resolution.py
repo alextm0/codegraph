@@ -118,7 +118,9 @@ def _resolve_callee(
 
     # Ambiguous globally — log and skip rather than guess wrong.
     logger.debug(
-        "Ambiguous callee '%s': %d candidates, skipping", callee_name, len(candidates),
+        "Ambiguous callee '%s': %d candidates, skipping",
+        callee_name,
+        len(candidates),
     )
     return None
 
@@ -158,11 +160,15 @@ def _resolve_base_class(
     if len(candidates) == 1:
         return candidates[0]
 
-    logger.debug("Ambiguous base class '%s': %d candidates, skipping", base_name, len(candidates))
+    logger.debug(
+        "Ambiguous base class '%s': %d candidates, skipping", base_name, len(candidates)
+    )
     return None
 
 
-def _resolve_import_to_file_path(module_path: str, all_file_paths: list[str]) -> str | None:
+def _resolve_import_to_file_path(
+    module_path: str, all_file_paths: list[str]
+) -> str | None:
     """Find a known file path that corresponds to the given dotted module path.
 
     Strategy: convert 'user_auth.models.user' to 'models/user.py' by progressively
