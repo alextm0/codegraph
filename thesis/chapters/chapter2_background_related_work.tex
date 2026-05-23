@@ -14,7 +14,7 @@ This chapter identifies the constraints of code retrieval for LLM-based agents. 
 \subsection{Tree-sitter and Static Analysis}
 \label{sec:treesitter-bg}
 
-Source code structure can be extracted through \emph{static analysis}, which examines source text without program execution. Modern static analysis tools use incremental parsing libraries such as \texttt{tree-sitter}~\cite{treesitter}. Unlike traditional compiler-based parsers, \texttt{tree-sitter} is designed to be:
+Source code structure can be extracted through \emph{static analysis}, which examines source text without program execution. Modern static analysis tools use incremental parsing libraries such as \texttt{Tree-sitter}~\cite{treesitter}. Unlike traditional compiler-based parsers, \texttt{Tree-sitter} is designed to be:
 \begin{itemize}
     \item \textbf{General:} It supports a wide range of programming languages through a unified grammar system.
     \item \textbf{Robust:} It can parse syntactically incomplete or erroneous code, which is common in active development environments.
@@ -86,6 +86,7 @@ Graph-based retrieval methods represent code relationships as edges in a typed d
     \caption{Comparison of code retrieval methodologies along key performance and implementation dimensions.}
     \label{tab:retrieval-comparison}
     \renewcommand{\arraystretch}{1.6}
+    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{2.1cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
         \toprule
         & \textbf{Sparse} & \textbf{Dense} & \textbf{Graph-based} \\
@@ -98,6 +99,7 @@ Graph-based retrieval methods represent code relationships as edges in a typed d
         Training required & None & Fine-tuning on code--query pairs & None for retrieval; requires graph construction \\
         \bottomrule
     \end{tabularx}
+    \end{adjustbox}
 \end{table}
 
 \begin{figure}[H]

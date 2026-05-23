@@ -15,6 +15,7 @@
 \usepackage{caption}        % caption customization
 \usepackage{subcaption}     % subfigures
 \usepackage{float}          % exact placement [H]
+\usepackage{adjustbox}      % scale tables to fit
 \usepackage{amsmath}        % math environments
 \usepackage{amssymb}        % math symbols
 \usepackage{enumitem}       % list customization
@@ -82,7 +83,8 @@
 % TikZ and graphics
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, shapes.geometric, backgrounds, fit, decorations.markings, calc, shadows.blur}
-\usepackage{cleveref}
+\usepackage[unicode, plainpages=false, pdfpagelabels]{hyperref}
+\usepackage[capitalise]{cleveref}
 
 \tikzset{
     lattice_stage/.style={

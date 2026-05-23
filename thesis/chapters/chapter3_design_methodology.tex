@@ -179,7 +179,7 @@ The design principle this example illustrates is \emph{signal amplification}. Se
         \rowcolor{black!6}
         \textbf{Stage} & \textbf{Phase} & \textbf{Dominant Operation} & \textbf{Complexity} \\
         \midrule
-        Stage 1: Parsing & Offline & tree-sitter CST traversal and entity extraction & $O(n \cdot m)$ \\
+        Stage 1: Parsing & Offline & Tree-sitter CST traversal and entity extraction & $O(n \cdot m)$ \\
         Stage 2: Graph Construction & Offline & Batched \texttt{UNWIND+MERGE} node/edge writes & $O(|V| + |E|)$ \\
         IDF Reweighting & Online & Edge weight update across all edges & $O(|E|)$ \\
         Stage 3: Seed Selection & Online & BM25 index query and entity lookup & $O(q \cdot |V|)$ \\
@@ -200,17 +200,18 @@ The following sections examine each stage in detail, beginning with how raw sour
 \section{Source Code Parsing}
 \label{sec:parsing}
 
-Graph-based retrieval requires an explicit representation of which code units exist and how they relate to each other. A Python source file is just text until a parser identifies meaningful units, classes, functions, methods, and the relationships between them. This section describes how CodeGraph uses tree-sitter to convert source files into a typed entity model that feeds directly into graph construction (\cref{sec:graph-construction}).
+Graph-based retrieval requires an explicit representation of which code units exist and how they relate to each other. A Python source file is just text until a parser identifies meaningful units, classes, functions, methods, and the relationships between them. This section describes how CodeGraph uses Tree-sitter to convert source files into a typed entity model that feeds directly into graph construction (\cref{sec:graph-construction}).
 
 The granularity at which entities are extracted shapes both graph size and retrieval quality, so it warrants explicit justification. A file-level model is too coarse: if \texttt{auth.py} contains both \texttt{LoginView.authenticate()} and the unrelated helper \texttt{parse\_user\_agent()}, both collapse into a single node and retrieval cannot separate them. Tracking every AST node is the opposite extreme, local variables and expressions inflate the graph into hundreds of thousands of nodes, PPR convergence slows past ten seconds, and local-scope noise overwhelms the structural signal.
 
-The four-entity model (files, classes, functions, methods) occupies the productive middle ground. It captures the cross-file relationships developers actually reason about, such as the \texttt{authenticate} method calling \texttt{hash\_password}, while keeping the graph small enough for sub-second retrieval. These four units also match how Python code is organized: classes, functions, and methods are the importable and callable components, which is the granularity at which dependency-driven retrieval is most effective. \Cref{fig:entity-granularity} compares the three options across graph size, retrieval speed, and recall.
+The four-entity model (files, classes, functions, methods) occupies the productive middle ground. It captures the cross-file relationships developers actually reason about, such as the \texttt{authenticate} method calling \texttt{hash\_password}, while keeping the graph small enough for sub-second retrieval. These four units also match how Python code is organized: classes, functions, and methods are the importable and callable components, which is the granularity at which dependency-driven retrieval is most effective. \Cref{tab:entity-granularity} compares the three options across graph size, retrieval speed, and recall.
 
 \begin{table}[H]
     \centering
     \caption[Entity granularity options]{Comparison of three entity granularity options. The four-type model achieves the best recall while preserving sub-second query latency. \checkmark\,indicates the selected design.}
-    \label{fig:entity-granularity}
+    \label{tab:entity-granularity}
     \renewcommand{\arraystretch}{1.3}
+    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X
                                   >{\centering\arraybackslash}p{2.2cm}
                                   >{\centering\arraybackslash}p{2.2cm}
@@ -226,16 +227,17 @@ The four-entity model (files, classes, functions, methods) occupies the producti
         \midrule
         \rowcolor[HTML]{FEF2F2}
         Limitation & Cannot distinguish methods within a file &
-           ,  &
+           ---  &
             Too slow; local variable noise overwhelms signal \\
         \bottomrule
     \end{tabularx}
+    \end{adjustbox}
 \end{table}
 
-\subsection{Parsing with tree-sitter}
+\subsection{Parsing with Tree-sitter}
 \label{sec:parsing-treesitter}
 
-CodeGraph employs tree-sitter for source code parsing, as introduced in \cref{ch:background}. From each Python file, the parser extracts four types of code entities: files, classes, functions, and methods. Each entity receives a \emph{qualified name}, a string that uniquely identifies it within the repository.
+CodeGraph employs Tree-sitter for source code parsing, as introduced in \cref{ch:background}. From each Python file, the parser extracts four types of code entities: files, classes, functions, and methods. Each entity receives a \emph{qualified name}, a string that uniquely identifies it within the repository.
 
 \Cref{tab:entity-types} summarizes the four entity types, their key properties, and the qualified name format for each.
 
@@ -277,7 +279,7 @@ The qualified name scheme ensures global uniqueness across the repository. Two f
 \subsection{Import Resolution}
 \label{sec:import-resolution}
 
-Import statements declare cross-file dependencies, but tree-sitter returns only the raw import string; it does not identify which file on disk that string refers to. Import resolution closes this gap, turning each import into an \texttt{IMPORTS} edge between the importing file and its target.
+Import statements declare cross-file dependencies, but Tree-sitter returns only the raw import string; it does not identify which file on disk that string refers to. Import resolution closes this gap, turning each import into an \texttt{IMPORTS} edge between the importing file and its target.
 
 The resolver handles three categories of imports:
 \begin{itemize}[leftmargin=*, itemsep=2pt]
@@ -380,7 +382,7 @@ Three edge cases are worth calling out because they occur in real-world reposito
 
 \paragraph{Dynamic imports.} \texttt{importlib.import\_module()}, \texttt{\_\_import\_\_()}, and plugin-loading frameworks pass module names as runtime strings, which static analysis cannot resolve. These patterns are silently dropped. In heavily plugin-based codebases, the missing edges noticeably shrink the reachable set for queries that traverse them.
 
-\paragraph{Large files.} tree-sitter parses in linear time, so a 5{,}000-line file costs only marginally more than five 1{,}000-line files. The bottleneck on large repositories is graph construction (Neo4j writes), not parsing. Files above roughly 10{,}000 lines are rare in well-maintained projects and did not appear in the SWE-bench evaluation set.
+\paragraph{Large files.} Tree-sitter parses in linear time, so a 5{,}000-line file costs only marginally more than five 1{,}000-line files. The bottleneck on large repositories is graph construction (Neo4j writes), not parsing. Files above roughly 10{,}000 lines are rare in well-maintained projects and did not appear in the SWE-bench evaluation set.
 
 \Cref{fig:parsing-extraction} shows the full parsing pipeline, from source code through entity extraction to resolved edges. The next stage assembles these entities into a weighted property graph.
 
@@ -605,7 +607,7 @@ The second pass resolves forward references: a call in file~A may target a funct
 
 \noindent\textbf{Pass 1,  intra-file construction:}
 \begin{enumerate}[leftmargin=*, itemsep=3pt]
-    \item Parse each Python file with tree-sitter to produce a concrete syntax tree.
+    \item Parse each Python file with Tree-sitter to produce a concrete syntax tree.
     \item Extract all entities: \texttt{File}, \texttt{Class}, \texttt{Function}, and \texttt{Method} nodes.
     \item Write entity nodes to Neo4j using batched \texttt{UNWIND+MERGE} operations (idempotent).
     \item Create \texttt{CONTAINS} edges: File $\to$ Class/Function, and Class $\to$ Method.
@@ -1084,7 +1086,7 @@ Every design involves trade-offs. The decisions described in this chapter, stati
 \section{Chapter Summary}
 \label{sec:design-summary}
 
-This chapter presented the design of the CodeGraph retrieval pipeline. The system transforms a Python repository into a weighted property graph via tree-sitter parsing and two-pass graph construction, translates a natural language task description into a personalization vector via multi-signal seed selection, ranks all graph nodes by structural relevance via Personalized PageRank, and delivers the top-$k$ results to an AI agent through an MCP server interface.
+This chapter presented the design of the CodeGraph retrieval pipeline. The system transforms a Python repository into a weighted property graph via Tree-sitter parsing and two-pass graph construction, translates a natural language task description into a personalization vector via multi-signal seed selection, ranks all graph nodes by structural relevance via Personalized PageRank, and delivers the top-$k$ results to an AI agent through an MCP server interface.
 
 Three organizing principles guided the design decisions described in this chapter. \emph{Parsimony}: CodeGraph performs only static analysis, avoiding the complexity and runtime cost of dynamic analysis, type inference, or execution tracing, accepting known blind spots (dynamic imports, duck-typed calls) in exchange for simplicity and speed. \emph{Composability}: each stage has a well-defined input and output type, so individual components can be improved, replaced, or extended without affecting the rest of the pipeline, as demonstrated by the iterative seed quality improvements in \cref{ch:evaluation}. \emph{Empiricism}: parameter choices, damping factor, top-$k$, signal weights, token budget, were selected based on measured benchmark performance rather than theoretical defaults. Together, these principles produce a system that is easy to reason about, straightforward to extend, and grounded in observed rather than assumed behavior.
 

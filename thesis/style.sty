@@ -8,7 +8,6 @@
 \usepackage{graphicx}                           % images
 \usepackage{url}                                % links
 \usepackage[nottoc, notlof, notlot]{tocbibind}  % table of contents style
-\usepackage[unicode, plainpages=false, pdfpagelabels]{hyperref}                  % references from the table of contents
 \usepackage{etoolbox,ifthen} 	                % ifthen type of commands
 \usepackage{kvoptions}	                        % define key/value pairs as options for packages and classes
 
@@ -22,7 +21,7 @@
 }
 
 % bib style
-\bibliographystyle{alpha}
+\bibliographystyle{plain}
 
 % define the boolean variables in which we store the options chosen for the package (language and type of document)
 \newbool{@eng}\setbool{@eng}{false}
