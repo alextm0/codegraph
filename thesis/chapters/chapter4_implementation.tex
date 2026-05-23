@@ -492,7 +492,26 @@ Given that AI agents often operate autonomously, the implementation includes rob
     \label{fig:mcp-sequence}
 \end{figure}
 
-The finalized payload, transmitted as a structured JSON response, contains a list of objects including the file path, the relevance score, and the raw code. This deterministic response allows the agent to immediately integrate the context into its internal reasoning window.
+The finalized payload, transmitted as a structured JSON response, includes a list of objects including the file path, the relevance score, and the raw code. This deterministic response allows the agent to immediately integrate the context into its internal reasoning window.
+
+% =============================================================================
+\section{System Observability and the Visualizer Interface}
+\label{sec:system-observability}
+% =============================================================================
+
+The interactive components of CodeGraph provide a window into the deterministic ranking process, transforming an abstract algorithmic sequence into a visually diagnosable engineering metric. We developed a dedicated Visualizer Graphical User Interface (GUI) to facilitate system debugging, mathematical traceability, and structural analysis.
+
+\subsection{Topological Node Visualization}
+
+The primary visualization pane renders the repository structure dynamically as a topological map. We use a distinct color-coding schema to differentiate the fundamental entity types: blue nodes represent Files, amber nodes represent Functions, and green nodes represent Classes. These entities are interconnected by explicit, typed edges representing \textsc{contains}, \textsc{calls}, and \textsc{imports} relationships. This map provides real-time observability of the graph construction and allows us to visually trace the propagation of Personalized PageRank mass across the codebase.
+
+\subsection{Seed Signals and Mathematical Traceability}
+
+To ensure the transparency of the ranking engine, the interface includes a dedicated \textsc{seed.signals} panel. This component provides a breakdown of the personalization vector distribution for a given query. It explicitly lists the weights assigned to each identified seed node, separating direct entity matches from lexical BM25 scores. This transparency was instrumental in diagnosing the ``Weighted Restart'' failure mode and validating the effectiveness of the ``Uniform Restart'' paradigm.
+
+\subsection{Node Inspection and Execution Results}
+
+The GUI allows for granular inspection of individual graph nodes through a \textsc{node.inspect} panel. Selecting a node reveals its structural metadata, incoming and outgoing relationships, and its current PPR relevance score. Finally, the \textsc{ranked results} interface displays the exact output package as it would be delivered to an MCP agent, including file-level deduplication and token budget constraints. By integrating these visual tools, we establish a deterministic and observable foundation for repository-scale code retrieval.
 
 % =============================================================================
 \section{Summary}
