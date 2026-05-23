@@ -265,7 +265,7 @@ The improvement follows a three-stage trajectory:
 
 When we inspected the distribution of ranks for the target file, we found a bimodal pattern: for most issues, the target file is either in the top-5 results or not in the top-10 at all. Only 15 out of 300 instances (5\%) fall in the middle ranks (ranks 6--10). This pattern holds across configurations and repositories.
 
-This is strong evidence that the PPR ranking step is not the primary bottleneck. Once a seed lands in the structural neighbourhood of the target file, PPR almost always pushes that file into the top-5. The dominant failure mode is reachability: if no seed lies on a path to the target, no amount of ranking can recover it. This observation motivated the seed-first improvements in \cref{sec:eval-seeds}.
+This is strong evidence that the PPR ranking step is not the primary bottleneck. Once a seed lands in the structural neighbourhood of the target file, PPR almost always pushes that file into the top-5. The dominant failure mode is reachability: if no seed lies on a path to the target, no amount of ranking can recover it. The anomalous 5\% of intermediate rankings (Ranks 6--10) represent cases where structural connectivity was present but diluted. These instances typically involve hyper-connected module files where the target's probability mass was shared with numerous other active components, or cases where utility-function interference was partially mitigated but not entirely neutralized by IDF reweighting. This observation motivated the seed-first improvements in \cref{sec:eval-seeds}.
 
 \begin{table}[H]
     \centering

@@ -10,9 +10,9 @@
 \label{sec:system-architecture}
 % =============================================================================
 
-This chapter translates the architectural blueprint established in \cref{ch:design} into a working implementation. We trace the full pipeline from the local filesystem to the ranked code context delivered to an AI agent. Our objective is to detail how theoretical constructs, specifically static parsing, resolution fallbacks, and structural ranking, are realized in software to ensure the system reliably retrieves correct code context while maintaining sub-second latency.
+In this chapter, we translate the architectural blueprint established in \cref{ch:design} into a working implementation. We trace the full pipeline from the local filesystem to the ranked code context delivered to an AI agent. Our objective is to detail how we realize theoretical constructs---specifically static parsing, resolution fallbacks, and structural ranking---in software to ensure the system reliably retrieves correct code context while maintaining sub-second latency.
 
-We organize the system into five sequential stages, as illustrated in \cref{fig:system-architecture}. First, the parser extracts structural entities from the repository. Next, the resolver establishes links between these entities. The resulting graph is loaded into a specialized database. When an AI agent requests context, the ranking engine traverses this graph to identify relevant code. Finally, the interface layer packages these results for agent consumption.
+We organize the system into five sequential stages, as illustrated in \cref{fig:system-architecture}. First, the parser extracts structural entities from the repository. Next, the resolver establishes links between these entities. We load the resulting graph into a specialized database. When an AI agent requests context, the ranking engine traverses this graph to identify relevant code. Finally, the interface layer packages these results for agent consumption.
 
 \begin{figure}[htbp]
     \centering
@@ -67,9 +67,9 @@ The engineering philosophy behind CodeGraph prioritizes deterministic structural
 \label{sec:the-parser}
 % =============================================================================
 
-The foundational stage of CodeGraph is the ingestion pipeline, where raw software repositories are transformed into structured representations of code entities.
+The foundational stage of CodeGraph is the ingestion pipeline, where we transform raw software repositories into structured representations of code entities.
 
-We use Tree-sitter, an incremental parsing tool called via its Python bindings, for the extraction process. Tree-sitter is preferred over traditional abstract syntax tree (AST) libraries because it produces a Concrete Syntax Tree (CST) that maps directly to source byte offsets. This byte-level fidelity ensures that our parser preserves formatting and recovers from syntax errors, a critical requirement in development environments where code is frequently in an intermediate, non-compiling state.
+We use Tree-sitter, an incremental parsing tool called via its Python bindings, for the extraction process. We prefer Tree-sitter over traditional abstract syntax tree (AST) libraries because it produces a Concrete Syntax Tree (CST) that maps directly to source byte offsets. This byte-level fidelity ensures that our parser preserves formatting and recovers from syntax errors: a critical requirement in development environments where code is frequently in an intermediate, non-compiling state.
 
 Rather than indexing every variable assignment or loop, we implement a custom extraction algorithm that traverses the CST to identify four architectural entities: \texttt{File}, \texttt{Class}, \texttt{Function}, and \texttt{Method}. \noindent For each entity, we store the following metadata:
 \begin{itemize}
@@ -116,15 +116,15 @@ def login(user, pwd):
 \label{sec:the-resolver}
 % =============================================================================
 
-Extracting independent entities is only the first step. To construct a graph capable of propagating relevance, we must determine how these entities interact. The resolver converts raw string references into concrete graph edges.
+We begin by extracting independent entities, but this is only the first step. To construct a graph capable of propagating relevance, we must determine how these entities interact. Our resolver converts raw string references into concrete graph edges.
 
 \subsection{Import Resolution}
 
-Import statements declare cross-file dependencies. Our implementation maps Python import strings into physical filesystem paths. For absolute imports, such as \texttt{import core.utils}, the resolver maps the dotted path relative to the project root. For relative imports, such as \texttt{from ..models import User}, it resolves parent directories before mapping. External packages and standard library imports are identified via dependency manifests and are intentionally omitted to avoid creating dangling nodes that point outside the repository scope.
+Import statements declare cross-file dependencies. Our implementation maps Python import strings into physical filesystem paths. For absolute imports, such as \texttt{import core.utils}, the resolver maps the dotted path relative to the project root. For relative imports, such as \texttt{from ..models import User}, it resolves parent directories before mapping. We identify external packages and standard library imports via dependency manifests and intentionally omit them to avoid creating dangling nodes that point outside the repository scope.
 
 \subsection{Call Resolution: The Fallback Protocol}
 
-Linking a function call expression, such as \texttt{verify()}, to the correct definition node in a dynamically typed language like Python requires a rigorous strategy. \noindent We implement a three-level Resolution Fallback Protocol, executed in descending order of confidence:
+Linking a function call expression, such as \texttt{verify()}, to the correct definition node in a dynamically typed language like Python requires a rigorous strategy. \noindent We employ a three-level Resolution Fallback Protocol, executed in descending order of confidence:
 
 \begin{enumerate}
     \item \textbf{Explicit Imports:} We first check the file's import statements. If the called name matches a name imported from another module, we link the call to the corresponding entity in that module.
@@ -136,7 +136,7 @@ Linking a function call expression, such as \texttt{verify()}, to the correct de
 
 Across all resolution logic, we enforce a strict policy: precision over recall. If a global search finds multiple candidates due to ambiguous naming, such as multiple \texttt{update} methods, we deliberately ignore the connection. Because Personalized PageRank propagates along all edges, a single false edge can catastrophically misroute relevance mass into an unrelated subgraph. Dropping ambiguous connections slightly reduces recall but preserves the structural integrity of the graph.
 
-Real-world edge cases further validate this decoupled approach. Circular imports are handled naturally without recursive loops because files are analyzed independently. Dynamic imports, such as \texttt{importlib.import\_module()}, cannot be resolved statically without execution tracing and are therefore safely ignored.
+Real-world edge cases further validate this decoupled approach. The system handles circular imports naturally without recursive loops because we analyze files independently. We cannot resolve dynamic imports, such as \texttt{importlib.import\_module()}, statically without execution tracing and therefore safely ignore them.
 
 \section{The Database: Storing the Graph}
 \label{sec:the-database}
@@ -146,7 +146,7 @@ After parsing the code and resolving connections, we persist the data into a str
 
 \subsection{Schema and Constraints}
 
-The graph schema reflects our four-entity model (\texttt{File}, \texttt{Class}, \texttt{Function}, \texttt{Method}). These nodes are connected using four relationship types, as shown in \cref{fig:database-schema}. We use a visual hierarchy where containers (\texttt{File} and \texttt{Class}) are structurally prominent, while functional units (\texttt{Function} and \texttt{Method}) represent the leaf nodes of the hierarchy.
+We designed the graph schema to reflect our four-entity model (\texttt{File}, \texttt{Class}, \texttt{Function}, \texttt{Method}). We connect these nodes using four relationship types, as shown in \cref{fig:database-schema}. We use a visual hierarchy where containers (\texttt{File} and \texttt{Class}) are structurally prominent, while functional units (\texttt{Function} and \texttt{Method}) represent the leaf nodes of the hierarchy.
 
 \begin{figure}[htbp]
     \centering
@@ -188,7 +188,7 @@ To ensure performance and correctness, we enforce strict database-level constrai
 
 \subsection{Two-Pass Construction: Handling Forward References}
 
-The node types introduced in \cref{sec:the-database} (\cref{fig:database-schema}) are loaded in two sequential passes to resolve forward references. Loading source code into a graph introduces a sequencing challenge: a function in \texttt{main.py} may call a utility defined in \texttt{utils.py}, but if \texttt{main.py} is processed first, the target node does not yet exist and the relationship creation fails.
+We load the node types introduced in \cref{sec:the-database} (\cref{fig:database-schema}) in two sequential passes to resolve forward references. We face a sequencing challenge when loading source code into a graph: a function in \texttt{main.py} may call a utility defined in \texttt{utils.py}, but if we process \texttt{main.py} first, the target node does not yet exist and the relationship creation fails.
 
 \noindent To resolve this, we implement a two-pass loading mechanism:
 \begin{enumerate}
@@ -264,7 +264,7 @@ The node types introduced in \cref{sec:the-database} (\cref{fig:database-schema}
     \label{fig:two-pass-sequence}
 \end{figure}
 
-All database writes utilize parameterized Cypher queries with batched \texttt{UNWIND} and \texttt{MERGE} clauses. This approach ensures idempotency; if we re-process a file, the system updates existing properties rather than creating duplicate nodes. Listing~\ref{lst:cypher-merge} demonstrates the MERGE pattern for both node and relationship creation.
+We execute all database writes using parameterized Cypher queries with batched \texttt{UNWIND} and \texttt{MERGE} clauses. This approach ensures idempotency; if we re-process a file, the system updates existing properties rather than creating duplicate nodes. Listing~\ref{lst:cypher-merge} demonstrates the MERGE pattern for both node and relationship creation.
 
 \begin{lstlisting}[language=SQL, style=pseudostyle, mathescape=false, caption={Cypher query for idempotent two-pass construction using MERGE.}, label={lst:cypher-merge}]
 // Pass 1: Node Creation (Idempotent)
@@ -499,4 +499,4 @@ The finalized payload, transmitted as a structured JSON response, contains a lis
 \label{sec:summary}
 % =============================================================================
 
-This chapter detailed the implementation of the CodeGraph pipeline, tracing the transition from raw source code to ranked context delivered via MCP. Key implementation wins include the use of the Tree-sitter parser for error-resilient extraction, the two-pass Neo4j construction for resolving forward references, and the stateful FastMCP server for low-latency delivery. These choices prioritize structural precision and low query latency, providing a robust foundation for autonomous agent interaction. The following chapter evaluates this implementation against industry benchmarks to quantify its retrieval effectiveness.
+In this chapter, we detailed the implementation of the CodeGraph pipeline, tracing the transition from raw source code to ranked context delivered via MCP. Key implementation wins include the use of the Tree-sitter parser for error-resilient extraction, the two-pass Neo4j construction for resolving forward references, and the stateful FastMCP server for low-latency delivery. These choices prioritize structural precision and low query latency, providing a robust foundation for autonomous agent interaction. The following chapter evaluates this implementation against industry benchmarks to quantify its retrieval effectiveness.
