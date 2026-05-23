@@ -10,6 +10,7 @@ interface LeftRailProps {
   error: string | null
   onRun: () => void
   seeds: SeedInfo[]
+  nodes: GraphNode[]
   hasRun: boolean
   onNodeSelect?: (node: GraphNode) => void
 }
@@ -17,7 +18,7 @@ interface LeftRailProps {
 export default function LeftRail({
   task, setTask, topK, setTopK,
   loading, error, onRun,
-  seeds, hasRun,
+  seeds, nodes, hasRun,
   onNodeSelect,
 }: LeftRailProps) {
   const [history, setHistory] = useState<string[]>([])
@@ -60,12 +61,8 @@ export default function LeftRail({
     [handleRun, history, historyIndex, setTask]
   )
 
-  const entitySeeds = seeds.filter(s => s.signal === 'entity')
-  const totalW      = seeds.reduce((a, s) => a + s.weight, 0)
-  const entityPct   = totalW > 0
-    ? (entitySeeds.reduce((a, s) => a + s.weight, 0) / totalW) * 100
-    : 0
-  const maxWeight   = seeds.length > 0 ? Math.max(...seeds.map(s => s.weight)) : 1
+  const totalW    = seeds.reduce((a, s) => a + s.weight, 0)
+  const maxWeight = seeds.length > 0 ? Math.max(...seeds.map(s => s.weight)) : 1
 
   return (
     <div
@@ -181,7 +178,10 @@ export default function LeftRail({
           padding: '10px 12px 8px',
           borderTop: '1px solid var(--border)',
           background: 'var(--surface2)',
-          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
         }}
       >
         <div
@@ -190,6 +190,7 @@ export default function LeftRail({
             justifyContent: 'space-between',
             alignItems: 'baseline',
             marginBottom: 8,
+            flexShrink: 0,
           }}
         >
           <span
@@ -207,109 +208,32 @@ export default function LeftRail({
           </span>
         </div>
 
-        {/* Entity/BM25 distribution bar */}
-        {hasRun && seeds.length > 0 && (
-          <div>
+        {/* Seed rows */}
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          {!hasRun ? (
             <div
               style={{
-                height: 4,
-                background: 'var(--border)',
-                display: 'flex',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  width: `${entityPct}%`,
-                  background: 'var(--accent)',
-                  transition: 'width 600ms cubic-bezier(.2,.8,.2,1)',
-                }}
-              />
-              <div style={{ flex: 1, background: 'var(--border-strong)' }} />
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginTop: 4,
-                fontSize: 9,
-              }}
-            >
-              <span style={{ color: 'var(--accent)', letterSpacing: '0.08em' }}>
-                ◆ entity {entityPct.toFixed(0)}%
-              </span>
-              <span style={{ color: 'var(--text-dim)', letterSpacing: '0.08em' }}>
-                bm25 {(100 - entityPct).toFixed(0)}% ◇
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Column headers */}
-      <div
-        style={{
-          padding: '0 12px 6px',
-          background: 'var(--surface2)',
-          borderBottom: '1px solid var(--border)',
-          display: 'grid',
-          gridTemplateColumns: '14px 1fr 64px',
-          gap: 8,
-          alignItems: 'center',
-          fontSize: 8.5,
-          letterSpacing: '0.14em',
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          flexShrink: 0,
-        }}
-      >
-        <span>#</span>
-        <span>signal / source</span>
-        <span style={{ textAlign: 'right' }}>weight</span>
-      </div>
-
-      {/* Seed rows */}
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        {!hasRun ? (
-          <div
-            style={{
-              padding: 16,
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              fontStyle: 'italic',
-              letterSpacing: '0.02em',
-            }}
-          >
-            // awaiting query — seeds derive from entity match + bm25 fallback
-          </div>
-        ) : seeds.length === 0 ? (
-          <div style={{ padding: 16, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            // no seeds found
-          </div>
-        ) : (
-          <>
-            {seeds.map((seed, i) => (
-              <SeedRow key={`${seed.name}-${i}`} seed={seed} idx={i} max={maxWeight} onNodeSelect={onNodeSelect} />
-            ))}
-            {/* Footnote */}
-            <div
-              style={{
-                padding: '10px 12px',
-                fontSize: 9,
+                padding: 16,
+                fontSize: 11,
                 color: 'var(--text-muted)',
-                letterSpacing: '0.04em',
-                lineHeight: 1.5,
+                fontStyle: 'italic',
+                letterSpacing: '0.02em',
               }}
             >
-              <div style={{ marginBottom: 3 }}>
-                <span style={{ color: 'var(--accent)' }}>◆ entity</span> — exact name match in graph
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-dim)' }}>◇ bm25</span> — lexical fallback
-              </div>
+              // awaiting query — seeds derive from entity match + bm25 fallback
             </div>
-          </>
-        )}
+          ) : seeds.length === 0 ? (
+            <div style={{ padding: 16, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              // no seeds found
+            </div>
+          ) : (
+            <>
+              {seeds.map((seed, i) => (
+                <SeedRow key={`${seed.name}-${i}`} seed={seed} idx={i} max={maxWeight} nodes={nodes} onNodeSelect={onNodeSelect} />
+              ))}
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -345,22 +269,28 @@ function SectionHeader({ label, right }: { label: string; right?: React.ReactNod
 }
 
 /* ── Seed row ────────────────────────────────────────────── */
-function SeedRow({ seed, idx, max, onNodeSelect }: { seed: SeedInfo; idx: number; max: number; onNodeSelect?: (node: GraphNode) => void }) {
+function SeedRow({ seed, idx, max, nodes, onNodeSelect }: { seed: SeedInfo; idx: number; max: number; nodes: GraphNode[]; onNodeSelect?: (node: GraphNode) => void }) {
   const pct = (seed.weight / max) * 100
   const isEntity = seed.signal === 'entity'
   const accentColor = isEntity ? 'var(--accent)' : 'var(--text-dim)'
 
   const handleClick = () => {
     if (onNodeSelect) {
-      onNodeSelect({
-        id: seed.name,
-        name: seed.name.split('::').pop() || seed.name,
-        file_path: '',
-        label: 'Function',
-        ppr_score: 0,
-        is_seed: true,
-        seed_weight: seed.weight,
-      })
+      // Find actual node in graph to get correct PPR score and label
+      const actualNode = nodes.find(n => n.id === seed.id)
+      if (actualNode) {
+        onNodeSelect(actualNode)
+      } else {
+        onNodeSelect({
+          id: seed.id,
+          name: seed.name.split('::').pop() || seed.name,
+          file_path: '',
+          label: 'Function',
+          ppr_score: 0,
+          is_seed: true,
+          seed_weight: seed.weight,
+        })
+      }
     }
   }
 

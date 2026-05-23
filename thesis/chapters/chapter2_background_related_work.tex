@@ -4,7 +4,7 @@
 \chapter{Background and Related Work}
 \label{ch:background}
 
-This chapter identifies the fundamental constraints of code retrieval for LLM-based agents. It provides technical background on the foundational technologies necessary for structural code analysis, specifically static parsing, graph databases, and ranking algorithms, and surveys established methodological families within the literature.
+This chapter identifies the constraints of code retrieval for LLM-based agents. We provide technical background on the technologies necessary for structural code analysis, specifically static parsing, graph databases, and ranking algorithms, and we survey established methodological families within the literature.
 
 % ============================================================
 \section{Background}
@@ -14,7 +14,7 @@ This chapter identifies the fundamental constraints of code retrieval for LLM-ba
 \subsection{Tree-sitter and Static Analysis}
 \label{sec:treesitter-bg}
 
-Source code structure can be extracted through \emph{static analysis}, which examines source text without program execution. Modern static analysis tools leverage incremental parsing libraries such as \texttt{tree-sitter}~\cite{treesitter}. Unlike traditional compiler-based parsers, \texttt{tree-sitter} is designed to be:
+Source code structure can be extracted through \emph{static analysis}, which examines source text without program execution. Modern static analysis tools use incremental parsing libraries such as \texttt{tree-sitter}~\cite{treesitter}. Unlike traditional compiler-based parsers, \texttt{tree-sitter} is designed to be:
 \begin{itemize}
     \item \textbf{General:} It supports a wide range of programming languages through a unified grammar system.
     \item \textbf{Robust:} It can parse syntactically incomplete or erroneous code, which is common in active development environments.
@@ -42,7 +42,7 @@ While standard PageRank provides a global importance score for every node, \emph
 \label{sec:related-work}
 % ============================================================
 
-LLM-based coding agents face a fundamental selection problem: given a natural language task description and a large code repository, which source files should the agent examine? This section defines this retrieval problem, establishes its constraints, and surveys three classes of methods (sparse, dense, and graph-based) that represent increasingly structural approaches to solving it.
+LLM-based coding agents face a fundamental selection problem: given a natural language task description and a large code repository, which source files should the agent examine? This section defines the retrieval problem, establishes its constraints, and we survey three classes of methods (sparse, dense, and graph-based) that represent increasingly structural approaches to solving it.
 
 %, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 \subsection{The Retrieval Problem}
@@ -59,7 +59,7 @@ This selection problem has an asymmetric cost structure. A false negative (faili
 \label{sec:rag}
 %, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 
-Retrieval-augmented generation (RAG)~\cite{lewis2020rag} addresses the context window limitation by treating the repository as an external knowledge base. A typical RAG pipeline first retrieves candidate code entities, then uses an LLM to reason over the retrieved context. The quality of generation is strictly bounded by retrieval: an LLM cannot produce a correct fix for code it was not shown.
+Retrieval-augmented generation (RAG)~\cite{lewis2020rag} addresses the context window limitation by treating the repository as an external knowledge base. A typical RAG pipeline first retrieves candidate code entities, then uses an LLM to reason over the retrieved context. The quality of generation is limited by retrieval: an LLM cannot produce a correct fix for code it was not shown.
 
 RAG for code faces a fundamental challenge: bridging the modal gap between natural language task descriptions and structured source code. A bug report uses high-level, ambiguous prose, while the retrieval targets are syntax-constrained code entities interconnected through explicit dependencies. Surface-level text similarity often fails to identify the relevant code. Recent empirical work confirms that retrieval quality, rather than reasoning capacity, is the dominant bottleneck in agent performance~\cite{yang2024swebench}. Evaluations on benchmarks such as SWE-bench demonstrate that agents with targeted retrieval mechanisms outperform those given larger but unfocused context~\cite{yang2024swebench}.
 

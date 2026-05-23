@@ -478,58 +478,43 @@ def get_subgraph_for_nodes(
 ) -> dict[str, list[dict]]:
     """Return all nodes and direct edges between the given qualified names.
 
-    Designed for D3 force-graph visualization. Deduplicates nodes and returns
-    both source and target in every edge.
+    Ensures all requested nodes are included even if they are isolated.
     """
     if not qualified_names:
         return {"nodes": [], "edges": []}
 
+    nodes: list[dict] = []
+    edges: list[dict] = []
+
     with driver.session() as session:
-        result = session.run(
+        # 1. Fetch all nodes in the set
+        node_result = session.run(
             """
-            MATCH (a)-[r]-(b)
-            WHERE a.qualified_name IN $ids AND b.qualified_name IN $ids
-            RETURN
-                a.qualified_name AS src_id,
-                a.name           AS src_name,
-                labels(a)[0]     AS src_label,
-                a.file_path      AS src_file,
-                type(r)          AS rel_type,
-                b.qualified_name AS tgt_id,
-                b.name           AS tgt_name,
-                labels(b)[0]     AS tgt_label,
-                b.file_path      AS tgt_file
+            MATCH (n)
+            WHERE n.qualified_name IN $ids
+            RETURN n.qualified_name AS id,
+                   n.name AS name,
+                   labels(n)[0] AS label,
+                   n.file_path AS file_path
             """,
             ids=qualified_names,
         )
-        rows = result.data()
+        nodes = [dict(r) for r in node_result]
 
-    nodes_by_id: dict[str, dict] = {}
-    edges: list[dict] = []
-    seen_edges: set[frozenset] = set()
+        # 2. Fetch edges only between these nodes
+        edge_result = session.run(
+            """
+            MATCH (a)-[r]->(b)
+            WHERE a.qualified_name IN $ids AND b.qualified_name IN $ids
+            RETURN a.qualified_name AS source,
+                   b.qualified_name AS target,
+                   type(r)          AS type
+            """,
+            ids=qualified_names,
+        )
+        edges = [dict(r) for r in edge_result]
 
-    for row in rows:
-        for prefix, qname in [("src", row["src_id"]), ("tgt", row["tgt_id"])]:
-            if qname not in nodes_by_id:
-                nodes_by_id[qname] = {
-                    "id": qname,
-                    "name": row[f"{prefix}_name"],
-                    "label": row[f"{prefix}_label"] or "Unknown",
-                    "file_path": row[f"{prefix}_file"] or "",
-                }
-
-        edge_key: frozenset = frozenset({row["src_id"], row["tgt_id"], row["rel_type"]})
-        if edge_key not in seen_edges:
-            seen_edges.add(edge_key)
-            edges.append(
-                {
-                    "source": row["src_id"],
-                    "target": row["tgt_id"],
-                    "type": row["rel_type"],
-                }
-            )
-
-    return {"nodes": list(nodes_by_id.values()), "edges": edges}
+    return {"nodes": nodes, "edges": edges}
 
 
 def get_subgraph_by_prefix(

@@ -18,7 +18,7 @@ The chapter follows the data through the pipeline. \Cref{sec:architecture} intro
 \section{Architecture Overview}
 \label{sec:architecture}
 
-CodeGraph is organized as a five-stage pipeline. Each stage consumes the output of the previous stage and produces a well-defined intermediate representation. The five stages are: \emph{source code parsing}, \emph{graph construction}, \emph{seed selection}, \emph{PPR-based ranking}, and \emph{context delivery}. \Cref{fig:pipeline-architecture} illustrates the full pipeline with its intermediate data types and the division between offline indexing and online retrieval.
+We organize CodeGraph as a five-stage pipeline. Each stage consumes the output of the previous stage and produces a well-defined intermediate representation. The five stages are: \emph{source code parsing}, \emph{graph construction}, \emph{seed selection}, \emph{PPR-based ranking}, and \emph{context delivery}. \Cref{fig:pipeline-architecture} illustrates the full pipeline with its intermediate data types and the division between offline indexing and online retrieval.
 
 \begin{figure}[H]
     \centering
@@ -601,7 +601,7 @@ Four edge types capture the structural relationships between code entities. \Cre
 
 Graph construction runs in two passes. Pass~1 creates all nodes and intra-file \texttt{CONTAINS} edges. Pass~2 creates the cross-file edges (\texttt{CALLS}, \texttt{IMPORTS}, \texttt{INHERITS\_FROM}) once every definition in the repository is in place.
 
-The second pass is needed because of forward references: a call in file~A may target a function defined in file~B, and if B has not yet been parsed, the callee does not exist in the graph. Deferring cross-file edges until every file has been indexed makes resolution independent of processing order. A single-pass variant using topological file ordering was considered but rejected, because import cycles, common in real Python repositories, leave topological ordering undefined. The two-pass approach handles cycles naturally without extra machinery.
+The second pass resolves forward references: a call in file~A may target a function defined in file~B, and if B has not yet been parsed, the callee does not exist in the graph. Deferring cross-file edges until every file has been indexed makes resolution independent of processing order. We considered but rejected a single-pass variant using topological file ordering, because import cycles, common in real Python repositories, leave topological ordering undefined. The two-pass approach handles cycles naturally without extra machinery.
 
 \noindent\textbf{Pass 1,  intra-file construction:}
 \begin{enumerate}[leftmargin=*, itemsep=3pt]

@@ -5,7 +5,7 @@
 \chapter{Introduction}
 \label{ch:introduction}
 
-The rise of Large Language Models (LLMs) has fundamentally transformed the landscape of software engineering, enabling the development of autonomous agents capable of resolving complex bugs and implementing new features. However, the effectiveness of these agents is strictly bounded by the context window of the underlying models. While modern agents can reason deeply about a few hundred lines of code, they frequently fail when tasked with navigating repositories containing millions of tokens. This thesis introduces CodeGraph: a hybrid retrieval system that grounds AI agents in the explicit structural topology of a codebase to solve the challenge of repository-scale code navigation.
+The rise of Large Language Models (LLMs) has expanded the capabilities of software engineering, enabling the development of autonomous agents capable of resolving complex bugs and implementing new features. However, the effectiveness of these agents is limited by the context window of the underlying models. While modern agents can reason deeply about a few hundred lines of code, they frequently fail when tasked with navigating repositories containing millions of tokens. This thesis introduces CodeGraph: a hybrid retrieval system that grounds AI agents in the structural topology of a codebase to solve the challenge of repository-scale code navigation.
 
 % =============================================================================
 \section{Motivation}
@@ -14,14 +14,14 @@ The rise of Large Language Models (LLMs) has fundamentally transformed the lands
 
 Current approaches to code retrieval typically rely on lexical keyword matching or dense vector embeddings. While effective for simple document search, these methods often fail to capture the multi-file dependencies and logical hierarchies that define complex software systems. A bug described in natural language may have symptoms in a UI component but a root cause in a deeply nested database utility. Text-based search often fails to bridge this gap, leaving the AI agent to search blindly through irrelevant files.
 
-The primary bottleneck in this process is the initial seed extraction: the difficulty of accurately translating ambiguous natural language task descriptions into precise starting points within a massive codebase. Without a reliable way to identify these seeds and follow their logical relationships, agents waste significant computational resources and context budget on exploratory navigation, often leading to hallucinations or task failure.
+The primary bottleneck in this process is the initial seed extraction: the difficulty of accurately translating ambiguous natural language task descriptions into precise starting points within a massive codebase. Without a reliable way to identify these seeds and follow their logical relationships, agents waste computational resources and context budget on exploratory navigation, often leading to hallucinations or task failure.
 
 % =============================================================================
 \section{Research Objectives}
 \label{sec:objectives}
 % =============================================================================
 
-This research aims to develop a retrieval architecture that leverages the inherent structural signals of source code to improve agent performance. The specific objectives of this thesis are:
+This research aims to develop a retrieval architecture that uses the structural signals of source code to improve agent performance. The specific objectives of this thesis are:
 
 \begin{enumerate}
     \item To design a graph-based representation of source code that captures essential dependencies (calls, imports, and inheritance) while maintaining high construction performance.
@@ -35,4 +35,4 @@ This research aims to develop a retrieval architecture that leverages the inhere
 \label{sec:roadmap}
 % =============================================================================
 
-The remainder of this thesis is organized as follows. \Cref{ch:background} provides the technical background on static analysis and graph-based ranking, while surveying related work in the field. \Cref{ch:design} presents the architectural design of the CodeGraph pipeline and the theoretical basis for structural relevance. \Cref{ch:implementation} details the engineering choices and algorithmic implementations that realize this design. \Cref{ch:evaluation} reports the results of our empirical evaluation on real-world software tasks. Finally, \cref{ch:discussion} interprets the qualitative impact of these results, and \cref{ch:conclusion} summarizes the contributions and suggests future research directions.
+We organize the remainder of this thesis as follows. \Cref{ch:background} provides the technical background on static analysis and graph-based ranking, while surveying related work in the field. \Cref{ch:design} presents the architectural design of the CodeGraph pipeline and the theoretical basis for structural relevance. \Cref{ch:implementation} details the engineering choices and algorithmic implementations that realize this design. \Cref{ch:evaluation} reports the results of our empirical evaluation on real-world software tasks. Finally, \cref{ch:discussion} interprets the qualitative impact of these results, and \cref{ch:conclusion} summarizes the contributions and suggests future research directions.

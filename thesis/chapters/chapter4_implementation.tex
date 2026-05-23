@@ -12,7 +12,7 @@
 
 This chapter translates the architectural blueprint established in \cref{ch:design} into a working implementation. We trace the full pipeline from the local filesystem to the ranked code context delivered to an AI agent. Our objective is to detail how theoretical constructs, specifically static parsing, resolution fallbacks, and structural ranking, are realized in software to ensure the system reliably retrieves correct code context while maintaining sub-second latency.
 
-The system is organized into five sequential stages, as illustrated in \cref{fig:system-architecture}. First, the parser extracts structural entities from the repository. Next, the resolver establishes links between these entities. The resulting graph is loaded into a specialized database. When an AI agent requests context, the ranking engine traverses this graph to identify relevant code. Finally, the interface layer packages these results for agent consumption.
+We organize the system into five sequential stages, as illustrated in \cref{fig:system-architecture}. First, the parser extracts structural entities from the repository. Next, the resolver establishes links between these entities. The resulting graph is loaded into a specialized database. When an AI agent requests context, the ranking engine traverses this graph to identify relevant code. Finally, the interface layer packages these results for agent consumption.
 
 \begin{figure}[htbp]
     \centering
@@ -142,7 +142,7 @@ Real-world edge cases further validate this decoupled approach. Circular imports
 \label{sec:the-database}
 % =============================================================================
 
-After parsing the code and resolving connections, we persist the data into a structural graph. CodeGraph uses Neo4j, a specialized graph database optimized for relationship-centric storage. This architectural choice allows multi-hop traversals to execute in milliseconds, providing a significant performance advantage over the recursive joins required by traditional relational databases.
+After parsing the code and resolving connections, we persist the data into a structural graph. CodeGraph uses Neo4j, a specialized graph database optimized for relationship-centric storage. This architectural choice allows multi-hop traversals to execute in milliseconds, providing a performance advantage over the recursive joins required by traditional relational databases.
 
 \subsection{Schema and Constraints}
 

@@ -754,6 +754,21 @@ def _read_build_timestamp(config_path: Path) -> str | None:
     return None
 
 
+def _gemini_settings_paths() -> list[Path]:
+    """Return candidate paths for Gemini CLI settings.json."""
+    return [Path.home() / ".gemini" / "settings.json"]
+
+
+def _gemini_settings_has_codegraph(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return "codegraph" in data.get("mcpServers", {})
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # codegraph status
 # ---------------------------------------------------------------------------
@@ -821,14 +836,24 @@ def _find_mcp_registrations(config_path: Path) -> list[str]:
     """Return list of config file paths where codegraph MCP server is registered."""
     found: list[str] = []
 
-    # Project-level .mcp.json
+    # Project-level .mcp.json (Claude Code)
     project_mcp = config_path.parent / ".mcp.json"
     if _mcp_json_has_codegraph(project_mcp):
         found.append(str(project_mcp))
 
+    # Project-level .gemini/settings.json (Gemini CLI)
+    project_gemini = config_path.parent / ".gemini" / "settings.json"
+    if _gemini_settings_has_codegraph(project_gemini):
+        found.append(str(project_gemini))
+
     # Claude Desktop global config
     for candidate in _claude_desktop_config_paths():
         if _claude_json_has_codegraph(candidate):
+            found.append(str(candidate))
+
+    # Gemini CLI global config
+    for candidate in _gemini_settings_paths():
+        if _gemini_settings_has_codegraph(candidate):
             found.append(str(candidate))
 
     return found
@@ -873,8 +898,7 @@ def _claude_desktop_config_paths() -> list[Path]:
 # ---------------------------------------------------------------------------
 
 def install_helper(config_path: Path) -> None:
-    """Write MCP server registration for Claude Code or Claude Desktop."""
-    import platform
+    """Write MCP server registration for Claude Code, Claude Desktop, or Gemini CLI."""
     import shutil
 
     console.print("\n[bold cyan]CodeGraph MCP Install Wizard[/bold cyan]\n")
@@ -887,11 +911,13 @@ def install_helper(config_path: Path) -> None:
     codegraph_exe = shutil.which("codegraph") or "codegraph"
 
     console.print("Which AI assistant do you want to configure?\n")
-    console.print("  [bold]1[/bold]  Claude Code  (project-level .mcp.json — recommended)")
+    console.print("  [bold]1[/bold]  Claude Code  (project-level .mcp.json)")
     console.print("  [bold]2[/bold]  Claude Desktop  (global ~/.../claude.json)")
-    console.print("  [bold]3[/bold]  Both\n")
+    console.print("  [bold]3[/bold]  Gemini CLI  (project-level .gemini/settings.json)")
+    console.print("  [bold]4[/bold]  Gemini CLI  (global ~/.gemini/settings.json)")
+    console.print("  [bold]5[/bold]  All\n")
 
-    choice = Prompt.ask("Choice", choices=["1", "2", "3"], default="1")
+    choice = Prompt.ask("Choice", choices=["1", "2", "3", "4", "5"], default="1")
 
     server_entry = {
         "command": codegraph_exe,
@@ -899,17 +925,25 @@ def install_helper(config_path: Path) -> None:
         "env": {},
     }
 
-    if choice in ("1", "3"):
+    if choice in ("1", "5"):
         _write_project_mcp_json(config_path.parent / ".mcp.json", server_entry)
 
-    if choice in ("2", "3"):
+    if choice in ("2", "5"):
         desktop_path = _claude_desktop_config_paths()[0]
         _write_claude_desktop_json(desktop_path, server_entry)
+
+    if choice in ("3", "5"):
+        gemini_project_path = config_path.parent / ".gemini" / "settings.json"
+        _write_gemini_settings_json(gemini_project_path, server_entry)
+
+    if choice in ("4", "5"):
+        gemini_global_path = _gemini_settings_paths()[0]
+        _write_gemini_settings_json(gemini_global_path, server_entry)
 
     # Verify reachability
     console.print("\n[bold]Verifying server can start...[/bold]")
     try:
-        db_manager = get_database_manager()
+        db_manager = _initialize_db(config_path)
         if db_manager.is_connected():
             console.print("   [green]+[/green] Neo4j reachable — server should start correctly")
         else:
@@ -950,3 +984,19 @@ def _write_claude_desktop_json(desktop_path: Path, server_entry: dict) -> None:
     desktop_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     console.print(f"   [green]+[/green] Written to {desktop_path}")
     console.print("      Restart Claude Desktop to activate.\n")
+
+
+def _write_gemini_settings_json(path: Path, server_entry: dict) -> None:
+    """Write or update Gemini CLI's settings.json."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data: dict = {}
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+
+    data.setdefault("mcpServers", {})["codegraph"] = server_entry
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    console.print(f"   [green]+[/green] Written to {path}")
+    console.print("      Reload Gemini CLI (or start a new session) to activate.\n")

@@ -1,23 +1,11 @@
-import type { PPRFileResult, BM25FileResult, GraphNode } from '../../types/api'
+import type { PPRFileResult, GraphNode } from '../../types/api'
 
 interface ResultsListProps {
   results: PPRFileResult[]
-  bm25Results: BM25FileResult[]
   onNodeSelect?: (node: GraphNode) => void
 }
 
-export default function ResultsList({ results, bm25Results, onNodeSelect }: ResultsListProps) {
-  const pprMap  = Object.fromEntries(results.map(r => [r.file_path, r]))
-  const bm25Map = Object.fromEntries(bm25Results.map(r => [r.file_path, r.rank]))
-  const allFiles = [
-    ...new Set([...results.map(r => r.file_path), ...bm25Results.map(r => r.file_path)]),
-  ]
-
-  const iouCount = allFiles.filter(fp => fp in pprMap && fp in bm25Map).length
-  const iou = allFiles.length > 0
-    ? (iouCount / allFiles.length).toFixed(2)
-    : '—'
-
+export default function ResultsList({ results, onNodeSelect }: ResultsListProps) {
   return (
     <div
       style={{
@@ -42,51 +30,48 @@ export default function ResultsList({ results, bm25Results, onNodeSelect }: Resu
           flexShrink: 0,
         }}
       >
-        ▸ ranked.results / bm25.compare
+        ▸ structural.ranking
       </div>
 
-      {/* Column headers */}
+      {/* Column headers — simplified */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: '28px 1fr 1fr',
-          padding: '6px 12px',
-          gap: 8,
-          background: 'var(--bg)',
+          padding: '8px 12px 6px',
+          background: 'var(--surface)',
           borderBottom: '1px solid var(--border)',
-          fontSize: 9,
+          fontSize: 8.5,
           letterSpacing: '0.14em',
           color: 'var(--text-muted)',
           textTransform: 'uppercase',
           flexShrink: 0,
+          display: 'flex',
+          justifyContent: 'space-between',
         }}
       >
-        <div>#</div>
-        <div style={{ color: 'var(--accent)' }}>codegraph[ppr]</div>
-        <div>bm25[lex]</div>
+        <span>ranked entities</span>
+        <span style={{ color: 'var(--accent)' }}>structural score</span>
       </div>
 
       {/* Rows */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {allFiles.length === 0 ? (
+        {results.length === 0 ? (
           <div
             style={{
-              padding: 16,
+              padding: 20,
               fontSize: 11,
               color: 'var(--text-muted)',
               fontStyle: 'italic',
+              letterSpacing: '0.02em',
             }}
           >
-            // awaiting query
+            // awaiting query results...
           </div>
         ) : (
-          allFiles.slice(0, 30).map((fp, i) => {
-            const pprRes = pprMap[fp]
-            const inPpr  = !!pprRes
-            const inBm25 = fp in bm25Map
-            const isWin  = inPpr && !inBm25
-            const isMiss = !inPpr && inBm25
-            const short  = fp.split('/').pop() ?? fp
+          results.map((res) => {
+            const fp = res.file_path
+            const parts = fp.split('/')
+            const short = parts.pop() ?? fp
+            const dir = parts.join('/')
 
             const handleClick = () => {
               if (onNodeSelect) {
@@ -95,7 +80,7 @@ export default function ResultsList({ results, bm25Results, onNodeSelect }: Resu
                   label: 'File',
                   name: short,
                   file_path: fp,
-                  ppr_score: pprRes ? pprRes.score : 0,
+                  ppr_score: res.score,
                   is_seed: false,
                   seed_weight: 0,
                 })
@@ -109,92 +94,100 @@ export default function ResultsList({ results, bm25Results, onNodeSelect }: Resu
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  borderBottom: `1px dashed var(--border)`,
-                  background: isWin
-                    ? 'var(--accent-soft)'
-                    : i % 2 === 0
-                    ? 'transparent'
-                    : 'var(--surface2)',
+                  borderBottom: `1px solid var(--border)`,
+                  background: 'transparent',
                   cursor: 'pointer',
+                  padding: '10px 12px',
+                  transition: 'background 120ms',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in oklch, var(--accent) 15%, transparent)' }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = isWin
-                    ? 'var(--accent-soft)'
-                    : i % 2 === 0
-                    ? 'transparent'
-                    : 'var(--surface2)'
-                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in oklch, var(--surface2) 60%, transparent)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
               >
                 <div
-                  title={fp}
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: '28px 1fr 1fr',
-                    gap: 8,
-                    padding: '6px 12px',
-                    fontSize: 10.5,
-                    alignItems: 'center',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    gap: 12,
+                    marginBottom: 2,
                   }}
                 >
                   <div
                     style={{
-                      color: isWin ? 'var(--accent)' : isMiss ? 'var(--text-dim)' : 'var(--text-muted)',
-                      fontVariantNumeric: 'tabular-nums',
-                      fontSize: 11,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      minWidth: 0,
                     }}
                   >
-                    {isWin ? '◆' : isMiss ? '○' : '·'}
+                    <div
+                      style={{
+                        color: 'var(--text-muted)',
+                        fontVariantNumeric: 'tabular-nums',
+                        fontSize: 10,
+                        width: 14,
+                        textAlign: 'right',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {res.rank}
+                    </div>
+                    <div
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: 'var(--text)',
+                        fontWeight: 600,
+                        fontSize: 12,
+                        letterSpacing: '0.01em',
+                      }}
+                    >
+                      {short}
+                    </div>
                   </div>
                   <div
                     style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: inPpr ? (isWin ? 'var(--accent)' : 'var(--text)') : 'var(--text-muted)',
+                      color: 'var(--accent)',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      fontVariantNumeric: 'tabular-nums slashed-zero',
+                      flexShrink: 0,
                     }}
                   >
-                    {inPpr ? (
-                      <>
-                        <span style={{ color: 'var(--text-muted)' }}>
-                          {String(pprRes.rank).padStart(2, '0')}{' '}
-                        </span>
-                        {short}
-                      </>
-                    ) : '—'}
-                  </div>
-                  <div
-                    style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: inBm25 ? (isMiss ? 'var(--text-dim)' : 'var(--text)') : 'var(--text-muted)',
-                    }}
-                  >
-                    {inBm25 ? (
-                      <>
-                        <span style={{ color: 'var(--text-muted)' }}>
-                          {String(bm25Map[fp]).padStart(2, '0')}{' '}
-                        </span>
-                        {short}
-                      </>
-                    ) : '—'}
+                    {res.score.toFixed(4)}
                   </div>
                 </div>
-                {inPpr && pprRes.path && (
+
+                <div
+                  style={{
+                    paddingLeft: 24,
+                    fontSize: 9.5,
+                    color: 'var(--text-muted)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={fp}
+                >
+                  {dir ? `${dir}/` : ''}<span style={{ color: 'var(--text-dim)' }}>{short}</span>
+                </div>
+
+                {res.path && (
                   <div
                     style={{
-                      padding: '0 12px 6px 48px',
+                      padding: '6px 0 0 24px',
                       fontSize: 9,
                       color: 'var(--text-dim)',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       fontFamily: 'var(--font-mono)',
+                      opacity: 0.8,
                     }}
-                    title={pprRes.path}
+                    title={res.path}
                   >
-                    <span style={{ color: 'var(--accent)', opacity: 0.7 }}>↳</span> {pprRes.path}
+                    <span style={{ color: 'var(--accent)', opacity: 0.6 }}>↳</span> {res.path}
                   </div>
                 )}
               </div>
@@ -204,7 +197,7 @@ export default function ResultsList({ results, bm25Results, onNodeSelect }: Resu
       </div>
 
       {/* Footer */}
-      {allFiles.length > 0 && (
+      {results.length > 0 && (
         <div
           style={{
             padding: '8px 12px',
@@ -219,10 +212,11 @@ export default function ResultsList({ results, bm25Results, onNodeSelect }: Resu
           }}
         >
           <span>
-            <span style={{ color: 'var(--accent)' }}>◆</span> ppr-only ·{' '}
-            <span style={{ color: 'var(--text-dim)' }}>○</span> bm25-only
+            <span style={{ color: 'var(--accent)' }}>◆</span> {results.length} entities ranked
           </span>
-          <span>iou · {iou}</span>
+          <span>
+            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
         </div>
       )}
     </div>

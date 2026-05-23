@@ -9,7 +9,8 @@ interface GraphCanvasProps {
   edges: D3Edge[]
   onNodeSelect: (node: GraphNode | null) => void
   selectedNode?: GraphNode | null
-  propagating?: boolean
+  dampingFactor?: number
+  topK?: number
 }
 
 const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const
@@ -61,7 +62,8 @@ function hideTooltip(tt: HTMLDivElement) { tt.style.display = 'none' }
 
 /* ── Main component ───────────────────────────────────────── */
 export default function GraphCanvas({
-  nodes, edges, onNodeSelect, selectedNode, propagating = false,
+  nodes, edges, onNodeSelect, selectedNode,
+  dampingFactor = 0.70, topK = 30,
 }: GraphCanvasProps) {
   const svgRef   = useRef<SVGSVGElement>(null)
   const simRef   = useRef<d3.Simulation<D3Node, D3Edge> | null>(null)
@@ -396,7 +398,7 @@ export default function GraphCanvas({
       )}
 
       {/* Empty state */}
-      {!hasData && !propagating && (
+      {!hasData && (
         <div
           style={{
             position: 'absolute',
@@ -439,6 +441,8 @@ export default function GraphCanvas({
             nodeCount={filteredNodes.length}
             edgeCount={filteredEdges.length}
             seedCount={filteredNodes.filter(n => n.is_seed).length}
+            dampingFactor={dampingFactor}
+            topK={topK}
           />
           <LatticeLegend 
             hiddenNodeTypes={hiddenNodeTypes} 
@@ -446,7 +450,6 @@ export default function GraphCanvas({
             hiddenEdgeTypes={hiddenEdgeTypes}
             setHiddenEdgeTypes={setHiddenEdgeTypes}
           />
-          <Oscilloscope running={propagating} />
         </>
       )}
     </div>
@@ -469,22 +472,49 @@ function cornerTick(pos: React.CSSProperties): React.CSSProperties {
 
 /* ── PPR Readout panel ───────────────────────────────────── */
 function PPRReadout({
-  nodeCount, edgeCount, seedCount,
+  nodeCount, edgeCount, seedCount, dampingFactor, topK,
 }: {
   nodeCount: number
   edgeCount: number
   seedCount: number
+  dampingFactor: number
+  topK: number
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
 
   const rows: [string, string, boolean][] = [
     ['nodes', nodeCount.toLocaleString(), false],
     ['edges', edgeCount.toLocaleString(), false],
     ['seeds', String(seedCount), false],
-    ['α (damping)', '0.850', false],
-    ['Δ vs bm25', '+9.4 pts', true],
-    ['tokens saved', '−66%', true],
+    ['α (damping)', dampingFactor.toFixed(3), false],
+    ['top_k limit', String(topK), false],
   ]
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          background: 'color-mix(in oklch, var(--surface) 50%, transparent)',
+          backdropFilter: 'blur(4px)',
+          border: '1px solid var(--border)',
+          padding: '4px 8px',
+          fontSize: 8.5,
+          color: 'var(--text-dim)',
+          fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.10em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          borderRadius: 2,
+        }}
+      >
+        ppr.readout +
+      </button>
+    )
+  }
 
   return (
     <div
@@ -492,15 +522,16 @@ function PPRReadout({
         position: 'absolute',
         top: 12,
         right: 12,
-        background: 'color-mix(in oklch, var(--surface) 88%, transparent)',
-        backdropFilter: 'blur(8px)',
+        background: 'color-mix(in oklch, var(--surface) 92%, transparent)',
+        backdropFilter: 'blur(10px)',
         border: '1px solid var(--border)',
-        minWidth: open ? 200 : 0,
+        minWidth: 180,
         fontSize: 10,
+        boxShadow: 'var(--shadow)',
       }}
     >
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen(false)}
         style={{
           width: '100%',
           padding: '8px 12px',
@@ -510,7 +541,7 @@ function PPRReadout({
           gap: 8,
           background: 'transparent',
           border: 'none',
-          borderBottom: open ? '1px dashed var(--border)' : 'none',
+          borderBottom: '1px dashed var(--border)',
           color: 'var(--text-muted)',
           fontSize: 9,
           fontFamily: 'var(--font-mono)',
@@ -520,38 +551,37 @@ function PPRReadout({
         }}
       >
         <span>▸ ppr.readout</span>
-        <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>{open ? '–' : '+'}</span>
+        <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>–</span>
       </button>
 
-      {open && (
-        <div style={{ padding: '8px 12px' }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr auto',
-              gap: '4px 12px',
-            }}
-          >
-            {rows.map(([label, value, accent]) => (
-              <div key={label} style={{ display: 'contents' }}>
-                <span style={{ color: 'var(--text-dim)' }}>{label}</span>
-                <span
-                  style={{
-                    color: accent ? 'var(--accent)' : 'var(--text)',
-                    fontVariantNumeric: 'tabular-nums',
-                    textAlign: 'right',
-                  }}
-                >
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
+      <div style={{ padding: '8px 12px' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            gap: '4px 12px',
+          }}
+        >
+          {rows.map(([label, value, accent]) => (
+            <div key={label} style={{ display: 'contents' }}>
+              <span style={{ color: 'var(--text-dim)' }}>{label}</span>
+              <span
+                style={{
+                  color: accent ? 'var(--accent)' : 'var(--text)',
+                  fontVariantNumeric: 'tabular-nums',
+                  textAlign: 'right',
+                }}
+              >
+                {value}
+              </span>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   )
 }
+
 
 /* ── Legend ──────────────────────────────────────────────── */
 function LatticeLegend({
@@ -709,113 +739,3 @@ function LatticeLegend({
   )
 }
 
-/* ── Oscilloscope / convergence sparkline ──────────────────── */
-function Oscilloscope({ running }: { running: boolean }) {
-  const [open, setOpen] = useState(false)
-
-  const W = 220, H = 42
-  const points: string[] = []
-  for (let i = 0; i <= 42; i++) {
-    const x = (i / 42) * W
-    const y = H - Math.exp(-i * 0.12) * (H - 6) - 3 + Math.sin(i * 0.8) * 1.5
-    points.push(`${x.toFixed(1)},${y.toFixed(1)}`)
-  }
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        style={{
-          position: 'absolute',
-          bottom: 12,
-          left: 12,
-          background: 'color-mix(in oklch, var(--surface) 88%, transparent)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid var(--border)',
-          padding: '6px 10px',
-          fontSize: 9,
-          color: 'var(--text-muted)',
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          fontFamily: 'var(--font-mono)',
-          cursor: 'pointer',
-          display: 'flex',
-          gap: 8,
-          alignItems: 'center',
-        }}
-      >
-        <span>▸ convergence</span>
-        <span style={{ color: 'var(--accent)' }}>{running ? '⟳' : '✓'}</span>
-        <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>+</span>
-      </button>
-    )
-  }
-
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        bottom: 12,
-        left: 12,
-        background: 'color-mix(in oklch, var(--surface) 88%, transparent)',
-        backdropFilter: 'blur(8px)',
-        border: '1px solid var(--border)',
-        width: W + 20,
-        fontFamily: 'var(--font-mono)',
-      }}
-    >
-      <button
-        onClick={() => setOpen(false)}
-        style={{
-          width: '100%',
-          padding: '6px 10px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          background: 'transparent',
-          border: 'none',
-          borderBottom: '1px dashed var(--border)',
-          fontSize: 9,
-          color: 'var(--text-muted)',
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          fontFamily: 'var(--font-mono)',
-          cursor: 'pointer',
-        }}
-      >
-        <span>▸ convergence</span>
-        <span style={{ color: 'var(--accent)' }}>{running ? '⟳' : '✓ done'}</span>
-        <span style={{ color: 'var(--text-dim)', fontSize: 10, marginLeft: 8 }}>–</span>
-      </button>
-      <div style={{ padding: '6px 10px' }}>
-        <svg width={W} height={H} style={{ display: 'block' }}>
-          <polyline
-            points={points.join(' ')}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth={1.2}
-          />
-          <line
-            x1={0} y1={H - 3} x2={W} y2={H - 3}
-            stroke="var(--border)"
-            strokeWidth={0.5}
-            strokeDasharray="2 3"
-          />
-        </svg>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: 8.5,
-            color: 'var(--text-muted)',
-            marginTop: 2,
-          }}
-        >
-          <span>iter 0</span>
-          <span style={{ color: 'var(--text)' }}>ε 8.4e−7</span>
-          <span>iter 42</span>
-        </div>
-      </div>
-    </div>
-  )
-}

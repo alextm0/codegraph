@@ -4,9 +4,9 @@
 \chapter{Evaluation and Results}
 \label{ch:evaluation}
 
-This chapter evaluates CodeGraph's effectiveness in locating relevant source files for real-world software bugs using only natural-language issue descriptions. By testing the system against 300 instances from the widely recognized SWE-bench Lite dataset, we establish a rigorous standard to prove CodeGraph's practical efficiency. Utilizing this common industry benchmark allows us to objectively measure how well our graph-based architecture performs compared to traditional text-based retrieval methods.
+This chapter evaluates CodeGraph's effectiveness in locating relevant source files for real-world software bugs using only natural-language issue descriptions. By testing the system against 300 instances from the widely recognized SWE-bench Lite dataset, we establish a rigorous standard to prove CodeGraph's efficiency. Using this common industry benchmark allows us to measure how well our graph-based architecture performs compared to traditional text-based retrieval methods.
 
-Our evaluation shows that the optimal CodeGraph configuration achieves a 74.0\% Recall@10 rate, marking a substantial 32 percentage point improvement over the initial baseline. Throughout this chapter, we analyze the specific design choices that drove this improvement: diagnosing the core challenge of reachability, demonstrating how precise seed extraction bridges the gap between natural language and code, and defining the boundaries of what pure graph structure can achieve.
+Our evaluation shows that the optimal CodeGraph configuration achieves a 74.0\% Recall@10 rate, marking a 32 percentage point improvement over the initial baseline. Throughout this chapter, we analyze the specific design choices that drove this improvement: diagnosing the core challenge of reachability, demonstrating how precise seed extraction bridges the gap between natural language and code, and defining the boundaries of what pure graph structure can achieve.
 
 The chapter is structured as follows:
 \begin{itemize}
@@ -213,7 +213,7 @@ All baselines run on the same SWE-bench Lite instances and repositories as CodeG
 
 The improvement follows a three-stage trajectory:
 \begin{enumerate}
-    \item \textbf{Algorithm Refinement (+18.7pp):} Switching from manually-assigned seed weights to \emph{uniform restart} allowed the graph topology to arbitrate between competing signals, significantly reducing false-positive amplification.
+    \item \textbf{Algorithm Refinement (+18.7pp):} Switching from manually-assigned seed weights to \emph{uniform restart} allowed the graph topology to arbitrate between competing signals, reducing false-positive amplification.
     \item \textbf{Seed Engineering (+11.6pp):} Implementing compound tokenization, expanded corpora, and inverse-frequency weighting ensured that the retrieval pipeline could match natural language symptoms to code entities.
     \item \textbf{Budget Adjustment (+1.7pp):} Increasing the candidate pool to $k=30$ recovered instances where PPR correctly identified the gold file but ranked it just outside the initial threshold.
 \end{enumerate}
@@ -263,7 +263,7 @@ The improvement follows a three-stage trajectory:
 \label{sec:eval-diagnostics}
 % ============================================================
 
-When we inspected the distribution of ranks for the target file, we found a bimodal pattern: for most issues, the target file is either in the top-5 results or not in the top-10 at all. Very few instances fall in the middle ranks. This pattern holds across configurations and repositories.
+When we inspected the distribution of ranks for the target file, we found a bimodal pattern: for most issues, the target file is either in the top-5 results or not in the top-10 at all. Only 15 out of 300 instances (5\%) fall in the middle ranks (ranks 6--10). This pattern holds across configurations and repositories.
 
 This is strong evidence that the PPR ranking step is not the primary bottleneck. Once a seed lands in the structural neighbourhood of the target file, PPR almost always pushes that file into the top-5. The dominant failure mode is reachability: if no seed lies on a path to the target, no amount of ranking can recover it. This observation motivated the seed-first improvements in \cref{sec:eval-seeds}.
 
@@ -304,7 +304,7 @@ This is strong evidence that the PPR ranking step is not the primary bottleneck.
         \draw[-{Stealth[length=4pt]}, gray!60, semithick] (-0.3, 0) -- (-0.3, 3.5);
         \node[rotate=90, lbl, text=gray!60!black] at (-1.3, 1.75) {Instances};
     \end{tikzpicture}
-    \caption{Bimodal rank distribution for the initial configuration (300 instances). Instances land almost exclusively in Rank 1--5 or outside the top~10; very few fall in the intermediate band.}
+    \caption{Bimodal rank distribution for the initial configuration (300 instances). Instances land almost exclusively in Rank 1--5 or outside the top~10; only 5\% fall in the intermediate band.}
     \label{fig:bimodal}
 \end{figure}
 
@@ -323,7 +323,7 @@ The diagnostic finding of the bimodal distribution established that the retrieva
     \item \textbf{Candidate Budget Optimization ($k=30$):} Increasing the returned candidate count from 20 to 30 accounted for instances where PPR correctly identified the target neighbourhood but ranked the gold file just outside the top-20.
 \end{enumerate}
 
-These refinements represent a significant engineering effort to bridge the gap between natural language symptoms and structured source code. The effectiveness of this Seed-First approach is further validated when compared against alternative structural augmentations.
+These refinements represent a targeted engineering effort to bridge the gap between natural language symptoms and structured source code. The effectiveness of this Seed-First approach is further validated when compared against alternative structural augmentations.
 
 % ============================================================
 \section{Ablation Studies and Architectural Validation}
@@ -337,7 +337,7 @@ To isolate the contributions of individual system components and justify our fin
 \label{sec:eval-ablation-algorithm}
 % ------------------------------------------------------------
 
-The most significant algorithmic finding was the superiority of \emph{uniform restart} over confidence-weighted seeds. In our initial configuration (Weighted PPR), we assigned restart probabilities proportional to the BM25 confidence scores of the retrieved seeds. This achieved only 42.0\% R@10.
+The most impactful algorithmic finding was the superiority of \emph{uniform restart} over confidence-weighted seeds. In our initial configuration (Weighted PPR), we assigned restart probabilities proportional to the BM25 confidence scores of the retrieved seeds. This achieved only 42.0\% R@10.
 
 By switching to a uniform restart distribution (60.7\% R@10), we allowed the graph topology to naturally arbitrate between competing signals. This improvement proves that the graph structure is a more reliable filter for relevance than initial lexical similarity. When seeds are noisy or ambiguous, over-weighting them based on confidence scores tends to amplify false positives, whereas a uniform distribution allows the personalization mass to aggregate where the structural evidence is strongest.
 
@@ -370,7 +370,7 @@ Qualitative analysis revealed a probability dilution effect: in large, heterogen
 The quantitative success of CodeGraph is deeply tied to the structural characteristics of the underlying repositories. This section synthesizes the per-repository performance and the failure taxonomy to define the structural limit of graph-based retrieval.
 
 \paragraph{Codebase Structure and Retrieval Success.}
-As shown in \cref{tab:per-repo}, performance varies significantly across repositories. The system achieves near-perfect recall on scikit-learn (9\% failure rate) and matplotlib (13\%). These repositories feature distinct subpackages with clear, non-overlapping domains, allowing BM25 to identify precise seeds and PPR to amplify them within cohesive module clusters.
+As shown in \cref{tab:per-repo}, performance varies across repositories. The system achieves near-perfect recall on scikit-learn (9\% failure rate) and matplotlib (13\%). These repositories feature distinct subpackages with clear, non-overlapping domains, allowing BM25 to identify precise seeds and PPR to amplify them within cohesive module clusters.
 
 In contrast, Django (27\% failure) and SymPy (31\%) present a greater challenge due to large, functionally heterogeneous directories. When a directory like \texttt{django/\allowbreak db/\allowbreak models/} contains over 25 files spanning distinct ORM and migration logic, seeds may land in the correct directory but the wrong file. Without explicit dependency edges between sibling files, probability does not propagate to the target, resulting in zero recall.
 

@@ -11,7 +11,7 @@ Design notes:
 import logging
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from neo4j import Driver
 from rank_bm25 import BM25Okapi
 
@@ -42,10 +42,13 @@ class SeedNode:
 class PersonalizationVector:
     """Normalized seed weights ready for PPR.
 
-    seeds maps internal Neo4j node ID -> normalized weight (sums to 1.0).
+    Attributes:
+        seeds: Maps internal Neo4j node ID -> normalized weight (sums to 1.0).
+        metadata: Maps internal node ID -> dict of {qname, source}.
     """
 
     seeds: dict[int, float]
+    metadata: dict[int, dict[str, str]] = field(default_factory=dict)
 
     def normalize(self) -> None:
         """Scale weights so they sum to 1.0."""
@@ -363,17 +366,24 @@ def _current_file_seeds(
 def _normalize_seeds(all_seeds: list[SeedNode]) -> PersonalizationVector:
     """Merge duplicate node IDs (sum weights) and normalize to sum to 1.0."""
     merged: dict[int, float] = {}
-    qnames: dict[int, str] = {}
+    metadata: dict[int, dict[str, str]] = {}
     for seed in all_seeds:
         merged[seed.node_id] = merged.get(seed.node_id, 0.0) + seed.weight
-        qnames[seed.node_id] = seed.qualified_name
+        # Keep track of the 'best' source if multiple signals hit the same node
+        # (Entity match takes precedence over BM25)
+        current = metadata.get(seed.node_id)
+        if not current or seed.source == "entity_match":
+            metadata[seed.node_id] = {
+                "qname": seed.qualified_name,
+                "source": seed.source,
+            }
 
     total = sum(merged.values())
     if total == 0.0:
-        return PersonalizationVector(seeds={})
+        return PersonalizationVector(seeds={}, metadata={})
 
     normalized = {nid: w / total for nid, w in merged.items()}
-    return PersonalizationVector(seeds=normalized)
+    return PersonalizationVector(seeds=normalized, metadata=metadata)
 
 
 def fetch_searchable_nodes(

@@ -37,6 +37,7 @@ class QueryRequest(BaseModel):
 
 
 class SeedInfo(BaseModel):
+    id: str  # qualified_name
     name: str
     signal: str  # "entity" or "bm25"
     weight: float
@@ -59,6 +60,8 @@ class QueryResponse(BaseModel):
     ppr_results: list[PPRFileResult]
     bm25_results: list[BM25FileResult]
     graph: dict[str, list[dict]]
+    damping_factor: float
+    top_k: int
 
 
 class NodeRelation(BaseModel):
@@ -127,18 +130,26 @@ def _run_query(
     top_k: int,
 ) -> QueryResponse:
     """Core logic: run PPR + BM25 + subgraph, return a QueryResponse."""
-    from codegraph.core.retrieval.seed_selection import extract_seeds, prepare_bm25_index
+    from codegraph.core.retrieval.seed_selection import extract_seeds, prepare_bm25_index, extract_entity_names
     from codegraph.core.graph.ppr import PPRConfig, create_gds_client, run_ppr_from_node_ids
     from codegraph.core.retrieval.pipeline import ensure_graph_ready
     from codegraph.core.graph.queries import trace_path_to_seed, get_subgraph_for_nodes
+    from codegraph.utils.config import parse_signal_weights
 
-    # Build seeds
+    # Step 1: Extract seeds with auto-augmentation (matches CLI pipeline)
     seed_section = raw_config.get("seed_selection", {})
     exclude_seed_paths = seed_section.get("exclude_seed_paths") or None
+    signal_weights = parse_signal_weights(seed_section)
+    
+    # Auto-augment mentioned_entities from task text
+    auto_entities = extract_entity_names(task)
+    
     bm25_index, searchable_nodes = prepare_bm25_index(driver, exclude_paths=exclude_seed_paths)
     seeds = extract_seeds(
         driver,
         task_description=task,
+        mentioned_entities=auto_entities,
+        signal_weights=signal_weights,
         bm25_index=bm25_index,
         searchable_nodes=searchable_nodes,
         exclude_paths=exclude_seed_paths,
@@ -146,31 +157,34 @@ def _run_query(
 
     seed_ids = list(seeds.seeds.keys())
     seed_names = _fetch_seed_names(driver, seed_ids)
-    seed_qnames = _fetch_seed_qualified_names(driver, seed_ids)
 
-    # Format seed info
+    # Format seed info for the UI using preserved metadata
     seeds_out = [
         SeedInfo(
+            id=seeds.metadata[nid]["qname"],
             name=seed_names.get(nid, str(nid)),
-            signal="entity" if weight >= 0.3 else "bm25",
+            signal="entity" if seeds.metadata[nid]["source"] == "entity_match" else "bm25",
             weight=round(weight, 4),
         )
         for nid, weight in sorted(seeds.seeds.items(), key=lambda x: -x[1])
     ]
 
-    # Run PPR
+    # Step 2: Configure PPR
     ppr_section = raw_config.get("ppr", {})
+    damping_factor = ppr_section.get("damping_factor", 0.70)
     ppr_config = PPRConfig(
-        damping_factor=ppr_section.get("damping_factor", 0.70),
+        damping_factor=damping_factor,
         max_iterations=ppr_section.get("max_iterations", 20),
         tolerance=ppr_section.get("tolerance", 1e-7),
         top_k=ppr_section.get("top_k", 30),
     )
     gds = create_gds_client(driver)
     ensure_graph_ready(driver, gds)
+    
+    # Step 3: Run PPR
     ppr_results_raw = run_ppr_from_node_ids(gds, driver, seeds.seeds, ppr_config)
 
-    # Deduplicate by file_path
+    # Deduplicate by file_path for the list view (keeps UI clean)
     best_per_file: dict[str, float] = {}
     for r in ppr_results_raw:
         if r.file_path and (r.file_path not in best_per_file or r.score > best_per_file[r.file_path]):
@@ -188,28 +202,17 @@ def _run_query(
         for rank, (fp, score) in enumerate(top_files, start=1)
     ]
 
-    # BM25 baseline
-    try:
-        _add_evaluation_to_path()
-        from evaluation.baselines import BM25Baseline  # type: ignore[import]
-        bm25_files = BM25Baseline().run(driver, task, k=top_k)
-    except ImportError:
-        logger.warning("BM25Baseline not available (evaluation package not on path)")
-        bm25_files = []
-
-    bm25_out = [BM25FileResult(rank=i + 1, file_path=fp) for i, fp in enumerate(bm25_files)]
-
-    # Build D3 subgraph from seed + PPR entity qualified_names
-    all_qnames: list[str] = [qn for qn in seed_qnames.values() if qn]
+    # Step 4: Build D3 subgraph
+    all_qnames: list[str] = [m["qname"] for m in seeds.metadata.values()]
     for r in ppr_results_raw:
         if r.qualified_name:
             all_qnames.append(r.qualified_name)
-    all_qnames = list(dict.fromkeys(all_qnames))  # deduplicate, preserve order
+    all_qnames = list(dict.fromkeys(all_qnames))
 
     subgraph = get_subgraph_for_nodes(driver, all_qnames)
 
     ppr_score_by_qname = {r.qualified_name: r.score for r in ppr_results_raw if r.qualified_name}
-    seed_weight_by_qname = {qn: seeds.seeds[nid] for nid, qn in seed_qnames.items() if qn}
+    seed_weight_by_qname = {seeds.metadata[nid]["qname"]: weight for nid, weight in seeds.seeds.items()}
 
     annotated_nodes = [
         {
@@ -224,8 +227,10 @@ def _run_query(
     return QueryResponse(
         seeds=seeds_out,
         ppr_results=ppr_out,
-        bm25_results=bm25_out,
+        bm25_results=[],  # Removed BM25 comparison as per user request
         graph={"nodes": annotated_nodes, "edges": subgraph["edges"]},
+        damping_factor=damping_factor,
+        top_k=top_k
     )
 
 

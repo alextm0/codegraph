@@ -37,7 +37,6 @@ export default function Layout({
 
   const seeds       = queryResult?.seeds ?? []
   const pprResults  = queryResult?.ppr_results ?? []
-  const bm25Results = queryResult?.bm25_results ?? []
   const hasResults  = pprResults.length > 0
 
   return (
@@ -69,6 +68,7 @@ export default function Layout({
           error={queryError}
           onRun={runQuery}
           seeds={seeds}
+          nodes={nodes}
           hasRun={hasResults || seeds.length > 0}
           onNodeSelect={onNodeSelect}
         />
@@ -83,7 +83,8 @@ export default function Layout({
             edges={edges}
             onNodeSelect={onNodeSelect}
             selectedNode={selectedNode}
-            propagating={queryLoading}
+            dampingFactor={queryResult?.damping_factor}
+            topK={queryResult?.top_k}
           />
 
           {/* Loading overlay */}
@@ -121,7 +122,7 @@ export default function Layout({
                   textTransform: 'uppercase',
                 }}
               >
-                ppr.iterating · α=0.85 · ε=1e−6
+                ppr.iterating · α={queryResult?.damping_factor?.toFixed(2) ?? '0.70'} · ε=1e−7
               </div>
             </div>
           )}
@@ -160,7 +161,7 @@ export default function Layout({
           </>
         ) : hasResults ? (
           <div style={{ width: 380, flexShrink: 0 }}>
-            <ResultsList results={pprResults} bm25Results={bm25Results} onNodeSelect={onNodeSelect} />
+            <ResultsList results={pprResults} onNodeSelect={onNodeSelect} />
           </div>
         ) : null}
       </div>
