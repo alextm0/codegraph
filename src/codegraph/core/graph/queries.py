@@ -68,7 +68,9 @@ def count_edges_by_type(driver: Driver | None = None) -> dict[str, int]:
         return {record["rel_type"]: record["cnt"] for record in result}
 
 
-def get_neighbors(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
+def get_neighbors(
+    driver: Driver | None = None, qualified_name: str = ""
+) -> list[NodeInfo]:
     """Return all nodes directly connected (in either direction) to the given node."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -87,7 +89,9 @@ def get_neighbors(driver: Driver | None = None, qualified_name: str = "") -> lis
         return [_row_to_node_info(r) for r in result]
 
 
-def get_file_contents(driver: Driver | None = None, file_path: str = "") -> list[NodeInfo]:
+def get_file_contents(
+    driver: Driver | None = None, file_path: str = ""
+) -> list[NodeInfo]:
     """Return all entities directly contained in a file."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -106,7 +110,9 @@ def get_file_contents(driver: Driver | None = None, file_path: str = "") -> list
         return [_row_to_node_info(r) for r in result]
 
 
-def find_callers(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
+def find_callers(
+    driver: Driver | None = None, qualified_name: str = ""
+) -> list[NodeInfo]:
     """Return all nodes that call the given node."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -125,7 +131,9 @@ def find_callers(driver: Driver | None = None, qualified_name: str = "") -> list
         return [_row_to_node_info(r) for r in result]
 
 
-def find_callees(driver: Driver | None = None, qualified_name: str = "") -> list[NodeInfo]:
+def find_callees(
+    driver: Driver | None = None, qualified_name: str = ""
+) -> list[NodeInfo]:
     """Return all nodes called by the given node."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -163,7 +171,9 @@ def find_node_by_name(driver: Driver | None = None, name: str = "") -> list[Node
         return [_row_to_node_info(r) for r in result]
 
 
-def find_node_by_pattern(driver: Driver | None = None, pattern: str = "") -> list[NodeInfo]:
+def find_node_by_pattern(
+    driver: Driver | None = None, pattern: str = ""
+) -> list[NodeInfo]:
     """Return all nodes whose name property contains the given pattern (case-insensitive)."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -184,7 +194,9 @@ def find_node_by_pattern(driver: Driver | None = None, pattern: str = "") -> lis
         return [_row_to_node_info(r) for r in result]
 
 
-def get_inheritance_chain(driver: Driver | None = None, class_qname: str = "") -> list[NodeInfo]:
+def get_inheritance_chain(
+    driver: Driver | None = None, class_qname: str = ""
+) -> list[NodeInfo]:
     """Return the full inheritance chain (ancestors) of a class, ordered from immediate parent upward."""
     if driver is None:
         driver = get_database_manager().get_driver()
@@ -295,7 +307,9 @@ def find_dead_code(driver: Driver | None = None, limit: int = 50) -> list[DeadCo
         ]
 
 
-def get_most_connected_files(driver: Driver | None = None, limit: int = 10) -> list[dict]:
+def get_most_connected_files(
+    driver: Driver | None = None, limit: int = 10
+) -> list[dict]:
     """Return files ranked by number of directly contained entities.
 
     Useful for understanding which files are the most structurally
@@ -327,6 +341,7 @@ def get_most_connected_files(driver: Driver | None = None, limit: int = 10) -> l
 # ---------------------------------------------------------------------------
 # Private helpers for query_entity_dependencies
 # ---------------------------------------------------------------------------
+
 
 def _validate_direction(direction: str) -> None:
     """Raise ValueError if direction is not one of the supported values."""
@@ -478,58 +493,43 @@ def get_subgraph_for_nodes(
 ) -> dict[str, list[dict]]:
     """Return all nodes and direct edges between the given qualified names.
 
-    Designed for D3 force-graph visualization. Deduplicates nodes and returns
-    both source and target in every edge.
+    Ensures all requested nodes are included even if they are isolated.
     """
     if not qualified_names:
         return {"nodes": [], "edges": []}
 
+    nodes: list[dict] = []
+    edges: list[dict] = []
+
     with driver.session() as session:
-        result = session.run(
+        # 1. Fetch all nodes in the set
+        node_result = session.run(
             """
-            MATCH (a)-[r]-(b)
-            WHERE a.qualified_name IN $ids AND b.qualified_name IN $ids
-            RETURN
-                a.qualified_name AS src_id,
-                a.name           AS src_name,
-                labels(a)[0]     AS src_label,
-                a.file_path      AS src_file,
-                type(r)          AS rel_type,
-                b.qualified_name AS tgt_id,
-                b.name           AS tgt_name,
-                labels(b)[0]     AS tgt_label,
-                b.file_path      AS tgt_file
+            MATCH (n)
+            WHERE n.qualified_name IN $ids
+            RETURN n.qualified_name AS id,
+                   n.name AS name,
+                   labels(n)[0] AS label,
+                   n.file_path AS file_path
             """,
             ids=qualified_names,
         )
-        rows = result.data()
+        nodes = [dict(r) for r in node_result]
 
-    nodes_by_id: dict[str, dict] = {}
-    edges: list[dict] = []
-    seen_edges: set[frozenset] = set()
+        # 2. Fetch edges only between these nodes
+        edge_result = session.run(
+            """
+            MATCH (a)-[r]->(b)
+            WHERE a.qualified_name IN $ids AND b.qualified_name IN $ids
+            RETURN a.qualified_name AS source,
+                   b.qualified_name AS target,
+                   type(r)          AS type
+            """,
+            ids=qualified_names,
+        )
+        edges = [dict(r) for r in edge_result]
 
-    for row in rows:
-        for prefix, qname in [("src", row["src_id"]), ("tgt", row["tgt_id"])]:
-            if qname not in nodes_by_id:
-                nodes_by_id[qname] = {
-                    "id": qname,
-                    "name": row[f"{prefix}_name"],
-                    "label": row[f"{prefix}_label"] or "Unknown",
-                    "file_path": row[f"{prefix}_file"] or "",
-                }
-
-        edge_key: frozenset = frozenset({row["src_id"], row["tgt_id"], row["rel_type"]})
-        if edge_key not in seen_edges:
-            seen_edges.add(edge_key)
-            edges.append(
-                {
-                    "source": row["src_id"],
-                    "target": row["tgt_id"],
-                    "type": row["rel_type"],
-                }
-            )
-
-    return {"nodes": list(nodes_by_id.values()), "edges": edges}
+    return {"nodes": nodes, "edges": edges}
 
 
 def get_subgraph_by_prefix(

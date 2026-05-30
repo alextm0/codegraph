@@ -13,10 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import tiktoken
-from neo4j import Driver
 
 from codegraph.core.graph.ppr import PPRResult
-from codegraph.core.retrieval.seed_selection import tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +193,7 @@ def count_tokens(text: str) -> int:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
 
 def _deduplicate_file_entities(ppr_results: list[PPRResult]) -> list[PPRResult]:
     """Drop File results whose content is already covered by 2+ sub-entity results.

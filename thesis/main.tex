@@ -15,10 +15,13 @@
 \usepackage{caption}        % caption customization
 \usepackage{subcaption}     % subfigures
 \usepackage{float}          % exact placement [H]
+\usepackage{adjustbox}      % scale tables to fit
+\usepackage[numbers,sort&compress]{natbib} % numeric citations
 \usepackage{amsmath}        % math environments
 \usepackage{amssymb}        % math symbols
 \usepackage{enumitem}       % list customization
 \usepackage{listings}       % code listings
+\usepackage[ruled, vlined, linesnumbered]{algorithm2e} % formal algorithms
 \usepackage{xcolor}         % colors for listings
 
 % Code listing style — shared across all chapters
@@ -27,6 +30,13 @@
 \definecolor{codeblue}{rgb}{0.13,0.29,0.53}
 \definecolor{codegreen}{rgb}{0,0.5,0}
 \definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+
+% Lattice Design System Colors
+\definecolor{latticeblue}{HTML}{2563EB}
+\definecolor{latticegreen}{HTML}{059669}
+\definecolor{latticered}{HTML}{DC2626}
+\definecolor{latticeorange}{HTML}{F59E0B}
+\definecolor{latticegray}{HTML}{6B7280}
 
 \lstdefinestyle{pythonstyle}{
     backgroundcolor=\color{backcolour},
@@ -51,6 +61,38 @@
     xleftmargin=16pt,
     xrightmargin=4pt,
 }
+
+% Define JSON language for listings
+\lstdefinelanguage{json}{
+    basicstyle=\normalfont\ttfamily\footnotesize,
+    numbers=left,
+    numberstyle=\tiny,
+    stepnumber=1,
+    numbersep=8pt,
+    showstringspaces=false,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{backcolour},
+    stringstyle=\color{codepurple},
+    literate=
+     *{0}{{{\color{latticeorange}0}}}{1}
+      {1}{{{\color{latticeorange}1}}}{1}
+      {2}{{{\color{latticeorange}2}}}{1}
+      {3}{{{\color{latticeorange}3}}}{1}
+      {4}{{{\color{latticeorange}4}}}{1}
+      {5}{{{\color{latticeorange}5}}}{1}
+      {6}{{{\color{latticeorange}6}}}{1}
+      {7}{{{\color{latticeorange}7}}}{1}
+      {8}{{{\color{latticeorange}8}}}{1}
+      {9}{{{\color{latticeorange}9}}}{1}
+      {:}{{{\color{codeblue}{:}}}}{1}
+      {,}{{{\color{codeblue}{,}}}}{1}
+      {\{}{{{\color{codeblue}{\{}}}}{1}
+      {\}}{{{\color{codeblue}{\}}}}}{1}
+      {[}{{{\color{codeblue}{[}}}}{1}
+      {]}{{{\color{codeblue}{]}}}}{1},
+}
+
 \lstdefinestyle{pseudostyle}{
     backgroundcolor=\color{backcolour},
     basicstyle=\ttfamily\footnotesize,
@@ -74,7 +116,40 @@
 % TikZ and graphics
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, shapes.geometric, backgrounds, fit, decorations.markings, calc, shadows.blur}
-\usepackage{cleveref}
+\usepackage[unicode, plainpages=false, pdfpagelabels]{hyperref}
+\usepackage[capitalise]{cleveref}
+
+\tikzset{
+    lattice_stage/.style={
+        draw, 
+        rounded corners=8pt,
+        minimum width=3.2cm, 
+        minimum height=1.6cm,
+        line width=1.2pt, 
+        inner sep=10pt,
+        align=center,
+        fill=white,
+        font=\small\bfseries
+    },
+    lattice_arrow/.style={
+        -{Stealth[length=8pt, width=5pt]}, 
+        line width=1.5pt,
+        latticeblue
+    },
+    lattice_gray_arrow/.style={
+        -{Stealth[length=6pt, width=4pt]}, 
+        line width=1.2pt,
+        latticegray
+    },
+    lattice_badge/.style={
+        circle, 
+        fill=latticeblue, 
+        text=white, 
+        inner sep=2pt, 
+        font=\scriptsize\bfseries,
+        minimum size=14pt
+    }
+}
 
 %\geometry{a4paper,top=2.5cm,left=3cm,right=2.5cm,bottom=2.5cm}
 %in style
@@ -91,7 +166,7 @@
 \specialization{Computer Science}
 \title{Structural Context Retrieval for AI Coding Agents via Weighted Personalized PageRank on Code Dependency Graphs}
 \author{Toma Alexandru-Mihai}
-\supervisor{Dr. Arthur Molnar}
+\supervisor{Lect. PhD. Arthur Molnar}
 
 \hypersetup{pageanchor=false}
 \maketitle
@@ -107,7 +182,9 @@
 \hrule
 \vspace{0.5cm}
 
-% TODO: Write abstract after all chapters are complete
+LLM-based coding agents are increasingly capable of resolving real software engineering tasks, moving beyond simple code generation to the autonomous management of entire repositories. However, as codebases grow to millions of tokens, the effectiveness of these agents is strictly limited by their ability to navigate complex file structures. Traditional retrieval methods, such as keyword search or dense embeddings, treat code as flat text and often fail to bridge the gap between a natural-language issue and its structural root cause. This thesis introduces CodeGraph, a hybrid retrieval system that leverages the inherent graph structure of source code to facilitate agentic navigation. By extracting lexical seeds from task descriptions and propagating relevance through a dependency graph using Personalized PageRank, CodeGraph provides agents with a deterministic and structurally-grounded view of the codebase.
+
+The system was validated on SWE-bench Lite, a benchmark of 300 real-world software issues. CodeGraph achieved a 74.0\% Recall@10, marking a substantial 32-percentage-point increase over traditional lexical search. These results prove that while initial seed quality is a critical bottleneck, leveraging the structural dependency graph of the source code allows agents to pinpoint relevant files within complex repositories. By transforming a codebase into a navigable map of logical links, this work establishes that explicit structural context is a fundamental requirement for the next generation of autonomous coding agents. The engineering artifacts produced—including the custom Tree-sitter parsing pipeline, the specialized graph schema, and the deterministic ranking engine—constitute original contributions to the field of software engineering for autonomous agents.
 
 \tableofcontents
 
@@ -115,7 +192,7 @@
 \newpage
 \pagenumbering{arabic}
 
-%\input{chapters/chapter1_introduction}
+\input{chapters/chapter1_introduction}
 
 \input{chapters/chapter2_background_related_work}
 

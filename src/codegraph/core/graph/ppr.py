@@ -69,7 +69,6 @@ def create_gds_client(driver: Driver) -> GraphDataScience:
 _ALL_RELATIONSHIP_TYPES = ["CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM"]
 
 
-
 def project_graph(
     gds: GraphDataScience,
     relationship_types: list[str] | None = None,
@@ -87,7 +86,11 @@ def project_graph(
     Returns the GDS Graph object (supports node_count(), relationship_count()).
     """
     node_spec = ["File", "Function", "Class", "Method"]
-    rel_types = relationship_types if relationship_types is not None else _ALL_RELATIONSHIP_TYPES
+    rel_types = (
+        relationship_types
+        if relationship_types is not None
+        else _ALL_RELATIONSHIP_TYPES
+    )
     relationship_spec = {
         rel_type: {"orientation": orientation, "properties": "weight"}
         for rel_type in rel_types
@@ -120,7 +123,9 @@ def drop_projection(gds: GraphDataScience) -> bool:
             return True
         return False
     except (KeyError, IndexError, TypeError, ValueError) as exc:
-        logger.debug("drop_projection: expected error (e.g., missing key/projection): %s", exc)
+        logger.debug(
+            "drop_projection: expected error (e.g., missing key/projection): %s", exc
+        )
         return False
     except Exception as exc:
         logger.error("drop_projection: unexpected error: %s", exc)
@@ -201,25 +206,31 @@ def run_ppr_weighted(
         for node_id, score in single_scores.items():
             combined[node_id] = combined.get(node_id, 0.0) + weight * score
 
-    top_ids = sorted(combined, key=combined.get, reverse=True)[:config.top_k]
+    top_ids = sorted(combined, key=combined.get, reverse=True)[: config.top_k]
     props_by_id = _fetch_all_node_properties(driver, top_ids)
 
     results: list[PPRResult] = []
     for nid in top_ids:
         props = props_by_id.get(nid)
         if props:
-            results.append(PPRResult(
-                qualified_name=props.get("qualified_name", ""),
-                name=props.get("name", ""),
-                label=props.get("label", ""),
-                file_path=props.get("file_path", ""),
-                score=combined[nid],
-                line_start=props.get("line_start", 0),
-                line_end=props.get("line_end", 0),
-            ))
+            results.append(
+                PPRResult(
+                    qualified_name=props.get("qualified_name", ""),
+                    name=props.get("name", ""),
+                    label=props.get("label", ""),
+                    file_path=props.get("file_path", ""),
+                    score=combined[nid],
+                    line_start=props.get("line_start", 0),
+                    line_end=props.get("line_end", 0),
+                )
+            )
 
-    logger.info("PPR (weighted, %d seeds) returned %d results (top_k=%d)",
-                len(seed_weights), len(results), config.top_k)
+    logger.info(
+        "PPR (weighted, %d seeds) returned %d results (top_k=%d)",
+        len(seed_weights),
+        len(results),
+        config.top_k,
+    )
     return results
 
 
@@ -249,24 +260,31 @@ def _run_ppr_uniform(
     for node_id in node_ids:
         props = props_by_id.get(node_id)
         if props:
-            results.append(PPRResult(
-                qualified_name=props.get("qualified_name", ""),
-                name=props.get("name", ""),
-                label=props.get("label", ""),
-                file_path=props.get("file_path", ""),
-                score=scores[node_id],
-                line_start=props.get("line_start", 0),
-                line_end=props.get("line_end", 0),
-            ))
+            results.append(
+                PPRResult(
+                    qualified_name=props.get("qualified_name", ""),
+                    name=props.get("name", ""),
+                    label=props.get("label", ""),
+                    file_path=props.get("file_path", ""),
+                    score=scores[node_id],
+                    line_start=props.get("line_start", 0),
+                    line_end=props.get("line_end", 0),
+                )
+            )
 
-    logger.info("PPR (uniform, %d seeds) returned %d results (top_k=%d)",
-                len(seed_weights), len(results), config.top_k)
+    logger.info(
+        "PPR (uniform, %d seeds) returned %d results (top_k=%d)",
+        len(seed_weights),
+        len(results),
+        config.top_k,
+    )
     return results
 
 
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
 
 def _run_ppr_single_seed(
     gds: GraphDataScience,

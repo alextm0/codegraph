@@ -9,9 +9,8 @@ Design notes:
 """
 
 import logging
-import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from neo4j import Driver
 from rank_bm25 import BM25Okapi
 
@@ -42,10 +41,13 @@ class SeedNode:
 class PersonalizationVector:
     """Normalized seed weights ready for PPR.
 
-    seeds maps internal Neo4j node ID -> normalized weight (sums to 1.0).
+    Attributes:
+        seeds: Maps internal Neo4j node ID -> normalized weight (sums to 1.0).
+        metadata: Maps internal node ID -> dict of {qname, source}.
     """
 
     seeds: dict[int, float]
+    metadata: dict[int, dict[str, str]] = field(default_factory=dict)
 
     def normalize(self) -> None:
         """Scale weights so they sum to 1.0."""
@@ -123,7 +125,9 @@ def extract_seeds(
         logger.debug("Current file seeds: %d", len(file_seeds))
 
     if not all_seeds:
-        logger.warning("extract_seeds: no seeds found for task '%s'", task_description[:80])
+        logger.warning(
+            "extract_seeds: no seeds found for task '%s'", task_description[:80]
+        )
         return PersonalizationVector(seeds={})
 
     return _normalize_seeds(all_seeds)
@@ -186,8 +190,13 @@ def prepare_bm25_index(
     # Build corpus: each doc is the tokenized name + file_path + signature + docstring.
     corpus_tokens = [
         tokenize(
-            row["name"] + " " + row["file_path"] + " " +
-            row["signature"] + " " + row["docstring"]
+            row["name"]
+            + " "
+            + row["file_path"]
+            + " "
+            + row["signature"]
+            + " "
+            + row["docstring"]
         )
         for row in rows
     ]
@@ -197,6 +206,7 @@ def prepare_bm25_index(
 # ---------------------------------------------------------------------------
 # Private: signal extractors
 # ---------------------------------------------------------------------------
+
 
 def _match_entities(
     driver: Driver,
@@ -255,7 +265,9 @@ def _match_entities(
         logger.debug("Entity match: no nodes found for %s", mentioned_entities)
     else:
         logger.debug(
-            "Entity match: %d seeds from %d entities", len(seeds), len(matches_by_entity)
+            "Entity match: %d seeds from %d entities",
+            len(seeds),
+            len(matches_by_entity),
         )
     return seeds
 
@@ -286,8 +298,13 @@ def _bm25_search(
             return []
         corpus_tokens = [
             tokenize(
-                row["name"] + " " + row["file_path"] + " " +
-                row["signature"] + " " + row["docstring"]
+                row["name"]
+                + " "
+                + row["file_path"]
+                + " "
+                + row["signature"]
+                + " "
+                + row["docstring"]
             )
             for row in rows
         ]
@@ -360,20 +377,28 @@ def _current_file_seeds(
 # Private: normalization and helpers
 # ---------------------------------------------------------------------------
 
+
 def _normalize_seeds(all_seeds: list[SeedNode]) -> PersonalizationVector:
     """Merge duplicate node IDs (sum weights) and normalize to sum to 1.0."""
     merged: dict[int, float] = {}
-    qnames: dict[int, str] = {}
+    metadata: dict[int, dict[str, str]] = {}
     for seed in all_seeds:
         merged[seed.node_id] = merged.get(seed.node_id, 0.0) + seed.weight
-        qnames[seed.node_id] = seed.qualified_name
+        # Keep track of the 'best' source if multiple signals hit the same node
+        # (Entity match takes precedence over BM25)
+        current = metadata.get(seed.node_id)
+        if not current or seed.source == "entity_match":
+            metadata[seed.node_id] = {
+                "qname": seed.qualified_name,
+                "source": seed.source,
+            }
 
     total = sum(merged.values())
     if total == 0.0:
-        return PersonalizationVector(seeds={})
+        return PersonalizationVector(seeds={}, metadata={})
 
     normalized = {nid: w / total for nid, w in merged.items()}
-    return PersonalizationVector(seeds=normalized)
+    return PersonalizationVector(seeds=normalized, metadata=metadata)
 
 
 def fetch_searchable_nodes(
@@ -437,8 +462,8 @@ def tokenize(text: str) -> list[str]:
         List of lowercase tokens with length > 1 (filters single chars).
     """
     # Split CamelCase: "SQLCompiler" -> "SQL Compiler", "handleSubQuery" -> "handle Sub Query"
-    text = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', text)
-    text = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1 \2', text)
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
     # Split on all non-alphanumeric (underscores split too, unlike before)
     tokens = re.split(r"[^a-z0-9]+", text.lower())
     return [tok for tok in tokens if len(tok) > 1]

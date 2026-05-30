@@ -54,6 +54,7 @@ def _resolve_config_path(cli_arg: str | None = None) -> Path:
 @dataclass
 class ServerState:
     """Long-lived resources initialized at startup."""
+
     driver: Driver
     gds: GraphDataScience
     project_root: str
@@ -212,6 +213,7 @@ def main() -> None:
     The CODEGRAPH_CONFIG environment variable is also respected as a fallback.
     """
     import argparse
+
     parser = argparse.ArgumentParser(description="CodeGraph MCP server")
     parser.add_argument("--config", type=str, default=None, help="Path to config.yaml")
     args, _ = parser.parse_known_args()

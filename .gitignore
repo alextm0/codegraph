@@ -42,3 +42,15 @@ demo/requests/
 .superpowers
 out/
 skills-lock.json
+
+# Gemini CLI / AI Research
+.gemini/
+.gemini.zip
+GEMINI_DEEP_RESEARCH_RESULTS.md
+.envrc
+.codegraph_last_built
+.DS_Store
+TODO.md
+thesis/review_ch1_to_ch5.tex
+thesis/scripts/compile_chapter3.py
+thesis/scripts/generate_chapter_pdfs.py

@@ -12,3 +12,7 @@
 *.run.xml
 *.bcf
 indent.log
+
+# Internal Management
+internal/
+

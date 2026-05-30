@@ -102,7 +102,10 @@ class TestFindMcpRegistrations:
     def test_returns_empty_when_nothing_registered(self, tmp_path):
         from codegraph.cli.cli_helpers import _find_mcp_registrations
         config_path = tmp_path / "config.yaml"
-        with patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[]):
+        with (
+            patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[]),
+            patch("codegraph.cli.cli_helpers._gemini_settings_paths", return_value=[]),
+        ):
             result = _find_mcp_registrations(config_path)
         assert result == []
 
@@ -111,7 +114,10 @@ class TestFindMcpRegistrations:
         config_path = tmp_path / "config.yaml"
         mcp_file = tmp_path / ".mcp.json"
         mcp_file.write_text(json.dumps({"mcpServers": {"codegraph": {}}}))
-        with patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[]):
+        with (
+            patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[]),
+            patch("codegraph.cli.cli_helpers._gemini_settings_paths", return_value=[]),
+        ):
             result = _find_mcp_registrations(config_path)
         assert any("mcp.json" in r for r in result)
 
@@ -122,9 +128,25 @@ class TestFindMcpRegistrations:
         mcp_file.write_text(json.dumps({"mcpServers": {"codegraph": {}}}))
         desktop_file = tmp_path / "claude.json"
         desktop_file.write_text(json.dumps({"mcpServers": {"codegraph": {}}}))
-        with patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[desktop_file]):
+        with (
+            patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[desktop_file]),
+            patch("codegraph.cli.cli_helpers._gemini_settings_paths", return_value=[]),
+        ):
             result = _find_mcp_registrations(config_path)
         assert len(result) == 2
+
+    def test_returns_gemini_settings_when_registered(self, tmp_path):
+        from codegraph.cli.cli_helpers import _find_mcp_registrations
+        config_path = tmp_path / "config.yaml"
+        gemini_file = tmp_path / "settings.json"
+        # Mocking that it has codegraph
+        gemini_file.write_text(json.dumps({"mcpServers": {"codegraph": {}}}))
+        with (
+            patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[]),
+            patch("codegraph.cli.cli_helpers._gemini_settings_paths", return_value=[gemini_file]),
+        ):
+            result = _find_mcp_registrations(config_path)
+        assert any("settings.json" in r for r in result)
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ export interface QueryRequest {
 // ---------------------------------------------------------------------------
 
 export interface SeedInfo {
+  id: string
   name: string
   /** "entity" for high-weight seeds, "bm25" for BM25-derived seeds */
   signal: 'entity' | 'bm25'
@@ -66,6 +67,8 @@ export interface QueryResponse {
   ppr_results: PPRFileResult[]
   bm25_results: BM25FileResult[]
   graph: GraphData
+  damping_factor: number
+  top_k: number
 }
 
 // ---------------------------------------------------------------------------

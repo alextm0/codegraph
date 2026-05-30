@@ -19,7 +19,7 @@ from codegraph.cli.cli_helpers import (
     install_helper,
     status_helper,
     watch_helper,
-    _initialize_db
+    _initialize_db,
 )
 
 app = typer.Typer(
@@ -29,11 +29,10 @@ app = typer.Typer(
 )
 console = Console()
 
+
 # Global options
 @app.callback()
-def callback(
-    config: str = typer.Option("config.yaml", help="Path to config.yaml")
-):
+def callback(config: str = typer.Option("config.yaml", help="Path to config.yaml")):
     """
     CodeGraph CLI.
     """
@@ -46,12 +45,14 @@ def callback(
     # But for simplicity, we'll just initialize DB here if it's a command that needs it
     pass
 
+
 def get_config_path(ctx: typer.Context) -> Path:
     config = ctx.parent.params.get("config", "config.yaml")
     config_path = Path(config).resolve()
     if not config_path.exists():
         config_path = Path.cwd() / "config.yaml"
     return config_path
+
 
 @app.command()
 def rebuild(ctx: typer.Context):
@@ -61,6 +62,7 @@ def rebuild(ctx: typer.Context):
     config_path = get_config_path(ctx)
     rebuild_helper(config_path)
 
+
 @app.command()
 def init(ctx: typer.Context):
     """
@@ -68,6 +70,7 @@ def init(ctx: typer.Context):
     """
     config_path = get_config_path(ctx)
     init_helper(config_path)
+
 
 @app.command()
 def install(ctx: typer.Context):
@@ -102,6 +105,7 @@ def watch(ctx: typer.Context):
     config_path = get_config_path(ctx)
     watch_helper(config_path)
 
+
 @app.command()
 def stats(ctx: typer.Context):
     """
@@ -112,9 +116,12 @@ def stats(ctx: typer.Context):
         _initialize_db(config_path)
     except ValueError as e:
         console.print(f"[bold red]Configuration error:[/bold red] {e}")
-        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        console.print(
+            "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
+        )
         raise typer.Exit(1)
     stats_helper()
+
 
 @app.command()
 def doctor(ctx: typer.Context):
@@ -128,17 +135,32 @@ def doctor(ctx: typer.Context):
         pass  # doctor_helper will report the missing credentials itself
     doctor_helper(config_path)
 
+
 @app.command()
 def query(
     ctx: typer.Context,
     task: str = typer.Argument(..., help="Task description to retrieve context for"),
-    entities: list[str] | None = typer.Option(None, "--entity", "-e", help="Specific entity names to include as seeds"),
-    file: str | None = typer.Option(None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"),
-    top_k: int = typer.Option(0, "--top-k", help="Max results (0 = use config default)"),
-    budget: int = typer.Option(0, "--budget", help="Token budget (0 = use config default)"),
-    viz: bool = typer.Option(False, "--viz", help="Open visualizer after running query"),
-    json_out: bool = typer.Option(False, "--json", help="Output results as machine-readable JSON"),
-    compact: bool = typer.Option(False, "--compact", help="Compact output: file paths and scores only"),
+    entities: list[str] | None = typer.Option(
+        None, "--entity", "-e", help="Specific entity names to include as seeds"
+    ),
+    file: str | None = typer.Option(
+        None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"
+    ),
+    top_k: int = typer.Option(
+        0, "--top-k", help="Max results (0 = use config default)"
+    ),
+    budget: int = typer.Option(
+        0, "--budget", help="Token budget (0 = use config default)"
+    ),
+    viz: bool = typer.Option(
+        False, "--viz", help="Open visualizer after running query"
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", help="Output results as machine-readable JSON"
+    ),
+    compact: bool = typer.Option(
+        False, "--compact", help="Compact output: file paths and scores only"
+    ),
 ):
     """
     Run the retrieval pipeline to get context for a specific task.
@@ -148,12 +170,24 @@ def query(
         _initialize_db(config_path)
     except ValueError as e:
         console.print(f"[bold red]Configuration error:[/bold red] {e}")
-        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        console.print(
+            "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
+        )
         raise typer.Exit(1)
-    query_helper(config_path, task, entities, file, top_k, budget, json_out=json_out, compact=compact)
+    query_helper(
+        config_path,
+        task,
+        entities,
+        file,
+        top_k,
+        budget,
+        json_out=json_out,
+        compact=compact,
+    )
 
     if viz:
         visualize_helper(config_path, port=8474, no_browser=False, initial_task=task)
+
 
 @app.command()
 def explain(
@@ -169,7 +203,9 @@ def explain(
         _initialize_db(config_path)
     except ValueError as e:
         console.print(f"[bold red]Configuration error:[/bold red] {e}")
-        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        console.print(
+            "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
+        )
         raise typer.Exit(1)
     explain_helper(config_path, task, top_k)
 
@@ -178,9 +214,17 @@ def explain(
 def visualize(
     ctx: typer.Context,
     port: int = typer.Option(8474, "--port", "-p", help="Port to listen on"),
-    no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser automatically"),
-    dev: bool = typer.Option(False, "--dev", help="API-only mode for Vite dev server (run 'cd frontend && npm run dev' separately)"),
-    watch: bool = typer.Option(False, "--watch", help="Enable file watching and live updates"),
+    no_browser: bool = typer.Option(
+        False, "--no-browser", help="Don't open browser automatically"
+    ),
+    dev: bool = typer.Option(
+        False,
+        "--dev",
+        help="API-only mode for Vite dev server (run 'cd frontend && npm run dev' separately)",
+    ),
+    watch: bool = typer.Option(
+        False, "--watch", help="Enable file watching and live updates"
+    ),
 ) -> None:
     """
     Start the interactive CodeGraph visualizer in your browser.
@@ -195,7 +239,9 @@ def visualize(
 @app.command()
 def serve(
     ctx: typer.Context,
-    config: str | None = typer.Option(None, "--config", help="Config path passed to the MCP server")
+    config: str | None = typer.Option(
+        None, "--config", help="Config path passed to the MCP server"
+    ),
 ):
     """
     Start the CodeGraph MCP server.
@@ -203,17 +249,22 @@ def serve(
     config_path = config or get_config_path(ctx)
     os.environ["CODEGRAPH_CONFIG"] = str(Path(config_path).resolve())
     from codegraph.mcp.server import main as serve_main
+
     serve_main()
+
 
 # Analyze command group
 analyze_app = typer.Typer(help="Analyze relationships and dependencies.")
 app.add_typer(analyze_app, name="analyze")
 
+
 @analyze_app.command("deps")
 def analyze_deps(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Entity name to find dependencies for"),
-    direction: str = typer.Option("both", "--direction", "-d", help="upstream, downstream, or both"),
+    direction: str = typer.Option(
+        "both", "--direction", "-d", help="upstream, downstream, or both"
+    ),
     depth: int = typer.Option(1, "--depth", help="Search depth (1 or 2)"),
     viz: bool = typer.Option(False, "--viz", help="Open visualizer for results"),
 ):
@@ -226,40 +277,55 @@ def analyze_deps(
         db_manager = _initialize_db(config_path)
     except ValueError as e:
         console.print(f"[bold red]Configuration error:[/bold red] {e}")
-        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        console.print(
+            "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
+        )
         raise typer.Exit(1)
     from codegraph.core.graph.queries import query_entity_dependencies
     from rich.table import Table
     import rich.box as box
 
     try:
-        results = query_entity_dependencies(db_manager.get_driver(), name, direction, depth)
+        results = query_entity_dependencies(
+            db_manager.get_driver(), name, direction, depth
+        )
         if not results:
             console.print(f"[yellow]No dependencies found for '{name}'[/yellow]")
             return
 
-        table = Table(title=f"Dependencies of '{name}' ({direction}, depth {depth})", box=box.ROUNDED)
+        table = Table(
+            title=f"Dependencies of '{name}' ({direction}, depth {depth})",
+            box=box.ROUNDED,
+        )
         table.add_column("Qualified Name", style="cyan")
         table.add_column("Type", style="magenta")
         table.add_column("Relationship", style="yellow")
         table.add_column("File Path", style="blue")
         for res in results:
-            table.add_row(res.qualified_name, res.label, res.relationship_type or "", res.file_path)
+            table.add_row(
+                res.qualified_name,
+                res.label,
+                res.relationship_type or "",
+                res.file_path,
+            )
         console.print(table)
 
         if viz:
             visualize_helper(config_path, port=8474, no_browser=False)
     except ValueError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
-        console.print("[dim]Use [bold]codegraph query[/bold] to confirm the entity name exists[/dim]")
+        console.print(
+            "[dim]Use [bold]codegraph query[/bold] to confirm the entity name exists[/dim]"
+        )
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1)
 
+
 @analyze_app.command("dead-code")
 def analyze_dead(
     ctx: typer.Context,
-    limit: int = typer.Option(50, "--limit", "-l", help="Maximum number of results")
+    limit: int = typer.Option(50, "--limit", "-l", help="Maximum number of results"),
 ):
     """Find functions and methods that are never called (potential dead code)."""
     config_path = get_config_path(ctx)
@@ -267,7 +333,9 @@ def analyze_dead(
         db_manager = _initialize_db(config_path)
     except ValueError as e:
         console.print(f"[bold red]Configuration error:[/bold red] {e}")
-        console.print("[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]")
+        console.print(
+            "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
+        )
         raise typer.Exit(1)
     from codegraph.core.graph.queries import find_dead_code
     from rich.table import Table
@@ -291,8 +359,10 @@ def analyze_dead(
         table.add_row(res.qualified_name, res.label, res.file_path)
     console.print(table)
 
+
 def cli():
     app()
+
 
 if __name__ == "__main__":
     cli()

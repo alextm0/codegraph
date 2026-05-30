@@ -43,7 +43,7 @@ pip install -e .
 codegraph init
 
 # 3. Register the MCP server with your AI assistant
-codegraph install      # writes .mcp.json (Claude Code) or claude.json (Claude Desktop)
+codegraph install      # writes .mcp.json (Claude Code), claude.json (Claude Desktop), or .gemini/settings.json (Gemini CLI)
 
 # 4. Index your project
 codegraph rebuild

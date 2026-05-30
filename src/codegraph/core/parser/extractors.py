@@ -31,10 +31,12 @@ from codegraph.core.parser.node_utils import (
 )
 
 
-def extract_functions(root: Node, source: bytes, file_path: str) -> list[FunctionEntity]:
+def extract_functions(
+    root: Node, source: bytes, file_path: str
+) -> list[FunctionEntity]:
     """
     Collect top-level (module-level) function definitions from a Tree-sitter AST root node.
-    
+
     Returns:
         list[FunctionEntity]: Extracted functions with fields: name, file_path, line_number (1-based), end_line (1-based), signature, and docstring.
     """
@@ -75,14 +77,14 @@ def extract_functions(root: Node, source: bytes, file_path: str) -> list[Functio
 def extract_classes(root: Node, source: bytes, file_path: str) -> list[ClassEntity]:
     """
     Collect top-level class definitions from the module AST root.
-    
+
     Scans the root node for class_definition nodes (including those wrapped by decorators) and returns corresponding ClassEntity objects populated with the class name, file path, 1-based start and end line numbers, and base classes. Classes without an identifier are skipped.
-    
+
     Parameters:
         root (Node): Tree-sitter AST root node for the module.
         source (bytes): The source file bytes used to extract node text.
         file_path (str): Path to the source file associated with the AST.
-    
+
     Returns:
         list[ClassEntity]: ClassEntity objects for each discovered top-level class.
     """
@@ -120,12 +122,12 @@ def extract_classes(root: Node, source: bytes, file_path: str) -> list[ClassEnti
 def extract_methods(root: Node, source: bytes, file_path: str) -> list[MethodEntity]:
     """
     Collect all methods defined inside classes in the given AST root.
-    
+
     Parameters:
         root (Node): Tree-sitter AST root node of the module.
         source (bytes): Source bytes used to extract textual content for signatures and docstrings.
         file_path (str): Path of the source file being analyzed.
-    
+
     Returns:
         list[MethodEntity]: MethodEntity objects for each method found; each includes method name, class_name, file_path, line_number, end_line, signature, and docstring.
     """
@@ -161,14 +163,14 @@ def _collect_methods_from_class(
 ) -> None:
     """
     Populate the provided list with MethodEntity objects for each method defined in the given class node.
-    
+
     Parameters:
         class_node (Node): Tree-sitter AST node for the class definition to inspect.
         class_name (str): Name of the class to assign to each MethodEntity.
         source (bytes): Original source bytes used to extract text for signatures and docstrings.
         file_path (str): Path of the file containing the class; stored on each MethodEntity.
         methods (list[MethodEntity]): Mutable list that will be appended with discovered MethodEntity instances.
-    
+
     Notes:
         - Decorated methods are handled by inspecting inner function definitions.
         - If the class has no block body, the function returns without mutating `methods`.
@@ -217,7 +219,7 @@ def _collect_methods_from_class(
 def extract_imports(root: Node, source: bytes, _file_path: str) -> list[ImportEntity]:
     """
     Extract non-stdlib import statements from a module AST.
-    
+
     Returns:
         list[ImportEntity]: ImportEntity objects for each non-stdlib import found in the module.
     """
@@ -233,15 +235,15 @@ def extract_imports(root: Node, source: bytes, _file_path: str) -> list[ImportEn
 def _parse_import_from(node: Node, source: bytes) -> list[ImportEntity]:
     """
     Parse a "from X import Y" statement into one or more ImportEntity records.
-    
+
     Parses the module path (including relative imports), the set of imported names (identifiers,
     dotted names, aliased imports, or wildcard `*`), and whether the import is relative.
     Skips and returns an empty list for imports that resolve to a Python standard-library module.
-    
+
     Parameters:
         node (Node): Tree-sitter node representing a `from ... import ...` statement.
         source (bytes): Original source bytes used to extract text for node children.
-    
+
     Returns:
         list[ImportEntity]: A list containing a single ImportEntity describing the parsed import,
         or an empty list if the module path is detected as a stdlib module.
@@ -308,7 +310,7 @@ def _parse_import_from(node: Node, source: bytes) -> list[ImportEntity]:
 def _parse_import(node: Node, source: bytes) -> list[ImportEntity]:
     """
     Extracts non-stdlib modules from a plain `import X` statement.
-    
+
     Returns:
         list[ImportEntity]: A list of ImportEntity objects, one per imported module. Each entry has
         `module_path` set to the imported module, `imported_names` as an empty tuple, `is_relative`
@@ -350,7 +352,7 @@ def _parse_import(node: Node, source: bytes) -> list[ImportEntity]:
 def extract_calls(root: Node, source: bytes, _file_path: str) -> list[CallEntity]:
     """
     Collect all call expressions in the AST and their enclosing scope.
-    
+
     Returns:
         calls (list[CallEntity]): A list of CallEntity objects representing each call expression; each entry includes the callee name, the enclosing caller scope name, and a 1-based line_number where the call occurs.
     """
@@ -362,9 +364,9 @@ def extract_calls(root: Node, source: bytes, _file_path: str) -> list[CallEntity
 def _walk_calls(node: Node, source: bytes, calls: list[CallEntity]) -> None:
     """
     Traverse the AST rooted at `node` and append a CallEntity for each call expression found.
-    
+
     Each appended CallEntity contains the callee's text, the enclosing scope name, and the 1-based line number. The provided `calls` list is mutated in place.
-    
+
     Parameters:
         node (Node): The AST node to traverse.
         source (bytes): Source bytes used to extract node text and context.

@@ -79,7 +79,7 @@ There is no `get_graph_stats`, `find_dead_code`, or `execute_cypher_query` MCP t
 ```bash
 pip install -e .
 codegraph init         # Interactive wizard: Neo4j credentials, project root, config.yaml
-codegraph install      # Register MCP server with Claude Code (.mcp.json) or Claude Desktop
+codegraph install      # Register MCP server with Claude Code, Claude Desktop, or Gemini CLI
 ```
 
 **Daily use:**

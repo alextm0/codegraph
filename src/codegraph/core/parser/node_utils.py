@@ -14,26 +14,26 @@ from tree_sitter import Node
 def node_text(node: Node, source: bytes) -> str:
     """
     Retrieve the UTF-8 text covered by a Tree-sitter node from the source bytes.
-    
+
     Parameters:
         node (Node): The Tree-sitter node whose byte range will be extracted.
         source (bytes): The full source file as bytes.
-    
+
     Returns:
         The decoded string of source[node.start_byte:node.end_byte]; invalid UTF-8 sequences are replaced.
     """
-    return source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+    return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
 
 def is_stdlib_module(module_name: str) -> bool:
     """
     Determine whether a module name refers to a top-level Python standard library module.
-    
+
     Checks only the first segment of a possibly dotted module name against sys.stdlib_module_names (Python 3.10+).
-    
+
     Parameters:
         module_name (str): Module import name (may be dotted, e.g. "xml.etree").
-    
+
     Returns:
         `true` if the top-level name is in the Python standard library, `false` otherwise.
     """
@@ -44,11 +44,11 @@ def is_stdlib_module(module_name: str) -> bool:
 def get_docstring(body_node: Node, source: bytes) -> str | None:
     """
     Extract the first docstring text from a function or class body node.
-    
+
     Parameters:
         body_node (Node | None): The Tree-sitter node representing the body block of a function or class. If None, no docstring is present.
         source (bytes): The original source bytes from which node text is extracted.
-    
+
     Returns:
         str | None: The docstring content with surrounding quotes removed and whitespace trimmed, `""` for an explicitly empty docstring, or `None` if no docstring is found.
     """
@@ -66,25 +66,33 @@ def get_docstring(body_node: Node, source: bytes) -> str | None:
             if inner.type == "string":
                 raw = node_text(inner, source)
                 for prefix in ('"""', "'''", '"', "'"):
-                    if raw.startswith(prefix) and raw.endswith(prefix) and len(raw) > 2 * len(prefix):
-                        return raw[len(prefix):-len(prefix)].strip()
-                    if raw.startswith(prefix) and raw.endswith(prefix) and len(raw) == 2 * len(prefix):
+                    if (
+                        raw.startswith(prefix)
+                        and raw.endswith(prefix)
+                        and len(raw) > 2 * len(prefix)
+                    ):
+                        return raw[len(prefix) : -len(prefix)].strip()
+                    if (
+                        raw.startswith(prefix)
+                        and raw.endswith(prefix)
+                        and len(raw) == 2 * len(prefix)
+                    ):
                         return ""
                 return raw.strip()
-        
+
         return None
-        
+
     return None
 
 
 def get_function_signature(func_node: Node, source: bytes) -> str:
     """
     Retrieve the parameter list text from a function definition node.
-    
+
     Parameters:
         func_node (Node): A Tree-sitter `function_definition` node.
         source (bytes): The original source bytes used to extract node text.
-    
+
     Returns:
         The parameter list text for the function (for example "(self, x=1)"), or "()" if no parameters node is present.
     """
@@ -97,9 +105,9 @@ def get_function_signature(func_node: Node, source: bytes) -> str:
 def get_class_bases(class_node: Node, source: bytes) -> tuple[str, ...]:
     """
     Get base class names from a class_definition node.
-    
+
     Returns:
-    	tuple[str, ...]: Tuple of base class name strings in the order they appear; empty tuple if the class has no bases.
+        tuple[str, ...]: Tuple of base class name strings in the order they appear; empty tuple if the class has no bases.
     """
     bases: list[str] = []
     for child in class_node.children:
@@ -113,11 +121,11 @@ def get_class_bases(class_node: Node, source: bytes) -> tuple[str, ...]:
 def find_enclosing_scope(node: Node, source: bytes) -> str:
     """
     Finds the nearest enclosing function or method scope name for the given AST node.
-    
+
     Parameters:
         node (Node): The Tree-sitter node from which to begin searching up the tree.
         source (bytes): The original source bytes used to extract identifier text.
-    
+
     Returns:
         str: "ClassName.method_name" for a method defined inside a class, "function_name" for a enclosing function, or "<module>" when no enclosing function or class is found.
     """

@@ -43,7 +43,9 @@ def _start_background_index(state: ServerState) -> None:
 
     def _index() -> None:
         try:
-            logger.info("Auto-index: starting background indexing of %s", state.project_root)
+            logger.info(
+                "Auto-index: starting background indexing of %s", state.project_root
+            )
             from codegraph.utils.ignore import load_ignore_patterns
             from codegraph.utils.config import load_raw_config
             from codegraph.core.graph import clear_database, build_graph
@@ -54,15 +56,22 @@ def _start_background_index(state: ServerState) -> None:
             exclude += raw_config.get("exclude_patterns", [])
 
             from pathlib import Path
+
             ignore_file = Path(state.project_root) / ".cgignore"
             if ignore_file.exists():
                 exclude.extend(load_ignore_patterns(ignore_file))
 
             parser = create_parser()
-            all_entities = parse_directory(state.project_root, parser, exclude_patterns=exclude)
+            all_entities = parse_directory(
+                state.project_root, parser, exclude_patterns=exclude
+            )
             clear_database(state.driver)
             counts = build_graph(state.driver, all_entities)
-            total = sum(v for k, v in counts.items() if k in ("File", "Function", "Class", "Method"))
+            total = sum(
+                v
+                for k, v in counts.items()
+                if k in ("File", "Function", "Class", "Method")
+            )
             logger.info("Auto-index: complete — %d nodes indexed", total)
         except Exception:
             logger.exception("Auto-index: background indexing failed")
@@ -105,11 +114,13 @@ def get_relevant_context_impl(
     if _graph_is_empty(state):
         logger.warning("get_relevant_context: graph is empty — triggering auto-index")
         _start_background_index(state)
-        return json.dumps({
-            "error": "Graph index is empty — indexing is now running in the background.",
-            "action": "Wait for indexing to complete, then call get_relevant_context again.",
-            "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
-        })
+        return json.dumps(
+            {
+                "error": "Graph index is empty — indexing is now running in the background.",
+                "action": "Wait for indexing to complete, then call get_relevant_context again.",
+                "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
+            }
+        )
 
     try:
         context_items = run_retrieval_pipeline(
@@ -125,18 +136,26 @@ def get_relevant_context_impl(
         )
     except Exception as exc:
         logger.exception("get_relevant_context pipeline failed")
-        return json.dumps({
-            "error": "Retrieval pipeline failed",
-            "detail": str(exc),
-            "hint": "Run 'codegraph doctor' to check system health, or 'codegraph rebuild' to re-index.",
-        })
+        return json.dumps(
+            {
+                "error": "Retrieval pipeline failed",
+                "detail": str(exc),
+                "hint": "Run 'codegraph doctor' to check system health, or 'codegraph rebuild' to re-index.",
+            }
+        )
 
     if not context_items:
-        return json.dumps({
-            "summary": {"result_count": 0, "total_tokens": 0, "token_budget": effective_budget},
-            "results": [],
-            "hint": "No results found. Is the graph indexed? Run: codegraph rebuild",
-        })
+        return json.dumps(
+            {
+                "summary": {
+                    "result_count": 0,
+                    "total_tokens": 0,
+                    "token_budget": effective_budget,
+                },
+                "results": [],
+                "hint": "No results found. Is the graph indexed? Run: codegraph rebuild",
+            }
+        )
 
     total_tokens = sum(item.token_count for item in context_items)
 
@@ -188,30 +207,37 @@ def query_dependencies_impl(
             depth=depth,
         )
     except ValueError as exc:
-        return json.dumps({
-            "error": str(exc),
-            "hint": "Entity not found. Use get_relevant_context first to confirm the entity name exists.",
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "hint": "Entity not found. Use get_relevant_context first to confirm the entity name exists.",
+            }
+        )
     except Exception as exc:
         logger.exception("query_dependencies failed")
-        return json.dumps({
-            "error": "Dependency query failed",
-            "detail": str(exc),
-            "hint": "Run 'codegraph doctor' to check system health.",
-        })
+        return json.dumps(
+            {
+                "error": "Dependency query failed",
+                "detail": str(exc),
+                "hint": "Run 'codegraph doctor' to check system health.",
+            }
+        )
 
     if not nodes:
-        return json.dumps({
-            "result_count": 0,
-            "results": [],
-            "hint": f"No {direction} dependencies found for '{entity_name}'. Try direction='both' or depth=2.",
-        })
+        return json.dumps(
+            {
+                "result_count": 0,
+                "results": [],
+                "hint": f"No {direction} dependencies found for '{entity_name}'. Try direction='both' or depth=2.",
+            }
+        )
 
     project_root = state.project_root
     serializable = [
         {
             "qualified_name": make_relative_qualified_name(
-                node.qualified_name, node.file_path,
+                node.qualified_name,
+                node.file_path,
                 make_relative_path(node.file_path, project_root),
             ),
             "name": node.name,
@@ -222,7 +248,10 @@ def query_dependencies_impl(
         for node in nodes
     ]
 
-    return json.dumps({
-        "result_count": len(serializable),
-        "results": serializable,
-    }, indent=2)
+    return json.dumps(
+        {
+            "result_count": len(serializable),
+            "results": serializable,
+        },
+        indent=2,
+    )

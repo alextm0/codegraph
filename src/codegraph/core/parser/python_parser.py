@@ -37,7 +37,7 @@ PY_LANGUAGE = get_tree_sitter_manager().get_language("python")
 def create_parser() -> Parser:
     """
     Create a Parser configured to parse Python source using the module's Python language binding.
-    
+
     Returns:
         parser (Parser): A tree-sitter Parser instance configured with the Python Language.
     """
@@ -47,9 +47,9 @@ def create_parser() -> Parser:
 def parse_file(source: bytes, file_path: str, parser: Parser) -> FileEntities:
     """
     Extract code entities from a Python source byte string and return them as a FileEntities.
-    
+
     If the parser fails (e.g., raises TypeError or ValueError), an empty FileEntities for the given file_path is returned.
-    
+
     Returns:
         FileEntities: A FileEntities instance populated with functions, classes, methods, imports, and calls found in the source.
     """
@@ -110,11 +110,11 @@ def parse_directory(
 def _iter_python_files(directory: str, exclude_patterns: list[str]) -> Iterator[Path]:
     """
     Generate Path objects for Python (.py) files under the given directory, excluding any that match the provided patterns.
-    
+
     Parameters:
         directory (str): Root directory to search for Python files.
         exclude_patterns (list[str]): Patterns used to skip files; patterns may be wildcards or substrings.
-    
+
     Returns:
         Iterator[Path]: An iterator of Path objects for .py files under `directory` that do not match any exclude pattern.
     """
