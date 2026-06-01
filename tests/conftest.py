@@ -9,7 +9,6 @@ from pathlib import Path
 
 from unittest.mock import MagicMock
 import pytest
-from neo4j.exceptions import ServiceUnavailable, AuthError
 
 from codegraph.core.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
 from codegraph.core.graph.database import DatabaseManager

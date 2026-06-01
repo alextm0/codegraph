@@ -1,5 +1,3 @@
-from pathlib import Path
-import pytest
 from codegraph.utils.ignore import is_ignored, load_ignore_patterns
 
 def test_load_ignore_patterns_nonexistent():

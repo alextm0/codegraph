@@ -1,14 +1,11 @@
 import { useTheme } from '../../context/ThemeContext'
 
 interface TopBarProps {
-  nodeCount: number
-  edgeCount: number
-  wsConnected: boolean
-  topK: number
+  gitInfo?: { repo: string; commit: string }
 }
 
 export default function TopBar({
-  nodeCount, edgeCount, wsConnected, topK,
+  gitInfo,
 }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
 
@@ -48,73 +45,16 @@ export default function TopBar({
           >
             CODEGRAPH
           </span>
-          <span
-            style={{
-              fontSize: 10,
-              color: 'var(--text-muted)',
-              letterSpacing: '0.10em',
-            }}
-          >
-            / v0.4.2
-          </span>
         </div>
 
-        <MetaChip label="repo" value="codegraph @ main" />
-        <MetaChip label="commit" value="09e091fc" />
+        {gitInfo && (
+          <>
+            <MetaChip label="repo" value={gitInfo.repo} />
+            <MetaChip label="commit" value={gitInfo.commit} />
+          </>
+        )}
 
         <div style={{ flex: 1 }} />
-
-        <MetaChip label="nodes" value={nodeCount.toLocaleString()} />
-        <MetaChip label="edges" value={edgeCount.toLocaleString()} />
-
-        {/* Live indicator */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '0 14px',
-            height: '100%',
-            borderLeft: '1px solid var(--border)',
-            background: wsConnected ? 'var(--accent-soft)' : 'transparent',
-          }}
-        >
-          <div
-            style={{
-              width: 6,
-              height: 6,
-              background: wsConnected ? 'var(--accent)' : 'var(--text-muted)',
-              animation: wsConnected ? 'lattice-blink 1.4s steps(2) infinite' : 'none',
-            }}
-          />
-          <span
-            style={{
-              fontSize: 10,
-              color: wsConnected ? 'var(--accent-ink)' : 'var(--text-muted)',
-              letterSpacing: '0.10em',
-            }}
-          >
-            {wsConnected ? 'LIVE' : 'OFFLINE'}
-          </span>
-        </div>
-
-        {/* Query hint */}
-        <div
-          style={{
-            padding: '0 16px',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            borderLeft: '1px solid var(--border)',
-            fontSize: 10,
-            color: 'var(--text-muted)',
-            letterSpacing: '0.08em',
-          }}
-        >
-          ~/codegraph/query &gt;{' '}
-          <span style={{ color: 'var(--accent)', marginLeft: 4 }}>cg run</span>
-          <span style={{ marginLeft: 4 }}>--top-k={topK}</span>
-        </div>
 
         <button
           onClick={toggleTheme}

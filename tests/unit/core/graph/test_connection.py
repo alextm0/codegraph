@@ -1,7 +1,5 @@
 """Tests for src/graph/connection.py — Neo4j driver lifecycle."""
 
-import os
-from pathlib import Path
 import yaml
 import pytest
 

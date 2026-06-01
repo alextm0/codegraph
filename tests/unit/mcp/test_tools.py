@@ -3,7 +3,6 @@
 import json
 import threading
 from unittest.mock import MagicMock, patch
-import pytest
 
 from codegraph.mcp.tools import (
     _graph_is_empty,

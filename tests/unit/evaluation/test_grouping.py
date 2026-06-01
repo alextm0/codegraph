@@ -3,9 +3,8 @@
 import io
 import json
 
-import pytest
 
-from evaluation.swe_bench_runner import InstanceGroup, _flush_ordered, _group_instances
+from evaluation.swe_bench_runner import _flush_ordered, _group_instances
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

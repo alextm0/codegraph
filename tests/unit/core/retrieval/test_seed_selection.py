@@ -1,6 +1,5 @@
 """Unit tests for pure-function helpers in seed_selection.py."""
 
-import pytest
 
 from codegraph.core.retrieval.seed_selection import extract_entity_names, tokenize
 

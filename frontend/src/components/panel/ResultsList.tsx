@@ -1,7 +1,7 @@
-import type { PPRFileResult, GraphNode } from '../../types/api'
+import type { PPREntityResult, GraphNode } from '../../types/api'
 
 interface ResultsListProps {
-  results: PPRFileResult[]
+  results: PPREntityResult[]
   onNodeSelect?: (node: GraphNode) => void
 }
 
@@ -24,13 +24,14 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
           borderBottom: '1px solid var(--border)',
           background: 'var(--surface2)',
           fontSize: 10,
-          letterSpacing: '0.16em',
+          letterSpacing: '0.12em',
           color: 'var(--text-dim)',
           textTransform: 'uppercase',
+          fontWeight: 600,
           flexShrink: 0,
         }}
       >
-        ▸ structural.ranking
+        Structural Ranking
       </div>
 
       {/* Column headers — simplified */}
@@ -48,8 +49,8 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
           justifyContent: 'space-between',
         }}
       >
-        <span>ranked entities</span>
-        <span style={{ color: 'var(--accent)' }}>structural score</span>
+        <span>Ranked Entities</span>
+        <span style={{ color: 'var(--accent)' }}>Relevance</span>
       </div>
 
       {/* Rows */}
@@ -70,26 +71,28 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
           results.map((res) => {
             const fp = res.file_path
             const parts = fp.split('/')
-            const short = parts.pop() ?? fp
+            const fileName = parts.pop() ?? fp
             const dir = parts.join('/')
 
             const handleClick = () => {
               if (onNodeSelect) {
                 onNodeSelect({
-                  id: fp,
-                  label: 'File',
-                  name: short,
+                  id: res.qualified_name,
+                  label: res.label as any,
+                  name: res.name,
                   file_path: fp,
                   ppr_score: res.score,
                   is_seed: false,
                   seed_weight: 0,
+                  line_number: res.line_number,
+                  line_end: res.line_end,
                 })
               }
             }
 
             return (
               <div
-                key={fp}
+                key={res.qualified_name}
                 onClick={handleClick}
                 style={{
                   display: 'flex',
@@ -132,18 +135,34 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
                     >
                       {res.rank}
                     </div>
-                    <div
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        color: 'var(--text)',
-                        fontWeight: 600,
-                        fontSize: 12,
-                        letterSpacing: '0.01em',
-                      }}
-                    >
-                      {short}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      <span
+                        style={{
+                          fontSize: 8,
+                          fontWeight: 700,
+                          padding: '1px 4px',
+                          background: 'var(--surface2)',
+                          color: 'var(--text-dim)',
+                          borderRadius: 2,
+                          textTransform: 'uppercase',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {res.label[0]}
+                      </span>
+                      <div
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: 'var(--text)',
+                          fontWeight: 600,
+                          fontSize: 12,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        {res.name}
+                      </div>
                     </div>
                   </div>
                   <div
@@ -170,7 +189,7 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
                   }}
                   title={fp}
                 >
-                  {dir ? `${dir}/` : ''}<span style={{ color: 'var(--text-dim)' }}>{short}</span>
+                  {dir ? `${dir}/` : ''}<span style={{ color: 'var(--text-dim)' }}>{fileName}</span>
                 </div>
 
                 {res.path && (
@@ -213,9 +232,6 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
         >
           <span>
             <span style={{ color: 'var(--accent)' }}>◆</span> {results.length} entities ranked
-          </span>
-          <span>
-            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
         </div>
       )}

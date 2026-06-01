@@ -44,11 +44,16 @@ class SeedInfo(BaseModel):
     weight: float
 
 
-class PPRFileResult(BaseModel):
+class PPREntityResult(BaseModel):
     rank: int
+    qualified_name: str
+    name: str
+    label: str
     file_path: str
     score: float
     path: str
+    line_number: int = 0
+    line_end: int = 0
 
 
 class BM25FileResult(BaseModel):
@@ -58,11 +63,12 @@ class BM25FileResult(BaseModel):
 
 class QueryResponse(BaseModel):
     seeds: list[SeedInfo]
-    ppr_results: list[PPRFileResult]
+    ppr_results: list[PPREntityResult]
     bm25_results: list[BM25FileResult]
     graph: dict[str, list[dict]]
     damping_factor: float
     top_k: int
+    git_info: dict[str, str] = {}
 
 
 class NodeRelation(BaseModel):
@@ -132,40 +138,57 @@ def _run_query(
     top_k: int,
 ) -> QueryResponse:
     """Core logic: run PPR + BM25 + subgraph, return a QueryResponse."""
-    from codegraph.core.retrieval.seed_selection import (
-        extract_seeds,
-        prepare_bm25_index,
-        extract_entity_names,
-    )
     from codegraph.core.graph.ppr import (
         PPRConfig,
         create_gds_client,
-        run_ppr_from_node_ids,
     )
-    from codegraph.core.retrieval.pipeline import ensure_graph_ready
+    from codegraph.core.retrieval.pipeline import run_core_retrieval
     from codegraph.core.graph.queries import trace_path_to_seed, get_subgraph_for_nodes
     from codegraph.utils.config import parse_signal_weights
 
-    # Step 1: Extract seeds with auto-augmentation (matches CLI pipeline)
+    # Step 1: Configure PPR
+    ppr_section = raw_config.get("ppr", {})
+    damping_factor = ppr_section.get("damping_factor", 0.70)
+    ppr_config = PPRConfig(
+        damping_factor=damping_factor,
+        max_iterations=ppr_section.get("max_iterations", 20),
+        tolerance=ppr_section.get("tolerance", 1e-7),
+        top_k=ppr_section.get("top_k", 30),
+    )
+
     seed_section = raw_config.get("seed_selection", {})
     exclude_seed_paths = seed_section.get("exclude_seed_paths") or None
     signal_weights = parse_signal_weights(seed_section)
 
-    # Auto-augment mentioned_entities from task text
-    auto_entities = extract_entity_names(task)
+    gds = create_gds_client(driver)
 
-    bm25_index, searchable_nodes = prepare_bm25_index(
-        driver, exclude_paths=exclude_seed_paths
-    )
-    seeds = extract_seeds(
-        driver,
+    # Step 2: Run Unified Retrieval Core
+    core_result = run_core_retrieval(
+        driver=driver,
+        gds=gds,
         task_description=task,
-        mentioned_entities=auto_entities,
+        ppr_config=ppr_config,
         signal_weights=signal_weights,
-        bm25_index=bm25_index,
-        searchable_nodes=searchable_nodes,
-        exclude_paths=exclude_seed_paths,
+        exclude_seed_paths=exclude_seed_paths,
     )
+
+    if not core_result:
+        return QueryResponse(
+            seeds=[],
+            ppr_results=[],
+            bm25_results=[],
+            graph={"nodes": [], "edges": []},
+            damping_factor=damping_factor,
+            top_k=top_k,
+        )
+
+    seeds = core_result.seeds
+    ppr_results_raw = core_result.ppr_results
+
+    # Use the same deduplication logic as the core pipeline to avoid redundant File results
+    from codegraph.core.retrieval.post_processing import _deduplicate_file_entities
+    deduped_results = _deduplicate_file_entities(ppr_results_raw)
+    top_results = deduped_results[:top_k]
 
     seed_ids = list(seeds.seeds.keys())
     seed_names = _fetch_seed_names(driver, seed_ids)
@@ -183,42 +206,23 @@ def _run_query(
         for nid, weight in sorted(seeds.seeds.items(), key=lambda x: -x[1])
     ]
 
-    # Step 2: Configure PPR
-    ppr_section = raw_config.get("ppr", {})
-    damping_factor = ppr_section.get("damping_factor", 0.70)
-    ppr_config = PPRConfig(
-        damping_factor=damping_factor,
-        max_iterations=ppr_section.get("max_iterations", 20),
-        tolerance=ppr_section.get("tolerance", 1e-7),
-        top_k=ppr_section.get("top_k", 30),
-    )
-    gds = create_gds_client(driver)
-    ensure_graph_ready(driver, gds)
-
-    # Step 3: Run PPR
-    ppr_results_raw = run_ppr_from_node_ids(gds, driver, seeds.seeds, ppr_config)
-
-    # Deduplicate by file_path for the list view (keeps UI clean)
-    best_per_file: dict[str, float] = {}
-    for r in ppr_results_raw:
-        if r.file_path and (
-            r.file_path not in best_per_file or r.score > best_per_file[r.file_path]
-        ):
-            best_per_file[r.file_path] = r.score
-    top_files = sorted(best_per_file.items(), key=lambda x: -x[1])[:top_k]
-
-    # Add reasoning paths
+    # Add reasoning paths and format as PPREntityResult
     ppr_out = [
-        PPRFileResult(
+        PPREntityResult(
             rank=rank,
-            file_path=fp,
-            score=round(score, 5),
-            path=trace_path_to_seed(driver, seed_ids, fp),
+            qualified_name=r.qualified_name,
+            name=r.name,
+            label=r.label,
+            file_path=r.file_path,
+            score=round(r.score, 5),
+            path=trace_path_to_seed(driver, seed_ids, r.file_path),
+            line_number=r.line_start,
+            line_end=r.line_end,
         )
-        for rank, (fp, score) in enumerate(top_files, start=1)
+        for rank, r in enumerate(top_results, start=1)
     ]
 
-    # Step 4: Build D3 subgraph
+    # Step 3: Build D3 subgraph
     all_qnames: list[str] = [m["qname"] for m in seeds.metadata.values()]
     for r in ppr_results_raw:
         if r.qualified_name:
@@ -240,6 +244,8 @@ def _run_query(
             "ppr_score": round(ppr_score_by_qname.get(node["id"], 0.0), 5),
             "is_seed": node["id"] in seed_weight_by_qname,
             "seed_weight": round(seed_weight_by_qname.get(node["id"], 0.0), 4),
+            "line_number": node.get("line_number", 0),
+            "line_end": node.get("line_end", 0),
         }
         for node in subgraph["nodes"]
     ]
@@ -251,12 +257,33 @@ def _run_query(
         graph={"nodes": annotated_nodes, "edges": subgraph["edges"]},
         damping_factor=damping_factor,
         top_k=top_k,
+        git_info=_get_git_info(),
     )
 
 
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
+
+
+def _get_git_info() -> dict[str, str]:
+    """Fetch current git branch and commit hash."""
+    import subprocess
+
+    try:
+        branch = (
+            subprocess.check_output(["git", "branch", "--show-current"])
+            .decode()
+            .strip()
+        )
+        commit = (
+            subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
+            .decode()
+            .strip()
+        )
+        return {"repo": f"codegraph @ {branch}", "commit": commit}
+    except Exception:
+        return {"repo": "codegraph", "commit": "unknown"}
 
 
 def create_app(
@@ -340,7 +367,68 @@ def create_app(
     @app.get("/api/health")
     def health():
         """Health check endpoint."""
-        return {"status": "ok"}
+        return {"status": "ok", "git_info": _get_git_info()}
+
+    @app.post("/api/open")
+    def open_file_in_ide(file_path: str, line: int = 1):
+        """Open a file in an IDE at the specified line.
+        
+        Attempts to use available CLIs in order: Cursor, VS Code, PyCharm.
+        """
+        import subprocess
+        import shutil
+
+        try:
+            full_path = Path(project_root) / file_path
+            if not full_path.exists():
+                raise HTTPException(status_code=404, detail="File not found")
+
+            # Try Cursor first (common for AI dev)
+            if shutil.which("cursor"):
+                cmd = ["cursor", "--goto", f"{full_path}:{line}"]
+            # Then VS Code
+            elif shutil.which("code"):
+                cmd = ["code", "--goto", f"{full_path}:{line}"]
+            # Then PyCharm (usually 'charm' or 'pycharm')
+            elif shutil.which("charm"):
+                cmd = ["charm", "--line", str(line), str(full_path)]
+            elif shutil.which("pycharm"):
+                cmd = ["pycharm", "--line", str(line), str(full_path)]
+            else:
+                # Fallback to system default 'open' (macOS) or 'xdg-open' (Linux)
+                # Note: These usually don't support line numbers easily
+                if shutil.which("open"):
+                    cmd = ["open", str(full_path)]
+                elif shutil.which("xdg-open"):
+                    cmd = ["xdg-open", str(full_path)]
+                else:
+                    raise HTTPException(
+                        status_code=500, 
+                        detail="No supported IDE CLI found (cursor, code, charm, pycharm)"
+                    )
+
+            subprocess.run(cmd, check=True)
+            return {"status": "ok", "command": " ".join(cmd)}
+        except subprocess.CalledProcessError as e:
+            logger.error("Failed to open file in IDE: %s", e)
+            raise HTTPException(
+                status_code=500, detail=f"IDE CLI failed: {' '.join(cmd)}"
+            ) from e
+        except Exception as e:
+            logger.exception("Unexpected error opening file")
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/api/graph/base")
+    def get_base_graph():
+        """Return the entire graph of the repository."""
+        try:
+            from codegraph.core.graph.queries import get_full_graph
+
+            data = get_full_graph(driver)
+            return data
+        except Exception as e:
+            logger.exception("Base graph endpoint failed")
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.get("/api/node/{qname:path}", response_model=NodeDetailResponse)
     def node_detail(qname: str):

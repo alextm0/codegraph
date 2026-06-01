@@ -8,12 +8,14 @@ Design notes:
 """
 
 import logging
+from dataclasses import dataclass
 from graphdatascience import GraphDataScience
 from graphdatascience.graph.graph_object import Graph
 from neo4j import Driver
 
 from codegraph.core.graph.ppr import (
     PPRConfig,
+    PPRResult,
     drop_projection,
     project_graph,
     run_ppr_from_node_ids,
@@ -25,6 +27,7 @@ from codegraph.core.retrieval.post_processing import (
     reset_base_weights,
 )
 from codegraph.core.retrieval.seed_selection import (
+    PersonalizationVector,
     extract_entity_names,
     extract_seeds,
     prepare_bm25_index,
@@ -33,22 +36,33 @@ from codegraph.core.retrieval.seed_selection import (
 logger = logging.getLogger(__name__)
 
 
-def run_retrieval_pipeline(
+@dataclass(frozen=True)
+class RawRetrievalResult:
+    """Unified container for retrieval signals and PPR scores.
+    
+    Consumed by MCP/CLI (for context formatting) and Visualizer (for graph display).
+    """
+    seeds: PersonalizationVector
+    ppr_results: list[PPRResult]
+
+
+def run_core_retrieval(
     driver: Driver,
     gds: GraphDataScience,
     task_description: str,
-    project_root: str,
     mentioned_entities: list[str] | None = None,
     current_file: str | None = None,
     ppr_config: PPRConfig | None = None,
     signal_weights: dict[str, float] | None = None,
-    token_budget: int = 6000,
     relationship_types: list[str] | None = None,
     orientation: str = "UNDIRECTED",
     apply_idf: bool = True,
     exclude_seed_paths: list[str] | None = None,
-) -> list[ContextResult]:
-    """Run the full retrieval pipeline and return context results."""
+) -> RawRetrievalResult | None:
+    """Core retrieval engine: seeds extraction -> PPR.
+    
+    This is the ground-truth retrieval logic used across all interfaces.
+    """
     if ppr_config is None:
         ppr_config = PPRConfig()
 
@@ -77,7 +91,7 @@ def run_retrieval_pipeline(
     )
     if not seeds.seeds:
         logger.warning("Pipeline: no seeds found — returning empty context")
-        return []
+        return None
 
     # Step 2: Prepare the graph for PPR (IDF weights + fresh GDS projection).
     ensure_graph_ready(
@@ -92,10 +106,46 @@ def run_retrieval_pipeline(
     ppr_results = run_ppr_from_node_ids(gds, driver, seeds.seeds, ppr_config)
     if not ppr_results:
         logger.warning("Pipeline: PPR returned no results")
+        return None
+
+    return RawRetrievalResult(seeds=seeds, ppr_results=ppr_results)
+
+
+def run_retrieval_pipeline(
+    driver: Driver,
+    gds: GraphDataScience,
+    task_description: str,
+    project_root: str,
+    mentioned_entities: list[str] | None = None,
+    current_file: str | None = None,
+    ppr_config: PPRConfig | None = None,
+    signal_weights: dict[str, float] | None = None,
+    token_budget: int = 6000,
+    relationship_types: list[str] | None = None,
+    orientation: str = "UNDIRECTED",
+    apply_idf: bool = True,
+    exclude_seed_paths: list[str] | None = None,
+) -> list[ContextResult]:
+    """Run the full retrieval pipeline and return context results."""
+    core_result = run_core_retrieval(
+        driver=driver,
+        gds=gds,
+        task_description=task_description,
+        mentioned_entities=mentioned_entities,
+        current_file=current_file,
+        ppr_config=ppr_config,
+        signal_weights=signal_weights,
+        relationship_types=relationship_types,
+        orientation=orientation,
+        apply_idf=apply_idf,
+        exclude_seed_paths=exclude_seed_paths,
+    )
+
+    if not core_result:
         return []
 
     # Step 4: Format results into token-budgeted ContextResult items with source code.
-    context_items = format_context(ppr_results, project_root, token_budget)
+    context_items = format_context(core_result.ppr_results, project_root, token_budget)
 
     logger.info(
         "Pipeline complete: %d context items (task='%s...')",

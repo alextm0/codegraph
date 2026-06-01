@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import * as d3 from 'd3'
 import type { D3Node, D3Edge } from '../../types/graph'
 import type { GraphNode } from '../../types/api'
@@ -76,12 +76,19 @@ export default function GraphCanvas({
   const [hiddenNodeTypes, setHiddenNodeTypes] = useState<Set<string>>(new Set())
   const [hiddenEdgeTypes, setHiddenEdgeTypes] = useState<Set<string>>(new Set())
 
-  const filteredNodes = nodes.filter(n => !hiddenNodeTypes.has(n.label.toLowerCase()))
-  const filteredEdges = edges.filter(e => {
-    let typeKey = e.type.toLowerCase()
-    if (typeKey === 'inherits_from') typeKey = 'inherits'
-    return !hiddenEdgeTypes.has(typeKey)
-  })
+  const filteredNodes = useMemo(() => 
+    nodes.filter(n => !hiddenNodeTypes.has(n.label.toLowerCase())),
+    [nodes, hiddenNodeTypes]
+  )
+  
+  const filteredEdges = useMemo(() => 
+    edges.filter(e => {
+      let typeKey = e.type.toLowerCase()
+      if (typeKey === 'inherits_from') typeKey = 'inherits'
+      return !hiddenEdgeTypes.has(typeKey)
+    }),
+    [edges, hiddenEdgeTypes]
+  )
 
   /* ResizeObserver */
   useEffect(() => {
@@ -90,6 +97,7 @@ export default function GraphCanvas({
     const parent = svg.parentElement
     if (!parent) return
     const ro = new ResizeObserver(entries => {
+      if (!entries[0]) return
       const { width, height } = entries[0].contentRect
       sizeRef.current = { w: Math.floor(width), h: Math.floor(height) }
     })
@@ -149,6 +157,12 @@ export default function GraphCanvas({
     })
 
     const g    = svgSel.append('g')
+    
+    // Inherit existing transform to prevent jumps on touch
+    const currentTransform = d3.zoomTransform(svg)
+    g.attr('transform', currentTransform.toString())
+    scaleRef.current = currentTransform.k
+
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.25, 6])
       .on('zoom', e => {
@@ -158,7 +172,11 @@ export default function GraphCanvas({
         const scaleTick = svg.parentElement?.querySelector('.lattice-scale-tick') as HTMLElement | null
         if (scaleTick) scaleTick.textContent = `scale: ${e.transform.k.toFixed(2)}×`
       })
+    
     svgSel.call(zoom)
+    // Synchronize zoom state if it was already modified
+    svgSel.call(zoom.transform, currentTransform)
+    
     zoomRef.current = zoom
 
     const nodeById: Record<string, D3Node> = {}
@@ -376,7 +394,8 @@ export default function GraphCanvas({
     const sn = filteredNodes.find(n => n.id === selectedNode.id)
     if (sn?.x !== undefined && sn?.y !== undefined && zoomRef.current) {
       const { w: W, h: H } = sizeRef.current
-      const scale = 2
+      // Soften the zoom level — 1.4 is a good balance between focus and context
+      const scale = 1.4
       d3.select(svgRef.current!)
         .transition().duration(750)
         .call(
@@ -614,7 +633,7 @@ function LatticeLegend({
         onClick={() => setOpen(true)}
         style={{
           position: 'absolute',
-          bottom: 56,
+          bottom: 12,
           left: 12,
           background: 'color-mix(in oklch, var(--surface) 88%, transparent)',
           backdropFilter: 'blur(8px)',
@@ -637,7 +656,7 @@ function LatticeLegend({
     <div
       style={{
         position: 'absolute',
-        bottom: 80,
+        bottom: 12,
         left: 12,
         background: 'color-mix(in oklch, var(--surface) 88%, transparent)',
         backdropFilter: 'blur(8px)',

@@ -487,6 +487,37 @@ def _run_trace_query(
     return _format_path(result["node_names"], result["rel_types"])
 
 
+def get_full_graph(driver: Driver) -> dict[str, list[dict]]:
+    """Return every single node and edge in the database."""
+    with driver.session() as session:
+        # Fetch nodes
+        nodes_res = session.run(
+            """
+            MATCH (n)
+            RETURN n.qualified_name AS id,
+                   n.name AS name,
+                   labels(n)[0] AS label,
+                   n.file_path AS file_path,
+                   coalesce(n.line_number, 0) AS line_number,
+                   coalesce(n.end_line, 0) AS line_end
+            """
+        )
+        nodes = [dict(r) for r in nodes_res]
+
+        # Fetch edges
+        edges_res = session.run(
+            """
+            MATCH (a)-[r]->(b)
+            RETURN a.qualified_name AS source,
+                   b.qualified_name AS target,
+                   type(r)          AS type
+            """
+        )
+        edges = [dict(r) for r in edges_res]
+
+    return {"nodes": nodes, "edges": edges}
+
+
 def get_subgraph_for_nodes(
     driver: Driver,
     qualified_names: list[str],
@@ -510,7 +541,9 @@ def get_subgraph_for_nodes(
             RETURN n.qualified_name AS id,
                    n.name AS name,
                    labels(n)[0] AS label,
-                   n.file_path AS file_path
+                   n.file_path AS file_path,
+                   coalesce(n.line_number, 0) AS line_number,
+                   coalesce(n.end_line, 0) AS line_end
             """,
             ids=qualified_names,
         )

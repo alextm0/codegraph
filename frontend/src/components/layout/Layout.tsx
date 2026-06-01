@@ -1,4 +1,4 @@
-import type { QueryResponse, GraphNode } from '../../types/api'
+import type { QueryResponse, GraphNode, GraphData } from '../../types/api'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
 import { useGraphData } from '../../hooks/useGraphData'
 import { useWebSocket } from '../../hooks/useWebSocket'
@@ -13,16 +13,20 @@ import ErrorBoundary from '../ErrorBoundary'
 
 interface LayoutProps {
   queryResult: QueryResponse | null
+  baseGraph: GraphData | null
   selectedNode: GraphNode | null
+  gitInfo?: { repo: string; commit: string }
   onQueryResult: (result: QueryResponse) => void
   onNodeSelect: (node: GraphNode | null) => void
 }
 
 export default function Layout({
   queryResult,
+  baseGraph,
   onQueryResult,
   onNodeSelect,
   selectedNode,
+  gitInfo,
 }: LayoutProps) {
   const {
     task, setTask, topK, setTopK,
@@ -32,7 +36,7 @@ export default function Layout({
   const { width: rightPanelWidth, handleMouseDown: handleRightMouseDown } =
     useResizablePanel(380, 250, 600, 'left')
 
-  const { nodes, edges, loading: graphLoading } = useGraphData(queryResult)
+  const { nodes, edges, loading: graphLoading } = useGraphData(queryResult, baseGraph)
   const wsState = useWebSocket()
 
   const seeds       = queryResult?.seeds ?? []
@@ -51,10 +55,7 @@ export default function Layout({
       }}
     >
       <TopBar
-        nodeCount={nodes.length}
-        edgeCount={edges.length}
-        wsConnected={wsState.connected}
-        topK={topK}
+        gitInfo={gitInfo}
       />
 
       {/* Left Rail */}

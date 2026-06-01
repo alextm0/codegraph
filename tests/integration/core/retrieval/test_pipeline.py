@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from codegraph.core.graph.graph_builder import build_graph, clear_database
-from codegraph.core.graph.ppr import PPRConfig, create_gds_client, drop_projection
+from codegraph.core.graph.ppr import PPRConfig, create_gds_client
 from codegraph.core.retrieval.pipeline import ensure_graph_ready, run_retrieval_pipeline
 from codegraph.core.retrieval.post_processing import ContextResult
 from codegraph.core.parser.python_parser import create_parser, parse_directory

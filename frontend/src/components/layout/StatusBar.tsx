@@ -14,16 +14,16 @@ interface StatusBarProps {
 }
 
 export default function StatusBar({ wsState, nodeCount, edgeCount }: StatusBarProps) {
-  const { lastMessage, connected } = wsState
+  const { connected, lastMessage } = wsState
   const now = new Date().toLocaleTimeString('en-GB', { hour12: false })
 
   const syncMsg = lastMessage
     ? lastMessage.type === 'file_changed'
-      ? `incremental.update on ${lastMessage.path ?? 'file_changed'}`
+      ? `incremental update: ${lastMessage.path?.split('/').pop()}`
       : lastMessage.type === 'rebuild_complete'
-      ? 'graph.synced ' + lastMessage.timestamp
-      : 'graph.rebuilding…'
-    : `graph.synced ${now}`
+      ? `graph synced: ${lastMessage.timestamp}`
+      : 'rebuilding graph...'
+    : `graph synced: ${now}`
 
   return (
     <div
@@ -36,24 +36,35 @@ export default function StatusBar({ wsState, nodeCount, edgeCount }: StatusBarPr
         alignItems: 'center',
         padding: '0 12px',
         gap: 16,
-        fontSize: 9.5,
+        fontSize: 9,
         color: 'var(--text-dim)',
-        letterSpacing: '0.06em',
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
         flexShrink: 0,
       }}
     >
-      <span style={{ color: connected ? 'var(--accent)' : 'var(--text-muted)' }}>
-        ● {connected ? 'ws.connected' : 'ws.offline'}
-      </span>
-      <span>·</span>
-      <span>{syncMsg}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: connected ? 'var(--accent)' : 'var(--text-muted)',
+            boxShadow: connected ? '0 0 8px var(--accent)' : 'none',
+            transition: 'all 0.3s ease',
+          }}
+        />
+        <span style={{ color: connected ? 'var(--text)' : 'var(--text-dim)' }}>
+          {syncMsg}
+        </span>
+      </div>
 
       <div style={{ flex: 1 }} />
 
-      <span>n=<span style={{ color: 'var(--text)' }}>{nodeCount}</span></span>
-      <span>e=<span style={{ color: 'var(--text)' }}>{edgeCount}</span></span>
-      <span>p50=<span style={{ color: 'var(--text)' }}>8ms</span></span>
-      <span>p95=<span style={{ color: 'var(--text)' }}>24ms</span></span>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontFamily: 'var(--font-mono)' }}>
+        <span>nodes: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{nodeCount}</span></span>
+        <span>edges: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{edgeCount}</span></span>
+      </div>
     </div>
   )
 }

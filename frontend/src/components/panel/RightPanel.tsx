@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getNodeDetail } from '../../api/client'
+import { getNodeDetail, openInIDE } from '../../api/client'
 import type { GraphNode, NodeDetailResponse, NodeRelation } from '../../types/api'
 
 interface RightPanelProps {
@@ -44,7 +44,7 @@ export default function RightPanel({
         fontFamily: 'var(--font-mono)',
       }}
     >
-      {/* ▸ node.inspect header */}
+      {/* Node Inspector header */}
       <div
         style={{
           padding: '8px 12px',
@@ -59,12 +59,13 @@ export default function RightPanel({
         <span
           style={{
             fontSize: 10,
-            letterSpacing: '0.16em',
+            letterSpacing: '0.12em',
             color: 'var(--text-dim)',
             textTransform: 'uppercase',
+            fontWeight: 600,
           }}
         >
-          ▸ node.inspect
+          Node Inspector
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <IconBtn onClick={onClose} title="Close">×</IconBtn>
@@ -101,9 +102,46 @@ export default function RightPanel({
               color: 'var(--text-muted)',
               marginTop: 4,
               wordBreak: 'break-all',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: 8,
             }}
           >
-            {selectedNode.file_path}
+            <span>{selectedNode.file_path}</span>
+            <button
+              onClick={() => {
+                const line = selectedNode.line_number || detail?.node?.line_number || 1
+                openInIDE(selectedNode.file_path, line).catch(err => {
+                  console.error('Failed to open in IDE', err)
+                  alert('Failed to open in IDE. Make sure "code" CLI is installed.')
+                })
+              }}
+              style={{
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                color: 'var(--text-dim)',
+                fontSize: 9,
+                padding: '2px 6px',
+                cursor: 'pointer',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                transition: 'all 100ms',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = 'var(--text)'
+                e.currentTarget.style.borderColor = 'var(--accent)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = 'var(--text-dim)'
+                e.currentTarget.style.borderColor = 'var(--border)'
+              }}
+            >
+              <span style={{ fontSize: 10 }}>↗</span> IDE
+            </button>
           </div>
         </div>
 
@@ -111,12 +149,12 @@ export default function RightPanel({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: selectedNode.is_seed ? '1fr 1fr' : '1fr',
             borderBottom: '1px dashed var(--border)',
           }}
         >
-          <div style={{ padding: 12, borderRight: '1px dashed var(--border)' }}>
-            <div style={statLabel}>ppr</div>
+          <div style={{ padding: 12, borderRight: selectedNode.is_seed ? '1px dashed var(--border)' : 'none' }}>
+            <div style={statLabel}>relevance</div>
             <div
               style={{
                 fontSize: 18,
@@ -127,18 +165,20 @@ export default function RightPanel({
               {(selectedNode.ppr_score || 0).toFixed(5)}
             </div>
           </div>
-          <div style={{ padding: 12 }}>
-            <div style={statLabel}>seed_w</div>
-            <div
-              style={{
-                fontSize: 18,
-                color: selectedNode.is_seed ? 'var(--seed)' : 'var(--text-muted)',
-                fontVariantNumeric: 'tabular-nums slashed-zero',
-              }}
-            >
-              {selectedNode.is_seed ? (selectedNode.seed_weight || 0).toFixed(3) : '—'}
+          {selectedNode.is_seed && (
+            <div style={{ padding: 12 }}>
+              <div style={statLabel}>seed weight</div>
+              <div
+                style={{
+                  fontSize: 18,
+                  color: 'var(--seed)',
+                  fontVariantNumeric: 'tabular-nums slashed-zero',
+                }}
+              >
+                {(selectedNode.seed_weight || 0).toFixed(3)}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Relations + source */}

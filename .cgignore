@@ -35,6 +35,7 @@ build/
 .pytest_cache/
 coverage.xml
 htmlcov/
+tests/fixtures/
 
 # MCP
 mcp.json

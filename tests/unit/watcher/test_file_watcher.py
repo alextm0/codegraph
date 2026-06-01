@@ -1,5 +1,4 @@
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, patch
 
 from codegraph.watcher.file_watcher import CodeGraphHandler, CodeGraphWatcher
 

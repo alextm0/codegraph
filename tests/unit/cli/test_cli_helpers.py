@@ -4,11 +4,8 @@ All file I/O and Neo4j interactions are mocked so no database is needed.
 """
 
 import json
-import platform
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -336,14 +333,13 @@ class TestQueryHelper:
             mock_dm.get_driver.return_value = MagicMock()
             mock_dm_getter.return_value = mock_dm
 
-            from io import StringIO
             output_lines = []
             with patch("codegraph.cli.cli_helpers.console") as mock_console:
                 mock_console.print = lambda *a, **kw: output_lines.append(str(a))
                 query_helper(config_path, "fix auth", None, None, 0, 0, json_out=True)
 
             # Find the JSON output line
-            json_line = next((l for l in output_lines if '"results"' in l or "results" in l), None)
+            next((l for l in output_lines if '"results"' in l or "results" in l), None)
             # We can't easily capture rich console JSON output in unit tests,
             # but we can verify no exception was raised and pipeline was called
         # Verify pipeline was called with correct task

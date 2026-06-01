@@ -98,8 +98,8 @@ def print_summary(wins: list[dict], n: int = TOP_N) -> None:
         print(f"  Instance  : {best['instance_id']}")
         print(f"  Gold file : {best['gold_files']}")
         print(f"  PPR rank  : #{rank}  (MRR={best['ppr_mrr']:.3f})")
-        print(f"\nNext step: run `codegraph explain \"<task description from SWE-bench>\"` on this instance")
-        print(f"to generate the graph path walkthrough for docs/thesis/killer-example.md")
+        print("\nNext step: run `codegraph explain \"<task description from SWE-bench>\"` on this instance")
+        print("to generate the graph path walkthrough for docs/thesis/killer-example.md")
         print(f"{'='*70}\n")
 
 

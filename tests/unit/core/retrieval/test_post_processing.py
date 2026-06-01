@@ -1,6 +1,5 @@
 """Unit tests for post_processing.py helpers that don't require Neo4j."""
 
-import pytest
 from codegraph.core.graph.ppr import PPRResult
 from codegraph.core.retrieval.post_processing import count_tokens, _deduplicate_file_entities
 

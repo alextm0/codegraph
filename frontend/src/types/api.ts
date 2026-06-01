@@ -19,12 +19,17 @@ export interface SeedInfo {
   weight: number
 }
 
-export interface PPRFileResult {
+export interface PPREntityResult {
   rank: number
+  qualified_name: string
+  name: string
+  label: string
   file_path: string
   score: number
   /** Human-readable path from the file to a seed node */
   path: string
+  line_number: number
+  line_end: number
 }
 
 export interface BM25FileResult {
@@ -45,6 +50,8 @@ export interface GraphNode {
   ppr_score: number
   is_seed: boolean
   seed_weight: number
+  line_number?: number
+  line_end?: number
 }
 
 export interface GraphEdge {
@@ -64,11 +71,12 @@ export interface GraphData {
 
 export interface QueryResponse {
   seeds: SeedInfo[]
-  ppr_results: PPRFileResult[]
+  ppr_results: PPREntityResult[]
   bm25_results: BM25FileResult[]
   graph: GraphData
   damping_factor: number
   top_k: number
+  git_info?: { repo: string; commit: string }
 }
 
 // ---------------------------------------------------------------------------
