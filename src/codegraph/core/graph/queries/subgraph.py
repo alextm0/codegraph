@@ -7,6 +7,7 @@ from neo4j import Driver
 from codegraph.core.graph.database import get_database_manager
 from codegraph.core.graph.queries.dependencies import _row_to_node_info
 from codegraph.core.graph.queries.models import NodeInfo
+from codegraph.core.graph.utils import normalize_path
 
 
 def get_file_contents(
@@ -57,6 +58,22 @@ def get_full_graph(driver: Driver) -> dict[str, list[dict]]:
         edges = [dict(r) for r in edges_res]
 
     return {"nodes": nodes, "edges": edges}
+
+
+def expand_qnames_with_file_nodes(
+    qualified_names: list[str],
+    *,
+    file_paths: list[str] | None = None,
+) -> list[str]:
+    """Add File node ids for entity paths so CONTAINS edges appear in query subgraphs."""
+    seen: dict[str, None] = dict.fromkeys(qualified_names)
+    for qname in qualified_names:
+        if "::" in qname:
+            seen[normalize_path(qname.split("::", 1)[0])] = None
+    for path in file_paths or ():
+        if path:
+            seen[normalize_path(path)] = None
+    return list(seen)
 
 
 def get_subgraph_for_nodes(

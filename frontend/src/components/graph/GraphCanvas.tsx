@@ -36,6 +36,8 @@ interface GraphCanvasProps {
 }
 
 const PARTICLE_MAX_EDGES = 500
+/** Stable empty default — avoids re-running highlight effect when no path is active. */
+const EMPTY_PATH_HIGHLIGHT: string[] = []
 /* Level-of-detail zoom thresholds (in transform scale k). */
 const LOD_PARTICLE_SCALE = 0.5
 const LOD_LABEL_SCALE = 0.7
@@ -49,20 +51,28 @@ function createTooltipEl(): HTMLDivElement {
   el.style.cssText = [
     'position:fixed',
     'background:var(--overlay)',
-    'backdrop-filter:blur(10px)',
+    'backdrop-filter:blur(12px)',
+    '-webkit-backdrop-filter:blur(12px)',
     'border:1px solid var(--border)',
-    'border-radius:var(--radius-sm)',
-    'padding:10px 14px',
+    'border-radius:var(--radius-md)',
+    'padding:9px 12px 9px 13px',
     'pointer-events:none',
     'z-index:999',
-    'max-width:280px',
+    'max-width:300px',
     'font-size:11px',
     'font-family:var(--font-mono)',
     'display:none',
-    'box-shadow:var(--elev-1)',
+    'box-shadow:var(--elev-2)',
   ].join(';')
   document.body.appendChild(el)
   return el
+}
+
+const NODE_TYPE_VAR: Record<string, string> = {
+  File: '--node-file',
+  Class: '--node-class',
+  Function: '--node-function',
+  Method: '--node-method',
 }
 
 function showTooltip(tt: HTMLDivElement, e: MouseEvent, d: D3Node) {
@@ -70,8 +80,13 @@ function showTooltip(tt: HTMLDivElement, e: MouseEvent, d: D3Node) {
   const sc  = ppr > 0 ? ppr.toFixed(5) : '—'
   const seedPart = d.is_seed ? ` · seed_w=${(d.seed_weight || 0).toFixed(3)}` : ''
   const name = d.name || d.file_path?.split('/').pop() || d.id?.split('::').pop() || '?'
+  const dotVar = NODE_TYPE_VAR[d.label] ?? '--text-muted'
   tt.innerHTML = `
-    <div style="font-weight:600;color:var(--text);margin-bottom:2px;word-break:break-all">${name}</div>
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+      <span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(${dotVar});box-shadow:0 0 6px color-mix(in oklch, var(${dotVar}) 60%, transparent)"></span>
+      <span style="font-weight:600;color:var(--text);word-break:break-all">${name}</span>
+      <span style="margin-left:auto;font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted)">${d.label ?? ''}</span>
+    </div>
     <div style="color:var(--text-muted);font-size:9px;margin-bottom:3px;word-break:break-all">${d.file_path ?? ''}</div>
     <div style="font-variant-numeric:tabular-nums slashed-zero;color:var(--text-dim);font-size:9px">ppr=${sc}${seedPart}</div>
   `
@@ -100,9 +115,9 @@ function rebuildStatusLabel(msg: WSStatus | null | undefined): string {
 export default function GraphCanvas({
   nodes, edges, onNodeSelect, selectedNode,
   highlightFilePath = null,
-  pathHighlightIds = [],
+  pathHighlightIds = EMPTY_PATH_HIGHLIGHT,
   viewMode = 'full',
-  dampingFactor = 0.70, topK = 30, showPprReadout = false, fitViewKey = 0,
+  dampingFactor = 0.70, topK = 10, showPprReadout = false, fitViewKey = 0,
   fileFocusKey = 0,
   projectHistory = [],
   isDatabaseEmpty = false,
@@ -140,6 +155,9 @@ export default function GraphCanvas({
   const requestDrawRef   = useRef<(() => void) | null>(null)
   const labelShowAllRef  = useRef(true)
   const labelSelRef       = useRef<d3.Selection<SVGTextElement, D3Node, SVGGElement, unknown> | null>(null)
+  const onNodeSelectRef   = useRef(onNodeSelect)
+
+  useEffect(() => { onNodeSelectRef.current = onNodeSelect })
 
   const [hiddenNodeTypes, setHiddenNodeTypes] = useState<Set<string>>(new Set())
   const [hiddenEdgeTypes, setHiddenEdgeTypes] = useState<Set<string>>(new Set())
@@ -223,10 +241,30 @@ export default function GraphCanvas({
       .attr('id', 'glow')
       .attr('x', '-80%').attr('y', '-80%')
       .attr('width', '260%').attr('height', '260%')
-    glow.append('feGaussianBlur').attr('stdDeviation', '2.5').attr('result', 'coloredBlur')
+    glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur')
     const glowMerge = glow.append('feMerge')
     glowMerge.append('feMergeNode').attr('in', 'coloredBlur')
     glowMerge.append('feMergeNode').attr('in', 'SourceGraphic')
+
+    /* Radial-gradient node fills for a soft volumetric look. */
+    const NODE_GRAD_VARS: Record<string, string> = {
+      File: '--node-file',
+      Class: '--node-class',
+      Function: '--node-function',
+      Method: '--node-method',
+      default: '--text-muted',
+    }
+    Object.entries(NODE_GRAD_VARS).forEach(([label, cssVar]) => {
+      const grad = defs.append('radialGradient')
+        .attr('id', `node-grad-${label}`)
+        .attr('cx', '35%').attr('cy', '28%').attr('r', '78%')
+      grad.append('stop').attr('offset', '0%')
+        .style('stop-color', `color-mix(in oklch, var(${cssVar}) 70%, white)`)
+      grad.append('stop').attr('offset', '55%')
+        .style('stop-color', `var(${cssVar})`)
+      grad.append('stop').attr('offset', '100%')
+        .style('stop-color', `color-mix(in oklch, var(${cssVar}) 82%, black)`)
+    })
 
     const g    = svgSel.append('g')
 
@@ -322,7 +360,7 @@ export default function GraphCanvas({
       .join('g')
       .attr('class', 'node')
       .attr('cursor', 'pointer')
-      .on('click', (_e, d) => onNodeSelect(d))
+      .on('click', (_e, d) => onNodeSelectRef.current(d))
       .on('mouseover', (_e, d) => showTooltip(tt, _e as unknown as MouseEvent, d))
       .on('mousemove', e => moveTooltip(tt, e as unknown as MouseEvent))
       .on('mouseout', () => hideTooltip(tt))
@@ -370,6 +408,7 @@ export default function GraphCanvas({
         showParticles: particleLinksRef.current.length > 0 && t.k >= LOD_PARTICLE_SCALE,
         showArrows: t.k >= LOD_ARROW_SCALE,
         elapsed: Date.now() - t0,
+        emphasizeStructural: viewMode === 'query' || viewMode === 'focus',
       })
       if (simRunningRef.current) {
         nodeSel.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
@@ -433,7 +472,7 @@ export default function GraphCanvas({
       tt.remove()
       ttRef.current = null
     }
-  }, [filteredNodes, filteredEdges, onNodeSelect, viewMode])
+  }, [filteredNodes, filteredEdges, viewMode])
 
   const handleZoomIn = () => {
     const svg = svgRef.current
@@ -599,6 +638,34 @@ export default function GraphCanvas({
 
   return (
     <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minWidth: 0, height: '100%' }}>
+      {/* Background depth: radial vignette + faint static grid */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          background:
+            'radial-gradient(120% 90% at 50% 38%, transparent 38%, var(--graph-vignette) 100%)',
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          opacity: 0.5,
+          backgroundImage:
+            'radial-gradient(var(--graph-grid) 1px, transparent 1px)',
+          backgroundSize: '30px 30px',
+          maskImage:
+            'radial-gradient(120% 90% at 50% 42%, black 30%, transparent 80%)',
+          WebkitMaskImage:
+            'radial-gradient(120% 90% at 50% 42%, black 30%, transparent 80%)',
+        }}
+      />
+
       {/* Subtle scale tick — bottom-left corner */}
       {hasData && !isDatabaseEmpty && (
         <GraphControls
@@ -759,6 +826,12 @@ function cornerTick(pos: React.CSSProperties): React.CSSProperties {
     fontVariantNumeric: 'tabular-nums',
     fontFamily: 'var(--font-mono)',
     pointerEvents: 'none',
+    padding: '3px 7px',
+    borderRadius: 'var(--radius-sm)',
+    background: 'color-mix(in oklch, var(--surface) 55%, transparent)',
+    border: '1px solid color-mix(in oklch, var(--border) 60%, transparent)',
+    backdropFilter: 'blur(6px)',
+    WebkitBackdropFilter: 'blur(6px)',
     ...pos,
   }
 }
@@ -879,17 +952,17 @@ function LatticeLegend({
 }) {
   const [open, setOpen] = useState(true)
 
-  const nodeTypes: [string, string][] = [
-    ['file', 'var(--node-file)'],
-    ['class', 'var(--node-class)'],
-    ['function', 'var(--node-function)'],
-    ['method', 'var(--node-method)'],
+  const nodeTypes: [string, string, NodeGlyph][] = [
+    ['file', 'var(--node-file)', 'rect'],
+    ['class', 'var(--node-class)', 'diamond'],
+    ['function', 'var(--node-function)', 'circle'],
+    ['method', 'var(--node-method)', 'hex'],
   ]
-  const edgeTypes: [string, string][] = [
-    ['CALLS', 'var(--edge-calls)'],
-    ['IMPORTS', 'var(--edge-imports)'],
-    ['CONTAINS', 'var(--edge-contains)'],
-    ['INHERITS', 'var(--edge-inherits)'],
+  const edgeTypes: [string, string, boolean][] = [
+    ['CALLS', 'var(--edge-calls)', false],
+    ['IMPORTS', 'var(--edge-imports)', false],
+    ['CONTAINS', 'var(--edge-contains)', true],
+    ['INHERITS', 'var(--edge-inherits)', true],
   ]
 
   if (!open) {
@@ -957,7 +1030,7 @@ function LatticeLegend({
         >
           nodes
         </div>
-        {nodeTypes.map(([label, color]) => {
+        {nodeTypes.map(([label, color, glyph]) => {
           const isHidden = hiddenNodeTypes.has(label)
           return (
             <div
@@ -972,7 +1045,7 @@ function LatticeLegend({
                 })
               }}
             >
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: color }} />
+              <NodeGlyphSwatch glyph={glyph} color={color} />
               <div style={{ color: 'var(--text-dim)' }}>{label}</div>
             </div>
           )
@@ -989,7 +1062,7 @@ function LatticeLegend({
         >
           edges
         </div>
-        {edgeTypes.map(([label, color]) => {
+        {edgeTypes.map(([label, color, dashed]) => {
           const isHidden = hiddenEdgeTypes.has(label.toLowerCase())
           return (
             <div
@@ -1005,7 +1078,13 @@ function LatticeLegend({
                 })
               }}
             >
-              <div style={{ width: 16, height: 1.5, background: color }} />
+              <div
+                style={{
+                  width: 16,
+                  height: 0,
+                  borderTop: dashed ? `1.5px dashed ${color}` : `1.5px solid ${color}`,
+                }}
+              />
               <div style={{ color: 'var(--text-dim)' }}>{label}</div>
             </div>
           )
@@ -1013,6 +1092,29 @@ function LatticeLegend({
       </div>
       </div>
     </div>
+  )
+}
+
+/* ── Legend node glyphs (mirror the canvas node shapes) ──── */
+type NodeGlyph = 'rect' | 'diamond' | 'circle' | 'hex'
+
+function NodeGlyphSwatch({ glyph, color }: { glyph: NodeGlyph; color: string }) {
+  const common = { fill: color }
+  return (
+    <svg width="11" height="11" viewBox="-5 -5 10 10" style={{ flex: 'none', display: 'block' }}>
+      {glyph === 'rect' && <rect x={-4} y={-3} width={8} height={6} rx={1.2} {...common} />}
+      {glyph === 'diamond' && <polygon points="0,-4.5 4.5,0 0,4.5 -4.5,0" {...common} />}
+      {glyph === 'circle' && <circle r={4} {...common} />}
+      {glyph === 'hex' && (
+        <polygon
+          points={Array.from({ length: 6 }, (_, i) => {
+            const a = (Math.PI / 3) * i - Math.PI / 6
+            return `${(Math.cos(a) * 4.3).toFixed(2)},${(Math.sin(a) * 4.3).toFixed(2)}`
+          }).join(' ')}
+          {...common}
+        />
+      )}
+    </svg>
   )
 }
 

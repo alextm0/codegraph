@@ -22,6 +22,8 @@ interface SceneOptions {
   showParticles: boolean
   showArrows: boolean
   elapsed: number
+  /** Query/focus subgraphs rely on CONTAINS edges from File nodes. */
+  emphasizeStructural?: boolean
 }
 
 interface EdgeStyle {
@@ -35,6 +37,36 @@ interface EdgeStyle {
 
 const DASHED_TYPES = new Set(['CONTAINS', 'INHERITS_FROM'])
 const PARTICLE_TYPES = new Set(['CALLS', 'IMPORTS'])
+/* Structural scaffolding edges sit visually behind the semantic ones. */
+const STRUCTURAL_TYPES = new Set(['CONTAINS'])
+
+/** Gentle perpendicular bow so overlapping edges separate (reduces hairball). */
+function controlPoint(
+  sx: number, sy: number, tx: number, ty: number,
+): { cx: number; cy: number } {
+  const dx = tx - sx, dy = ty - sy
+  const len = Math.hypot(dx, dy) || 1
+  const bow = Math.min(len * 0.12, 34)
+  return { cx: (sx + tx) / 2 - (dy / len) * bow, cy: (sy + ty) / 2 + (dx / len) * bow }
+}
+
+/** Point on the quadratic curve at parameter t in [0,1]. */
+function quadPointAt(
+  sx: number, sy: number, cx: number, cy: number, tx: number, ty: number, t: number,
+): { x: number; y: number } {
+  const u = 1 - t
+  return {
+    x: u * u * sx + 2 * u * t * cx + t * t * tx,
+    y: u * u * sy + 2 * u * t * cy + t * t * ty,
+  }
+}
+
+/** Multiplier that thins the edge field when zoomed out (de-hairballs). */
+function zoomEdgeAlpha(k: number): number {
+  if (k >= 1) return 1
+  if (k <= 0.35) return 0.5
+  return 0.5 + ((k - 0.35) / 0.65) * 0.5
+}
 
 /** Size a canvas backing store for the device pixel ratio. */
 export function sizeCanvas(
@@ -58,13 +90,21 @@ function edgeStyle(
   edge: D3Edge,
   colors: GraphColors,
   highlight: HighlightState | null,
+  emphasizeStructural: boolean,
 ): EdgeStyle {
   const base = edgeColorFrom(colors, edge.type)
   const dashed = DASHED_TYPES.has(edge.type)
-  const baseWidth = dashed ? 1 : 1.2
+  const structural = STRUCTURAL_TYPES.has(edge.type)
+  const baseWidth = structural ? (emphasizeStructural ? 1.1 : 0.8) : 1
+  const baseOpacity = structural
+    ? (emphasizeStructural ? 0.48 : 0.14)
+    : 0.26
 
   if (!highlight) {
-    return { color: base, width: baseWidth, opacity: 0.38, dashed, arrowColor: base, arrowOpacity: 0.55 }
+    return {
+      color: base, width: baseWidth, opacity: baseOpacity, dashed,
+      arrowColor: base, arrowOpacity: structural ? (emphasizeStructural ? 0.65 : 0.3) : 0.5,
+    }
   }
 
   const sid = endpointId(edge.source)
@@ -74,7 +114,7 @@ function edgeStyle(
     const onPath = highlight.pathNodeIds.has(sid) && highlight.pathNodeIds.has(tid)
     return onPath
       ? { color: colors.accent, width: 3.5, opacity: 1, dashed: false, arrowColor: colors.accent, arrowOpacity: 1 }
-      : { color: base, width: 1, opacity: 0.04, dashed, arrowColor: base, arrowOpacity: 0.04 }
+      : { color: base, width: 1, opacity: 0.035, dashed, arrowColor: base, arrowOpacity: 0.035 }
   }
 
   const lit = highlight.highlightIds.has(sid) && highlight.highlightIds.has(tid)
@@ -92,10 +132,11 @@ function bucketEdges(
   links: D3Edge[],
   colors: GraphColors,
   highlight: HighlightState | null,
+  emphasizeStructural: boolean,
 ): Map<string, { style: EdgeStyle; edges: D3Edge[] }> {
   const buckets = new Map<string, { style: EdgeStyle; edges: D3Edge[] }>()
   for (const edge of links) {
-    const style = edgeStyle(edge, colors, highlight)
+    const style = edgeStyle(edge, colors, highlight, emphasizeStructural)
     const key = styleKey(style)
     const bucket = buckets.get(key)
     if (bucket) bucket.edges.push(edge)
@@ -113,7 +154,9 @@ function drawArrow(
   const t = edge.target as D3Node
   const sx = s.x ?? 0, sy = s.y ?? 0
   const tx = t.x ?? 0, ty = t.y ?? 0
-  const dx = tx - sx, dy = ty - sy
+  const { cx, cy } = controlPoint(sx, sy, tx, ty)
+  // Tangent at the curve's end points from the control handle to the target.
+  const dx = tx - cx, dy = ty - cy
   const len = Math.hypot(dx, dy) || 1
   const ux = dx / len, uy = dy / len
   const r = nodeRadius(t)
@@ -126,17 +169,24 @@ function drawArrow(
   ctx.closePath()
 }
 
-/** Stroke every edge bucket, then optionally paint arrowheads per bucket. */
+/** Stroke every edge bucket as gentle curves, then optional arrowheads. */
 function drawEdges(
   ctx: CanvasRenderingContext2D,
   opts: SceneOptions,
 ): void {
   const { k } = opts.transform
-  const buckets = bucketEdges(opts.links, opts.colors, opts.highlight)
+  const emphasizeStructural = opts.emphasizeStructural ?? false
+  const buckets = bucketEdges(
+    opts.links,
+    opts.colors,
+    opts.highlight,
+    emphasizeStructural,
+  )
   const arrowSize = 6 / k
+  const fade = opts.highlight ? 1 : zoomEdgeAlpha(k)
 
   for (const { style, edges } of buckets.values()) {
-    ctx.globalAlpha = style.opacity
+    ctx.globalAlpha = style.opacity * fade
     ctx.strokeStyle = style.color
     ctx.lineWidth = style.width / k
     ctx.setLineDash(style.dashed ? [4 / k, 4 / k] : [])
@@ -144,14 +194,17 @@ function drawEdges(
     for (const edge of edges) {
       const s = edge.source as D3Node
       const t = edge.target as D3Node
-      ctx.moveTo(s.x ?? 0, s.y ?? 0)
-      ctx.lineTo(t.x ?? 0, t.y ?? 0)
+      const sx = s.x ?? 0, sy = s.y ?? 0
+      const tx = t.x ?? 0, ty = t.y ?? 0
+      const { cx, cy } = controlPoint(sx, sy, tx, ty)
+      ctx.moveTo(sx, sy)
+      ctx.quadraticCurveTo(cx, cy, tx, ty)
     }
     ctx.stroke()
 
     if (opts.showArrows && style.arrowOpacity > 0.15) {
       ctx.setLineDash([])
-      ctx.globalAlpha = style.arrowOpacity
+      ctx.globalAlpha = style.arrowOpacity * fade
       ctx.fillStyle = style.arrowColor
       ctx.beginPath()
       for (const edge of edges) drawArrow(ctx, edge, arrowSize)
@@ -190,10 +243,15 @@ function drawParticles(
       r = lit ? (highlight.isPathActive ? 3.5 : 3) / k : radius
     }
 
+    const sx = s.x ?? 0, sy = s.y ?? 0
+    const tx = t.x ?? 0, ty = t.y ?? 0
+    const { cx, cy } = controlPoint(sx, sy, tx, ty)
+    const p = quadPointAt(sx, sy, cx, cy, tx, ty, f)
+
     ctx.globalAlpha = opacity
     ctx.fillStyle = edgeColorFrom(opts.colors, edge.type)
     ctx.beginPath()
-    ctx.arc((s.x ?? 0) + ((t.x ?? 0) - (s.x ?? 0)) * f, (s.y ?? 0) + ((t.y ?? 0) - (s.y ?? 0)) * f, r, 0, Math.PI * 2)
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
     ctx.fill()
   }
 }

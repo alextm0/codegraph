@@ -67,7 +67,7 @@ def run_query(
 ) -> QueryResponse:
     """Run PPR + BM25 + subgraph, return a QueryResponse."""
     from codegraph.core.graph.ppr import PPRConfig, create_gds_client
-    from codegraph.core.graph.queries import get_subgraph_for_nodes
+    from codegraph.core.graph.queries import expand_qnames_with_file_nodes, get_subgraph_for_nodes
     from codegraph.core.retrieval.explanations import build_explained_results
     from codegraph.core.retrieval.pipeline import run_core_retrieval
     from codegraph.utils.config import parse_signal_weights
@@ -156,7 +156,10 @@ def run_query(
     for r in ppr_out:
         all_qnames.append(r.qualified_name)
         all_qnames.extend(r.path_ids)
-    all_qnames = list(dict.fromkeys(all_qnames))
+    all_qnames = expand_qnames_with_file_nodes(
+        list(dict.fromkeys(all_qnames)),
+        file_paths=[r.file_path for r in ppr_out],
+    )
 
     subgraph = filter_graph_for_visualizer(
         get_subgraph_for_nodes(driver, all_qnames),

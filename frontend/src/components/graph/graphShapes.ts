@@ -1,15 +1,13 @@
 import * as d3 from 'd3'
 import type { D3Node, D3Edge } from '../../types/graph'
 
-/** CSS custom property for a node label fill (auto-updates on theme change). */
+const NODE_GRAD_LABELS = new Set(['File', 'Class', 'Function', 'Method'])
+
+/** Radial-gradient fill id for a node label (defined once in <defs>). */
 function nodeFillVar(label: string): string {
-  switch (label) {
-    case 'File':     return 'var(--node-file)'
-    case 'Class':    return 'var(--node-class)'
-    case 'Function': return 'var(--node-function)'
-    case 'Method':   return 'var(--node-method)'
-    default:         return 'var(--text-muted)'
-  }
+  return NODE_GRAD_LABELS.has(label)
+    ? `url(#node-grad-${label})`
+    : 'url(#node-grad-default)'
 }
 
 /** Radius used for force layout collision and sizing. */

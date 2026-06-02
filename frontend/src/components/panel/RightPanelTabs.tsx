@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import type { GraphNode, QueryResponse } from '../../types/api'
 import type { SeedInfo } from '../../types/api'
 import LatticeButton from '../ui/LatticeButton'
@@ -120,7 +120,7 @@ export default function RightPanelTabs({
           <ExplainPanel
             results={queryResult.ppr_results}
             seeds={queryResult.seeds}
-            dampingFactor={queryResult.damping_factor}
+            onNodeSelect={onNodeSelect}
           />
         )}
         {activeTab === 'inspector' && (
@@ -150,9 +150,9 @@ export default function RightPanelTabs({
 export function useRightPanelTabs() {
   const [activeTab, setActiveTab] = useState<RightTab>('results')
 
-  const onQueryComplete = () => setActiveTab('results')
-  const onNodeSelected = () => setActiveTab('inspector')
-  const onFileSelected = () => setActiveTab('file')
+  const onQueryComplete = useCallback(() => setActiveTab('results'), [])
+  const onNodeSelected = useCallback(() => setActiveTab('inspector'), [])
+  const onFileSelected = useCallback(() => setActiveTab('file'), [])
 
   return { activeTab, setActiveTab, onQueryComplete, onNodeSelected, onFileSelected }
 }

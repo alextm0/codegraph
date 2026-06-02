@@ -52,15 +52,20 @@
   --warning:       oklch(0.82 0.16 75);
   --danger:        oklch(0.80 0.14 25);
 
-  --node-file:     oklch(0.78 0.13 240);
-  --node-class:    oklch(0.82 0.16 145);
-  --node-function: oklch(0.82 0.16 75);
-  --node-method:   oklch(0.78 0.16 320);
+  --node-file:     oklch(0.75 0.13 248);
+  --node-class:    oklch(0.81 0.15 162);
+  --node-function: oklch(0.85 0.15 85);
+  --node-method:   oklch(0.76 0.16 305);
 
-  --edge-calls:    oklch(0.78 0.14 145);
-  --edge-imports:  oklch(0.74 0.13 240);
-  --edge-contains: oklch(0.42 0.008 240);
-  --edge-inherits: oklch(0.78 0.16 35);
+  --edge-calls:    oklch(0.74 0.13 162);
+  --edge-imports:  oklch(0.72 0.12 248);
+  --edge-contains: oklch(0.58 0.014 248);
+  --edge-inherits: oklch(0.77 0.15 42);
+
+  /* Graph canvas depth */
+  --graph-glow:    oklch(0.92 0.04 145);
+  --graph-vignette: oklch(0.10 0.012 248);
+  --graph-grid:    color-mix(in oklch, var(--border) 38%, transparent);
 
   --elev-1: 0 1px 2px oklch(0 0 0 / 0.35), 0 4px 12px oklch(0 0 0 / 0.25);
   --elev-2: 0 2px 8px oklch(0 0 0 / 0.4), 0 12px 32px oklch(0 0 0 / 0.35);
@@ -92,15 +97,20 @@
   --warning:       oklch(0.58 0.18 75);
   --danger:        oklch(0.52 0.20 25);
 
-  --node-file:     oklch(0.48 0.16 240);
-  --node-class:    oklch(0.46 0.18 145);
-  --node-function: oklch(0.55 0.17 75);
-  --node-method:   oklch(0.48 0.18 320);
+  --node-file:     oklch(0.50 0.16 248);
+  --node-class:    oklch(0.48 0.17 162);
+  --node-function: oklch(0.58 0.16 85);
+  --node-method:   oklch(0.49 0.18 305);
 
-  --edge-calls:    oklch(0.50 0.16 145);
-  --edge-imports:  oklch(0.50 0.15 240);
-  --edge-contains: oklch(0.62 0.008 240);
-  --edge-inherits: oklch(0.52 0.17 35);
+  --edge-calls:    oklch(0.52 0.15 162);
+  --edge-imports:  oklch(0.52 0.14 248);
+  --edge-contains: oklch(0.66 0.012 248);
+  --edge-inherits: oklch(0.54 0.16 42);
+
+  /* Graph canvas depth */
+  --graph-glow:    oklch(0.55 0.16 145);
+  --graph-vignette: oklch(0.99 0.006 85);
+  --graph-grid:    color-mix(in oklch, var(--border) 55%, transparent);
 
   --elev-1: 0 1px 2px oklch(0 0 0 / 0.06), 0 4px 12px oklch(0 0 0 / 0.04);
   --elev-2: 0 2px 8px oklch(0 0 0 / 0.08), 0 12px 28px oklch(0 0 0 / 0.06);

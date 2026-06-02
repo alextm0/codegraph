@@ -1,73 +1,155 @@
-import type { PPREntityResult, SeedInfo } from '../../types/api'
+import type { PPREntityResult, SeedInfo, GraphNode } from '../../types/api'
+import { oneLineWhy, seedKind, shortName } from './explainFormat'
 
 interface ExplainPanelProps {
   results: PPREntityResult[]
   seeds: SeedInfo[]
-  dampingFactor?: number
+  onNodeSelect?: (node: GraphNode) => void
 }
 
-export default function ExplainPanel({ results, seeds, dampingFactor = 0.70 }: ExplainPanelProps) {
+export default function ExplainPanel({ results, seeds, onNodeSelect }: ExplainPanelProps) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)', flexShrink: 0 }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-          PPR explain · α={dampingFactor.toFixed(2)}
-        </div>
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {seeds.length > 0 && (
-          <section style={{ padding: 12, borderBottom: '1px dashed var(--border)' }}>
-            <div style={label}>Seeds ({seeds.length})</div>
-            {seeds.map((s, i) => (
-              <div key={`${s.id}-${i}`} style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', gap: 8, padding: '4px 0', fontSize: 10 }}>
-                <span style={{ color: 'var(--text-muted)' }}>{String(i + 1).padStart(2, '0')}</span>
-                <span style={{ color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.name}>
-                  {s.name}
-                </span>
-                <span style={{ color: s.signal === 'entity' ? 'var(--accent)' : 'var(--seed)', fontVariantNumeric: 'tabular-nums' }}>
-                  {s.weight.toFixed(3)}
-                </span>
-              </div>
-            ))}
-          </section>
-        )}
-
-        {results.map(r => (
-          <section key={r.qualified_name} style={{ padding: 12, borderBottom: '1px dashed var(--border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, color: 'var(--text)', fontWeight: 600 }}>{r.name}</span>
-              <span style={{ fontSize: 10, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums' }}>{r.score.toFixed(5)}</span>
+    <div style={{ height: '100%', overflowY: 'auto', fontSize: 11, color: 'var(--text)' }}>
+      {seeds.length > 0 && (
+        <section style={section}>
+          <div style={label}>Seeds</div>
+          {seeds.map((s, i) => (
+            <div key={`${s.id}-${i}`} style={seedRow}>
+              <span style={name}>{shortName(s.name)}</span>
+              <span style={meta}>{seedKind(s.signal)}</span>
             </div>
-            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6 }}>{r.file_path}</div>
-            {r.path && (
-              <div style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.5, padding: 8, background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                <span style={{ color: 'var(--accent)', marginRight: 6 }}>path</span>
-                {r.path}
-              </div>
-            )}
-            {r.contribution && (
-              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
-                contribution · {r.contribution}
-              </div>
-            )}
-          </section>
-        ))}
+          ))}
+        </section>
+      )}
 
-        {results.length === 0 && seeds.length === 0 && (
-          <div style={{ padding: 16, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            // run a query to see seed selection and reasoning paths
-          </div>
-        )}
-      </div>
+      {results.length === 0 ? (
+        <p style={empty}>Run a query to see why each result ranked.</p>
+      ) : (
+        <section style={section}>
+          <div style={label}>Why ranked</div>
+          {results.map(r => (
+            <ResultRow
+              key={r.qualified_name}
+              result={r}
+              onSelect={onNodeSelect ? () => onNodeSelect(toGraphNode(r)) : undefined}
+            />
+          ))}
+        </section>
+      )}
     </div>
   )
 }
 
+function ResultRow({
+  result,
+  onSelect,
+}: {
+  result: PPREntityResult
+  onSelect?: () => void
+}) {
+  return (
+    <div
+      style={{
+        ...row,
+        cursor: onSelect ? 'pointer' : undefined,
+      }}
+      onClick={onSelect}
+      onKeyDown={onSelect ? e => { if (e.key === 'Enter') onSelect() } : undefined}
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+    >
+      <div style={titleRow}>
+        <span style={rank}>#{result.rank}</span>
+        <span style={name}>{result.name}</span>
+      </div>
+      <div style={file} title={result.file_path}>{result.file_path}</div>
+      <div style={why}>{oneLineWhy(result)}</div>
+    </div>
+  )
+}
+
+function toGraphNode(r: PPREntityResult): GraphNode {
+  return {
+    id: r.qualified_name,
+    name: r.name,
+    label: r.label as GraphNode['label'],
+    file_path: r.file_path,
+    ppr_score: r.score,
+    is_seed: r.path === 'direct seed',
+    seed_weight: 0,
+    reasoning_path: r.path_ids,
+    line_number: r.line_number,
+    line_end: r.line_end,
+  }
+}
+
+const section: React.CSSProperties = {
+  padding: '10px 12px',
+  borderBottom: '1px solid var(--border)',
+}
+
 const label: React.CSSProperties = {
-  fontSize: 9,
-  letterSpacing: '0.12em',
-  textTransform: 'uppercase',
+  fontSize: 10,
   color: 'var(--text-muted)',
   marginBottom: 8,
+}
+
+const seedRow: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 8,
+  padding: '3px 0',
+}
+
+const row: React.CSSProperties = {
+  padding: '8px 0',
+  borderBottom: '1px solid color-mix(in oklch, var(--border) 55%, transparent)',
+}
+
+const titleRow: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: 6,
+}
+
+const rank: React.CSSProperties = {
+  fontSize: 10,
+  color: 'var(--text-muted)',
+  fontFamily: 'var(--font-mono)',
+  flexShrink: 0,
+}
+
+const name: React.CSSProperties = {
+  fontWeight: 500,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+const file: React.CSSProperties = {
+  fontSize: 10,
+  color: 'var(--text-muted)',
+  marginTop: 2,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+const why: React.CSSProperties = {
+  fontSize: 10,
+  color: 'var(--text-dim)',
+  marginTop: 4,
+  lineHeight: 1.45,
+}
+
+const meta: React.CSSProperties = {
+  fontSize: 10,
+  color: 'var(--text-muted)',
+  flexShrink: 0,
+}
+
+const empty: React.CSSProperties = {
+  padding: 16,
+  color: 'var(--text-muted)',
+  margin: 0,
 }

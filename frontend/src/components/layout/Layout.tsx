@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react'
+import { useCallback, useRef, useEffect, useMemo } from 'react'
 import type { QueryResponse, GraphNode, GraphData } from '../../types/api'
 import { ProjectHistoryItem, type GraphStats } from '../../api/client'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
@@ -14,6 +14,8 @@ import CollapsedRailHandle from './CollapsedRailHandle'
 import RightPanelTabs, { useRightPanelTabs } from '../panel/RightPanelTabs'
 import ViewModeBanner from './ViewModeBanner'
 import ClearSelectionPill from '../graph/ClearSelectionPill'
+
+const EMPTY_PATH_HIGHLIGHT: string[] = []
 
 interface LayoutProps {
   queryResult: QueryResponse | null
@@ -139,18 +141,35 @@ export default function Layout({
     onSelectedFilePath(null)
   }, [onNodeSelect, onSelectedFilePath])
 
+  /** Esc: clear selection first, then exit query / file-focus back to the full graph. */
+  const handleEscape = useCallback(() => {
+    if (selectedNode || selectedFilePath) {
+      handleClearAll()
+      return
+    }
+    if (viewMode !== 'full') {
+      handleRestoreFullGraph()
+    }
+  }, [
+    selectedNode,
+    selectedFilePath,
+    viewMode,
+    handleClearAll,
+    handleRestoreFullGraph,
+  ])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClearAll()
+      if (e.key === 'Escape') handleEscape()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [handleClearAll])
+  }, [handleEscape])
 
-  const pathHighlightIds =
-    selectedNode?.reasoning_path && selectedNode.reasoning_path.length > 1
-      ? selectedNode.reasoning_path
-      : []
+  const pathHighlightIds = useMemo(() => {
+    const path = selectedNode?.reasoning_path
+    return path && path.length > 1 ? path : EMPTY_PATH_HIGHLIGHT
+  }, [selectedNode])
 
   const showClearPill = Boolean(selectedNode || selectedFilePath)
 
@@ -233,15 +252,11 @@ export default function Layout({
 
           <ClearSelectionPill
             visible={showClearPill}
-            onClear={handleClearAll}
+            onClear={handleEscape}
           />
 
-          {viewMode !== 'full' && (
-            <ViewModeBanner
-              mode={viewMode}
-              nodeCount={nodes.length}
-              onShowAll={handleRestoreFullGraph}
-            />
+          {viewMode === 'focus' && (
+            <ViewModeBanner nodeCount={nodes.length} />
           )}
 
           {queryLoading && (

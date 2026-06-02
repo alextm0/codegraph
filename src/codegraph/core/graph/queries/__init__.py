@@ -40,6 +40,7 @@ from codegraph.core.graph.queries.stats import (
 )
 from codegraph.core.graph.queries.subgraph import (
     delete_file_entities,
+    expand_qnames_with_file_nodes,
     get_file_contents,
     get_full_graph,
     get_node_detail,
@@ -67,6 +68,7 @@ __all__ = [
     "get_most_connected_files",
     "get_neighbors",
     "get_node_detail",
+    "expand_qnames_with_file_nodes",
     "get_subgraph_by_prefix",
     "get_subgraph_for_nodes",
     "query_entity_dependencies",

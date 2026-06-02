@@ -45,7 +45,10 @@ def test_view_mode_banner_for_exiting_query():
     banner = (FRONTEND / "components" / "layout" / "ViewModeBanner.tsx").read_text(
         encoding="utf-8"
     )
-    assert "Entire codebase" in banner
+    layout = (FRONTEND / "components" / "layout" / "Layout.tsx").read_text(encoding="utf-8")
+    assert "Esc · full graph" in banner
+    assert "handleEscape" in layout
+    assert "handleRestoreFullGraph" in layout
     graph = (FRONTEND / "hooks" / "useGraphData.ts").read_text(encoding="utf-8")
     assert "stripQueryAnnotations" in graph
     assert "graphRevision" in graph
@@ -59,6 +62,19 @@ def test_right_panel_tabs_include_results_explain_inspector():
     assert "'explain'" in src
     assert "'inspector'" in src
     assert "'file'" in src
+
+
+def test_explain_panel_formats_provenance():
+    fmt = (FRONTEND / "components" / "panel" / "explainFormat.ts").read_text(
+        encoding="utf-8"
+    )
+    panel = (FRONTEND / "components" / "panel" / "ExplainPanel.tsx").read_text(
+        encoding="utf-8"
+    )
+    assert "oneLineWhy" in fmt
+    assert "Matched task — seed" in fmt
+    assert "Why ranked" in panel
+    assert "onNodeSelect" in panel
 
 
 def test_graph_controls_and_project_tree_present():

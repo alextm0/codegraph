@@ -11,7 +11,7 @@ class InitRequest(BaseModel):
 
 class QueryRequest(BaseModel):
     task: str
-    top_k: int = 30
+    top_k: int = 10
     mentioned_entities: list[str] | None = None
     token_budget: int = 0
 

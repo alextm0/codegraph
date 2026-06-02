@@ -18,7 +18,7 @@ from codegraph.visualizer.models import (
 
 def test_query_request_defaults():
     req = QueryRequest(task="fix auth bug")
-    assert req.top_k == 30
+    assert req.top_k == 10
     assert req.mentioned_entities is None
     assert req.token_budget == 0
 

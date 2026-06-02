@@ -61,8 +61,14 @@ function ControlBtn({
         cursor: 'pointer',
         transition: 'background var(--dur-fast), color var(--dur-fast)',
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface2)' }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = 'var(--surface2)'
+        e.currentTarget.style.color = 'var(--accent)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = 'transparent'
+        e.currentTarget.style.color = 'var(--text)'
+      }}
     >
       {children}
     </button>
