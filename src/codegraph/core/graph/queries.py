@@ -448,6 +448,33 @@ def trace_path_to_seed(
         return "(trace error)"
 
 
+def trace_path_ids_to_seed(
+    driver: Driver,
+    seed_ids: list[int],
+    file_path: str,
+    max_hops: int = 6,
+) -> list[str]:
+    """Find the shortest path from any seed to the file and return node IDs (qualified names)."""
+    with driver.session() as session:
+        # We query for the shortest path and return the list of qualified_names
+        result = session.run(
+            f"""
+            MATCH (seed) WHERE id(seed) IN $seed_ids
+            MATCH (target:File {{file_path: $file_path}})
+            MATCH p = shortestPath((seed)-[*..{max_hops}]-(target))
+            RETURN [node IN nodes(p) | node.qualified_name] AS path_ids
+            ORDER BY length(p) ASC
+            LIMIT 1
+            """,
+            seed_ids=seed_ids,
+            file_path=file_path,
+        ).single()
+
+    if not result or not result["path_ids"]:
+        return []
+    return result["path_ids"]
+
+
 def _run_trace_query(
     driver: Driver,
     seed_ids: list[int],
