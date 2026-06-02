@@ -358,27 +358,58 @@ export default function GraphCanvas({
       return
     }
 
-    const connected = new Set<string>([selectedNode.id])
-    filteredEdges.forEach(e => {
-      const sid = typeof e.source === 'object' ? (e.source as D3Node).id : e.source
-      const tid = typeof e.target === 'object' ? (e.target as D3Node).id : e.target
-      if (sid === selectedNode.id) connected.add(tid as string)
-      if (tid === selectedNode.id) connected.add(sid as string)
-    })
+    const pathNodeIds = new Set<string>(selectedNode.reasoning_path || [])
+    const isPathActive = pathNodeIds.size > 0
 
-    nodeSel.attr('opacity', d => connected.has(d.id) ? 1 : 0.06)
-    ringSel.attr('opacity', d => connected.has(d.id) ? 1 : 0)
-    labelSel.attr('opacity', d => connected.has(d.id) ? 0.9 : 0.04)
+    const connected = new Set<string>([selectedNode.id])
+    if (!isPathActive) {
+      filteredEdges.forEach(e => {
+        const sid = typeof e.source === 'object' ? (e.source as D3Node).id : e.source
+        const tid = typeof e.target === 'object' ? (e.target as D3Node).id : e.target
+        if (sid === selectedNode.id) connected.add(tid as string)
+        if (tid === selectedNode.id) connected.add(sid as string)
+      })
+    }
+
+    const highlightIds = isPathActive ? pathNodeIds : connected
+
+    nodeSel.attr('opacity', d => highlightIds.has(d.id) ? 1 : (isPathActive ? 0.15 : 0.06))
+    ringSel.attr('opacity', d => highlightIds.has(d.id) ? 1 : 0)
+    labelSel.attr('opacity', d => highlightIds.has(d.id) ? 0.9 : (isPathActive ? 0.1 : 0.04))
 
     linkSel
       .attr('stroke-opacity', d => {
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
         const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+        if (isPathActive) {
+          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 1.0 : 0.05
+        }
         return (sid === selectedNode.id || tid === selectedNode.id) ? 1.0 : 0.04
+      })
+      .attr('stroke-width', d => {
+        if (isPathActive) {
+          const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
+          const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 2.5 : 1.1
+        }
+        return 1.1
+      })
+      .attr('filter', d => {
+        if (isPathActive) {
+          const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
+          const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 'url(#glow)' : null
+        }
+        return null
       })
       .attr('marker-end', d => {
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
         const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+        if (isPathActive) {
+          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string))
+            ? `url(#arr-${d.type})`
+            : `url(#arr-dim-${d.type})`
+        }
         return (sid === selectedNode.id || tid === selectedNode.id)
           ? `url(#arr-${d.type})`
           : `url(#arr-dim-${d.type})`
@@ -388,11 +419,17 @@ export default function GraphCanvas({
       .attr('opacity', d => {
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
         const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+        if (isPathActive) {
+          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 1.0 : 0.05
+        }
         return (sid === selectedNode.id || tid === selectedNode.id) ? 1.0 : 0.04
       })
       .attr('r', d => {
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
         const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+        if (isPathActive) {
+          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 3 : 1.8
+        }
         return (sid === selectedNode.id || tid === selectedNode.id) ? 3 : 1.8
       })
 
