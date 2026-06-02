@@ -164,6 +164,9 @@ def query(
     compact: bool = typer.Option(
         False, "--compact", help="Compact output: file paths and scores only"
     ),
+    trace: bool = typer.Option(
+        False, "--trace", help="Emit structured retrieval trace as JSON"
+    ),
 ):
     """
     Run the retrieval pipeline to get context for a specific task.
@@ -186,6 +189,7 @@ def query(
         budget,
         json_out=json_out,
         compact=compact,
+        trace=trace,
     )
 
     if viz:
