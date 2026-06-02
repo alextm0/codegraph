@@ -273,12 +273,14 @@ def query_dependencies_impl(
             depth=depth,
         )
     except ValueError as exc:
-        return json.dumps(
-            {
-                "error": str(exc),
-                "hint": "Entity not found. Use get_relevant_context first to confirm the entity name exists.",
-            }
-        )
+        msg = str(exc)
+        if "direction" in msg.lower():
+            hint = "Use direction='upstream', 'downstream', or 'both'."
+        else:
+            hint = (
+                "Use get_relevant_context first to confirm the entity name exists."
+            )
+        return json.dumps({"error": msg, "hint": hint})
     except Exception as exc:
         logger.exception("query_dependencies failed")
         return json.dumps(
