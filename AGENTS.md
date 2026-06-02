@@ -47,7 +47,9 @@ There are **no other MCP tools**. `get_graph_stats`, `find_dead_code`, `execute_
 | `src/codegraph/mcp/server.py` | FastMCP lifespan, ServerState |
 | `src/codegraph/mcp/tools.py` | get_relevant_context_impl, query_dependencies_impl |
 | `src/codegraph/cli/main.py` | Typer CLI commands |
-| `src/codegraph/cli/cli_helpers.py` | All CLI helper implementations |
+| `src/codegraph/cli/commands/` | CLI command implementations (re-exported via `cli_helpers.py`) |
+| `DECISIONS.md` | Binding design decisions |
+| `docs/architecture.md` | System architecture reference |
 
 ## PPR Defaults (iter-2 tuned — do not change without benchmarking)
 

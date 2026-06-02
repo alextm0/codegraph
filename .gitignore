@@ -1,11 +1,9 @@
-# Documentation
-docs/
+# MkDocs build output
 site/
 
 # AI Agents
 .agents/
 .claude/
-docs/DECISIONS.md
 memory/
 
 # Python environment
