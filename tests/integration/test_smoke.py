@@ -55,6 +55,7 @@ seed_selection:
     query_helper(config_path, "routing blueprint", None, None, 5, 2000, trace=True)
 
     explain_helper(config_path, "routing blueprint", top_k=3)
+    driver = db.get_driver()
 
     raw = load_raw_config(config_path)
     from codegraph.visualizer.server import create_app
