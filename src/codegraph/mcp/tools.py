@@ -25,12 +25,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _empty_graph_payload() -> dict[str, str]:
+    """Standard JSON payload when the graph has no indexed nodes."""
+    return {
+        "error": "Graph index is empty — indexing is now running in the background.",
+        "action": "Wait for indexing to complete, then retry this tool.",
+        "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
+    }
+
+
 def _graph_is_empty(state: ServerState) -> bool:
     """Return True if the Neo4j graph has no indexed nodes."""
     try:
         counts = count_nodes_by_label(state.driver)
         return sum(counts.values()) == 0
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Could not verify graph population (%s); assuming graph is not empty",
+            exc,
+        )
         return False
 
 
@@ -90,6 +103,7 @@ def get_relevant_context_impl(
     top_k: int,
     token_budget: int,
     state: ServerState,
+    include_explanations: bool = False,
 ) -> str:
     """Implementation of get_relevant_context tool."""
     effective_top_k = top_k if top_k > 0 else state.default_top_k
@@ -114,26 +128,60 @@ def get_relevant_context_impl(
     if _graph_is_empty(state):
         logger.warning("get_relevant_context: graph is empty — triggering auto-index")
         _start_background_index(state)
-        return json.dumps(
-            {
-                "error": "Graph index is empty — indexing is now running in the background.",
-                "action": "Wait for indexing to complete, then call get_relevant_context again.",
-                "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
-            }
-        )
+        return json.dumps(_empty_graph_payload())
 
     try:
-        context_items = run_retrieval_pipeline(
-            driver=state.driver,
-            gds=state.gds,
-            task_description=task_description,
-            project_root=state.project_root,
-            mentioned_entities=mentioned_entities,
-            current_file=current_file,
-            ppr_config=ppr_config,
-            signal_weights=state.signal_weights or None,
-            token_budget=effective_budget,
-        )
+        if include_explanations:
+            from codegraph.core.retrieval.explanations import (
+                build_explained_results,
+                explained_result_to_dict,
+            )
+            from codegraph.core.retrieval.pipeline import run_core_retrieval
+
+            core_result = run_core_retrieval(
+                driver=state.driver,
+                gds=state.gds,
+                task_description=task_description,
+                mentioned_entities=mentioned_entities,
+                current_file=current_file,
+                ppr_config=ppr_config,
+                signal_weights=state.signal_weights or None,
+            )
+            if not core_result:
+                return json.dumps(
+                    {
+                        "summary": {
+                            "result_count": 0,
+                            "total_tokens": 0,
+                            "token_budget": effective_budget,
+                        },
+                        "results": [],
+                        "hint": "No results found. Is the graph indexed? Run: codegraph rebuild",
+                    }
+                )
+            explained = build_explained_results(
+                state.driver, core_result, top_k=effective_top_k
+            )
+            from codegraph.core.retrieval.post_processing import format_context
+
+            context_items = format_context(
+                core_result.ppr_results, state.project_root, effective_budget
+            )
+            explanation_by_qname = {e.qualified_name: e for e in explained}
+        else:
+            core_result = None
+            explanation_by_qname = {}
+            context_items = run_retrieval_pipeline(
+                driver=state.driver,
+                gds=state.gds,
+                task_description=task_description,
+                project_root=state.project_root,
+                mentioned_entities=mentioned_entities,
+                current_file=current_file,
+                ppr_config=ppr_config,
+                signal_weights=state.signal_weights or None,
+                token_budget=effective_budget,
+            )
     except Exception as exc:
         logger.exception("get_relevant_context pipeline failed")
         return json.dumps(
@@ -159,8 +207,9 @@ def get_relevant_context_impl(
 
     total_tokens = sum(item.token_count for item in context_items)
 
-    results = [
-        {
+    results = []
+    for item in context_items:
+        row = {
             "entity_name": item.entity_name,
             "entity_type": item.entity_type,
             "qualified_name": item.qualified_name,
@@ -170,10 +219,13 @@ def get_relevant_context_impl(
             "token_count": item.token_count,
             "source_code": item.source_code,
         }
-        for item in context_items
-    ]
+        if include_explanations and item.qualified_name in explanation_by_qname:
+            row["explanation"] = explained_result_to_dict(
+                explanation_by_qname[item.qualified_name]
+            )
+        results.append(row)
 
-    output = {
+    output: dict = {
         "summary": {
             "result_count": len(results),
             "total_tokens": total_tokens,
@@ -182,6 +234,15 @@ def get_relevant_context_impl(
         },
         "results": results,
     }
+    if include_explanations and core_result is not None:
+        output["seeds"] = [
+            {
+                "qualified_name": meta["qname"],
+                "source": meta["source"],
+                "weight": round(core_result.seeds.seeds[nid], 4),
+            }
+            for nid, meta in core_result.seeds.metadata.items()
+        ]
     return json.dumps(output, indent=2)
 
 
@@ -202,13 +263,7 @@ def query_dependencies_impl(
     if _graph_is_empty(state):
         logger.warning("query_dependencies: graph is empty — triggering auto-index")
         _start_background_index(state)
-        return json.dumps(
-            {
-                "error": "Graph index is empty — indexing is now running in the background.",
-                "action": "Wait for indexing to complete, then call query_dependencies again.",
-                "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
-            }
-        )
+        return json.dumps(_empty_graph_payload())
 
     try:
         nodes = query_entity_dependencies(

@@ -137,6 +137,7 @@ def get_relevant_context(
     current_file: str | None,
     top_k: int,
     token_budget: int,
+    include_explanations: bool,
     ctx: Context,
 ) -> str:
     """Return structurally relevant source code for a task using Personalized PageRank.
@@ -150,30 +151,38 @@ def get_relevant_context(
     - If the graph is empty, this tool will auto-trigger a rebuild and ask you to wait. Wait 15-30s and retry.
 
     Returns a JSON object:
-      summary.result_count   — number of items returned
-      summary.total_tokens   — tokens consumed across all results
-      results[].entity_name  — short name (e.g. "authenticate")
-      results[].entity_type  — "Function", "Class", "Method", or "File"
-      results[].file_path    — relative path from project root
-      results[].lines        — [start, end] line numbers
-      results[].relevance_score — PPR-derived rank score (higher = more relevant)
-      results[].source_code  — full source text of the entity
+      summary.result_count    — number of items returned
+      summary.total_tokens    — tokens consumed across all results
+      summary.token_budget    — budget applied
+      summary.visualizer_url  — link to the graph visualizer
+      results[].entity_name   — short name (e.g. "authenticate")
+      results[].entity_type   — "Function", "Class", "Method", or "File"
+      results[].qualified_name  — file_path::name identity
+      results[].file_path     — relative path from project root
+      results[].lines         — [start, end] line numbers
+      results[].relevance_score — PPR rank score (higher = more relevant)
+      results[].token_count   — tokens in source_code
+      results[].source_code   — full source text of the entity
+      results[].explanation   — (optional) seed path and contribution when include_explanations=true
+      seeds[]                 — (optional) seed nodes when include_explanations=true
 
     Parameters:
-      task_description  — plain-English description of what you are trying to do
-      mentioned_entities — list of exact entity names the user mentioned (e.g. ["AuthService"])
-                           pass [] or null if no specific entities were named
-      current_file      — relative path of the file currently open (weak seed hint); null if unknown
-      top_k             — max results to return; 0 = server default (~15); raise to 20–30 for
-                          broad refactors, keep at 0 for focused lookups
-      token_budget      — max total tokens across all results; 0 = server default (~6000)
-
-    Does NOT search comments, docstrings, or git history — use task_description for those signals.
-    Does NOT return test files unless the task is about testing.
+      task_description     — plain-English description of what you are trying to do
+      mentioned_entities   — entity names mentioned (e.g. ["AuthService"]); null if none
+      current_file         — relative path of the open file (weak seed hint); null if unknown
+      top_k                — max results; 0 = server default (~15)
+      token_budget         — max total tokens; 0 = server default (~6000)
+      include_explanations — when true, attach seed provenance and reasoning paths per result
     """
     state = ctx.request_context.lifespan_context
     return get_relevant_context_impl(
-        task_description, mentioned_entities, current_file, top_k, token_budget, state
+        task_description,
+        mentioned_entities,
+        current_file,
+        top_k,
+        token_budget,
+        state,
+        include_explanations=include_explanations,
     )
 
 
@@ -198,18 +207,15 @@ def query_dependencies(
     - Use 'depth=1' for direct dependencies, or 'depth=2' to see transitive dependencies.
     - If the graph is empty, this tool will auto-trigger a rebuild and ask you to wait.
 
-    Returns a JSON array, each item:
-      qualified_name    — fully qualified identifier (e.g. "src/auth.py::AuthService.login")
-      name              — short name
-      label             — "Function", "Class", "Method", or "File"
-      file_path         — relative path from project root
-      relationship_type — "CALLS", "IMPORTS", "INHERITS_FROM", or "CONTAINS"
+    Returns a JSON object:
+      result_count — number of related entities returned
+      results[]    — each item has:
+        qualified_name, name, label, file_path, relationship_type
 
     Parameters:
-      entity_name — name or qualified_name of the entity; partial matches are accepted
-      direction   — "upstream" (who calls/imports this), "downstream" (what this calls/imports),
-                    or "both" (all relationships)
-      depth       — 1 for direct relationships only; 2 for two-hop traversal (can be large)
+      entity_name — exact name or qualified_name (use get_relevant_context to confirm)
+      direction   — "upstream", "downstream", or "both"
+      depth       — 1 for direct neighbors; 2 for two-hop (can be large)
     """
     state = ctx.request_context.lifespan_context
     return query_dependencies_impl(entity_name, direction, depth, state)
