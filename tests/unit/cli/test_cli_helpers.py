@@ -335,7 +335,7 @@ class TestQueryHelper:
             output_lines = []
             with patch("codegraph.cli.commands.query.console") as mock_console:
                 mock_console.print = lambda *a, **kw: output_lines.append(str(a))
-                query_helper(config_path, "fix auth", None, None, 0, 0, json_out=True)
+                query_helper(config_path, "fix auth", None, 0, 0, json_out=True)
 
             # Find the JSON output line
             next((l for l in output_lines if '"results"' in l or "results" in l), None)
@@ -364,7 +364,7 @@ class TestQueryHelper:
             printed = []
             with patch("codegraph.cli.commands.query.console") as mock_console:
                 mock_console.print = lambda *a, **kw: printed.append(str(a))
-                query_helper(config_path, "task", None, None, 0, 0, json_out=False)
+                query_helper(config_path, "task", None, 0, 0, json_out=False)
 
             # Should print some "no results" message
             full_output = " ".join(printed)

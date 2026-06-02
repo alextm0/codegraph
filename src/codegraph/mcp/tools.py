@@ -106,6 +106,8 @@ def get_relevant_context_impl(
     include_explanations: bool = False,
 ) -> str:
     """Implementation of get_relevant_context tool."""
+    # Kept in the MCP signature for compatibility; active-file seeding is deprecated.
+    _ = current_file
     effective_top_k = top_k if top_k > 0 else state.default_top_k
     effective_budget = token_budget if token_budget > 0 else state.default_token_budget
 
@@ -117,10 +119,9 @@ def get_relevant_context_impl(
     )
 
     logger.info(
-        "get_relevant_context called: task='%s...' entities=%s current_file=%s top_k=%d budget=%d",
+        "get_relevant_context called: task='%s...' entities=%s top_k=%d budget=%d",
         task_description[:60],
         mentioned_entities,
-        current_file,
         effective_top_k,
         effective_budget,
     )
@@ -143,7 +144,6 @@ def get_relevant_context_impl(
                 gds=state.gds,
                 task_description=task_description,
                 mentioned_entities=mentioned_entities,
-                current_file=current_file,
                 ppr_config=ppr_config,
                 signal_weights=state.signal_weights or None,
             )
@@ -177,7 +177,6 @@ def get_relevant_context_impl(
                 task_description=task_description,
                 project_root=state.project_root,
                 mentioned_entities=mentioned_entities,
-                current_file=current_file,
                 ppr_config=ppr_config,
                 signal_weights=state.signal_weights or None,
                 token_budget=effective_budget,

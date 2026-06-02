@@ -1,9 +1,10 @@
-"""Doctor command helper."""
+"""Doctor command helper and structured diagnostics for API use."""
 
 from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from codegraph.core.graph import get_database_manager
@@ -13,112 +14,173 @@ from codegraph.utils.logging import setup_logging
 from codegraph.cli.commands._shared import console
 
 
-def doctor_helper(config_path: Path | None = None) -> None:
-    """Run health checks on config, Neo4j, GDS, and dependencies."""
-    setup_logging(level=logging.WARNING)
-    ok = True
+@dataclass(frozen=True)
+class DoctorCheck:
+    """Single diagnostic check result."""
 
-    console.print("[bold cyan]Running CodeGraph Diagnostics...[/bold cyan]\n")
+    name: str
+    ok: bool
+    message: str
+    fix_hint: str | None = None
+    severity: str = "error"  # error | warning | skip
 
-    # 0. Config file
-    console.print("[bold]0. Checking Configuration...[/bold]")
+
+def run_doctor_checks(config_path: Path | None = None) -> dict:
+    """Run health checks and return structured JSON-serializable results."""
+    checks: list[DoctorCheck] = []
+    all_ok = True
     config_ok = False
+    raw: dict = {}
+    proj_root = Path(".")
+
     if config_path is None or not config_path.exists():
-        console.print(
-            f"   [red]-[/red] config.yaml not found at {config_path or 'unknown'}"
+        checks.append(
+            DoctorCheck(
+                name="config_file",
+                ok=False,
+                message=f"config.yaml not found at {config_path or 'unknown'}",
+                fix_hint="Run codegraph init to create config.yaml",
+            )
         )
-        console.print(
-            "       [dim]Fix: run [bold]codegraph init[/bold] to create it[/dim]"
-        )
-        ok = False
+        all_ok = False
     else:
-        raw = {}
         try:
             raw = load_raw_config(config_path)
             config_ok = True
-            console.print(f"   [green]+[/green] Config found at {config_path}")
+            checks.append(
+                DoctorCheck(
+                    name="config_file",
+                    ok=True,
+                    message=f"Config found at {config_path}",
+                )
+            )
         except Exception as exc:
-            console.print(f"   [red]-[/red] Could not read config: {exc}")
-            ok = False
+            checks.append(
+                DoctorCheck(
+                    name="config_file",
+                    ok=False,
+                    message=f"Could not read config: {exc}",
+                    fix_hint="Fix config.yaml syntax or run codegraph init",
+                )
+            )
+            all_ok = False
 
         if config_ok:
             proj_root = resolve_project_root(raw, config_path)
             if proj_root.exists():
-                console.print(f"   [green]+[/green] Project root exists: {proj_root}")
-            else:
-                console.print(f"   [red]-[/red] Project root not found: {proj_root}")
-                console.print(
-                    "       [dim]Fix: update project_root in config.yaml[/dim]"
+                checks.append(
+                    DoctorCheck(
+                        name="project_root",
+                        ok=True,
+                        message=f"Project root exists: {proj_root}",
+                    )
                 )
-                ok = False
+            else:
+                checks.append(
+                    DoctorCheck(
+                        name="project_root",
+                        ok=False,
+                        message=f"Project root not found: {proj_root}",
+                        fix_hint="Update project_root in config.yaml",
+                    )
+                )
+                all_ok = False
 
-            # Check password is available
             has_password = bool(
                 os.getenv("NEO4J_PASSWORD") or raw.get("neo4j", {}).get("password")
             )
             if not has_password:
-                console.print("   [red]-[/red] Neo4j password not set")
-                console.print(
-                    "       [dim]Fix: set NEO4J_PASSWORD in .env or run [bold]codegraph init[/bold][/dim]"
+                checks.append(
+                    DoctorCheck(
+                        name="neo4j_password",
+                        ok=False,
+                        message="Neo4j password not set",
+                        fix_hint="Set NEO4J_PASSWORD in .env or run codegraph init",
+                    )
                 )
-                ok = False
+                all_ok = False
             else:
-                console.print("   [green]+[/green] Neo4j password available")
+                checks.append(
+                    DoctorCheck(
+                        name="neo4j_password",
+                        ok=True,
+                        message="Neo4j password available",
+                    )
+                )
 
     db_manager = get_database_manager()
     connected = False
 
-    # 1. Neo4j connectivity
-    console.print("\n[bold]1. Checking Neo4j Connectivity...[/bold]")
     try:
         connected = db_manager.is_connected()
         if connected:
             uri = db_manager._config.uri if db_manager._config else "Neo4j"
-            console.print(f"   [green]+[/green] Connected to {uri}")
+            checks.append(
+                DoctorCheck(
+                    name="neo4j_connectivity",
+                    ok=True,
+                    message=f"Connected to {uri}",
+                )
+            )
         else:
             uri = (
                 db_manager._config.uri
                 if db_manager._config
                 else "neo4j://localhost:7687"
             )
-            console.print(f"   [red]-[/red] Cannot reach Neo4j at {uri}")
-            console.print(
-                "       [dim]Fix: start Neo4j (Neo4j Desktop → Start, or: neo4j start)[/dim]"
+            checks.append(
+                DoctorCheck(
+                    name="neo4j_connectivity",
+                    ok=False,
+                    message=f"Cannot reach Neo4j at {uri}",
+                    fix_hint="Start Neo4j (Neo4j Desktop → Start, or: neo4j start)",
+                )
             )
-            console.print("       [dim]Then verify at http://localhost:7474[/dim]")
-            ok = False
+            all_ok = False
     except Exception as exc:
-        console.print(f"   [red]-[/red] Connection error: {exc}")
-        console.print(
-            "       [dim]Fix: check Neo4j is running and credentials are correct[/dim]"
+        checks.append(
+            DoctorCheck(
+                name="neo4j_connectivity",
+                ok=False,
+                message=f"Connection error: {exc}",
+                fix_hint="Check Neo4j is running and credentials are correct",
+            )
         )
-        ok = False
+        all_ok = False
 
-    # 2. GDS plugin
-    console.print("\n[bold]2. Checking GDS Plugin...[/bold]")
     if connected:
         try:
             from codegraph.core.graph.ppr import create_gds_client
 
             gds = create_gds_client(db_manager.get_driver())
             version = gds.version()
-            console.print(
-                f"   [green]+[/green] GDS Plugin installed (version: {version})"
+            checks.append(
+                DoctorCheck(
+                    name="gds_plugin",
+                    ok=True,
+                    message=f"GDS Plugin installed (version: {version})",
+                )
             )
         except Exception as exc:
-            console.print(f"   [red]-[/red] GDS check failed: {exc}")
-            console.print(
-                "       [dim]Fix: install GDS in Neo4j Desktop → Plugins, or add to neo4j.conf[/dim]"
+            checks.append(
+                DoctorCheck(
+                    name="gds_plugin",
+                    ok=False,
+                    message=f"GDS check failed: {exc}",
+                    fix_hint="Install GDS in Neo4j Desktop → Plugins",
+                )
             )
-            console.print(
-                "       [dim]GDS is required for Personalized PageRank retrieval[/dim]"
-            )
-            ok = False
+            all_ok = False
     else:
-        console.print("   [yellow]![/yellow] SKIP (Neo4j not reachable)")
+        checks.append(
+            DoctorCheck(
+                name="gds_plugin",
+                ok=False,
+                message="Skipped (Neo4j not reachable)",
+                severity="skip",
+            )
+        )
 
-    # 3. Graph is indexed
-    console.print("\n[bold]3. Checking Graph Index...[/bold]")
     if connected:
         try:
             from codegraph.core.graph.queries import count_nodes_by_label
@@ -126,7 +188,13 @@ def doctor_helper(config_path: Path | None = None) -> None:
             node_counts = count_nodes_by_label(db_manager.get_driver())
             total = sum(node_counts.values())
             if total > 0:
-                console.print(f"   [green]+[/green] Graph has {total} nodes")
+                checks.append(
+                    DoctorCheck(
+                        name="graph_index",
+                        ok=True,
+                        message=f"Graph has {total} nodes",
+                    )
+                )
                 if config_ok:
                     from codegraph.utils.graph_helpers import verify_graph_project_root
 
@@ -134,46 +202,123 @@ def doctor_helper(config_path: Path | None = None) -> None:
                         db_manager.get_driver(), proj_root
                     )
                     if aligned:
-                        console.print(
-                            f"   [green]+[/green] Indexed files resolve under project root"
+                        checks.append(
+                            DoctorCheck(
+                                name="graph_project_alignment",
+                                ok=True,
+                                message="Indexed files resolve under project root",
+                            )
                         )
                     else:
-                        console.print(
-                            "   [yellow]![/yellow] Graph may be out of sync with project_root"
+                        checks.append(
+                            DoctorCheck(
+                                name="graph_project_alignment",
+                                ok=False,
+                                message=f"Graph may be out of sync (sample: {sample})",
+                                fix_hint="Run codegraph rebuild after fixing project_root",
+                                severity="warning",
+                            )
                         )
-                        console.print(f"       Sample missing file: {sample}")
-                        console.print(
-                            f"       Config project_root: {proj_root}"
-                        )
-                        console.print(
-                            "       [dim]Fix: set project_root to the indexed repo, "
-                            "then run [bold]codegraph rebuild[/bold][/dim]"
-                        )
-                        ok = False
+                        all_ok = False
             else:
-                console.print("   [yellow]![/yellow] Graph is empty")
-                console.print(
-                    "       [dim]Fix: run [bold]codegraph rebuild[/bold] to index your project[/dim]"
+                checks.append(
+                    DoctorCheck(
+                        name="graph_index",
+                        ok=False,
+                        message="Graph is empty",
+                        fix_hint="Run codegraph rebuild to index your project",
+                        severity="warning",
+                    )
                 )
         except Exception as exc:
-            console.print(f"   [yellow]![/yellow] Could not check graph: {exc}")
+            checks.append(
+                DoctorCheck(
+                    name="graph_index",
+                    ok=False,
+                    message=f"Could not check graph: {exc}",
+                    severity="warning",
+                )
+            )
     else:
-        console.print("   [yellow]![/yellow] SKIP (Neo4j not reachable)")
+        checks.append(
+            DoctorCheck(
+                name="graph_index",
+                ok=False,
+                message="Skipped (Neo4j not reachable)",
+                severity="skip",
+            )
+        )
 
-    # 4. tree-sitter installation
-    console.print("\n[bold]4. Checking Tree-Sitter Installation...[/bold]")
     try:
         from tree_sitter import Language, Parser  # noqa: F401
         import tree_sitter_python  # noqa: F401
 
-        console.print("   [green]+[/green] tree-sitter is installed")
-        console.print("   [green]+[/green] python parser is available")
-    except ImportError as e:
-        console.print(f"   [red]-[/red] tree-sitter check failed: {e}")
-        console.print(
-            "       [dim]Fix: pip install tree-sitter tree-sitter-python[/dim]"
+        checks.append(
+            DoctorCheck(
+                name="tree_sitter",
+                ok=True,
+                message="tree-sitter and python parser available",
+            )
         )
-        ok = False
+    except ImportError as exc:
+        checks.append(
+            DoctorCheck(
+                name="tree_sitter",
+                ok=False,
+                message=f"tree-sitter check failed: {exc}",
+                fix_hint="pip install tree-sitter tree-sitter-python",
+            )
+        )
+        all_ok = False
+
+    return {
+        "ok": all_ok,
+        "checks": [
+            {
+                "name": c.name,
+                "ok": c.ok,
+                "message": c.message,
+                "fix_hint": c.fix_hint,
+                "severity": c.severity,
+            }
+            for c in checks
+        ],
+    }
+
+
+def doctor_helper(config_path: Path | None = None) -> None:
+    """Run health checks on config, Neo4j, GDS, and dependencies."""
+    setup_logging(level=logging.WARNING)
+    result = run_doctor_checks(config_path)
+    ok = result["ok"]
+
+    console.print("[bold cyan]Running CodeGraph Diagnostics...[/bold cyan]\n")
+
+    section = 0
+    for check in result["checks"]:
+        if check["name"] == "neo4j_connectivity":
+            section = 1
+            console.print("\n[bold]1. Checking Neo4j Connectivity...[/bold]")
+        elif check["name"] == "gds_plugin":
+            section = 2
+            console.print("\n[bold]2. Checking GDS Plugin...[/bold]")
+        elif check["name"] == "graph_index":
+            section = 3
+            console.print("\n[bold]3. Checking Graph Index...[/bold]")
+        elif check["name"] == "tree_sitter":
+            section = 4
+            console.print("\n[bold]4. Checking Tree-Sitter Installation...[/bold]")
+        elif section == 0:
+            console.print("[bold]0. Checking Configuration...[/bold]")
+
+        if check["severity"] == "skip":
+            console.print(f"   [yellow]![/yellow] {check['message']}")
+        elif check["ok"]:
+            console.print(f"   [green]+[/green] {check['message']}")
+        else:
+            console.print(f"   [red]-[/red] {check['message']}")
+            if check["fix_hint"]:
+                console.print(f"       [dim]Fix: {check['fix_hint']}[/dim]")
 
     console.print("\n" + "=" * 40)
     if ok:

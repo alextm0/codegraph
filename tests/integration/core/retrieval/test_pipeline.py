@@ -218,17 +218,6 @@ class TestRunRetrievalPipeline:
         # top_k=5 means at most 5 PPR results, likely fewer context items.
         assert len(result) <= 5
 
-    def test_current_file_hint_does_not_crash(self, populated_db, gds_client):
-        """Providing current_file should not raise an exception."""
-        result = run_retrieval_pipeline(
-            driver=populated_db,
-            gds=gds_client,
-            task_description="fix auth service",
-            project_root=PROJECT_ROOT,
-            current_file="services/auth_service.py",
-        )
-        assert isinstance(result, list)
-
     def test_all_context_results_have_file_path(self, populated_db, gds_client):
         """Every returned ContextResult must have a non-empty file_path."""
         result = run_retrieval_pipeline(

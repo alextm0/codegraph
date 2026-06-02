@@ -146,9 +146,6 @@ def query(
     entities: list[str] | None = typer.Option(
         None, "--entity", "-e", help="Specific entity names to include as seeds"
     ),
-    file: str | None = typer.Option(
-        None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"
-    ),
     top_k: int = typer.Option(
         0, "--top-k", help="Max results (0 = use config default)"
     ),
@@ -184,7 +181,6 @@ def query(
         config_path,
         task,
         entities,
-        file,
         top_k,
         budget,
         json_out=json_out,

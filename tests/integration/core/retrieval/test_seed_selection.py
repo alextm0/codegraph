@@ -25,15 +25,12 @@ class TestResolveSignalWeights:
         weights = _resolve_signal_weights(None)
         assert weights["entity_match"] == 0.6
         assert weights["bm25"] == 0.3
-        assert weights["current_file"] == 0.1
         assert weights["bm25_top_n"] == 10
 
     def test_caller_values_override_defaults(self):
         weights = _resolve_signal_weights({"entity_match": 0.8, "bm25": 0.1})
         assert weights["entity_match"] == 0.8
         assert weights["bm25"] == 0.1
-        # Unspecified keys stay at defaults
-        assert weights["current_file"] == 0.1
 
     def test_negative_weight_clamped_to_default(self):
         weights = _resolve_signal_weights({"entity_match": -0.5})
@@ -175,29 +172,6 @@ class TestBM25Search:
             task_description="validate email and password",
         )
         assert len(pv.seeds) > 0
-
-
-@neo4j_required
-class TestCurrentFileSeeds:
-    """Tests for current_file signal (seed signal 3)."""
-
-    def test_current_file_produces_seeds(self, populated_db):
-        """Entities from current_file should appear in seeds."""
-        pv = extract_seeds(
-            populated_db,
-            task_description="some task",
-            current_file="services/auth_service.py",
-        )
-        assert len(pv.seeds) > 0, "Expected seeds from current_file"
-
-    def test_unknown_file_produces_no_file_seeds(self, populated_db):
-        """If the file is not in the graph, no extra seeds are produced."""
-        pv_only_task = extract_seeds(populated_db, "some task")
-        pv_with_ghost_file = extract_seeds(
-            populated_db, "some task", current_file="ghost.py"
-        )
-        # Weights should be identical as if no file was provided
-        assert pv_with_ghost_file.seeds == pv_only_task.seeds
 
 
 @neo4j_required

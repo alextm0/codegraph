@@ -39,7 +39,6 @@ def test_query_trace_emits_json_only(capsys) -> None:
             MagicMock(),
             "test task",
             None,
-            None,
             0,
             0,
             trace=True,
@@ -66,7 +65,7 @@ def test_query_trace_no_results_emits_error_json(capsys) -> None:
         db.get_driver.return_value = MagicMock()
         db_mgr.return_value = db
 
-        query_helper(MagicMock(), "empty task", None, None, 0, 0, trace=True)
+        query_helper(MagicMock(), "empty task", None, 0, 0, trace=True)
 
     captured = capsys.readouterr()
     assert "Running retrieval" not in captured.out

@@ -23,7 +23,6 @@ def query_helper(
     config_path: Path,
     task: str,
     entities: list[str] | None,
-    current_file: str | None,
     top_k: int,
     token_budget: int,
     json_out: bool = False,
@@ -75,8 +74,6 @@ def query_helper(
             console.print(f"Running retrieval for: [bold cyan]{task!r}[/bold cyan]")
             if entities:
                 console.print(f"  Seed entities: [yellow]{entities}[/yellow]")
-            if current_file:
-                console.print(f"  Current file:  [blue]{current_file}[/blue]")
             console.print()
 
         def _run_trace() -> None:
@@ -85,7 +82,6 @@ def query_helper(
                 gds=gds,
                 task_description=task,
                 mentioned_entities=entities,
-                current_file=current_file,
                 ppr_config=ppr_config,
                 signal_weights=signal_weights or None,
                 exclude_seed_paths=exclude_seed_paths or None,
@@ -112,7 +108,6 @@ def query_helper(
                 task_description=task,
                 project_root=project_root_str,
                 mentioned_entities=entities,
-                current_file=current_file,
                 ppr_config=ppr_config,
                 signal_weights=signal_weights or None,
                 token_budget=effective_budget,

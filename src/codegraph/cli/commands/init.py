@@ -138,7 +138,6 @@ def init_helper(config_path: Path, target: str | None = None) -> None:
         "seed_selection": {
             "entity_match_weight": 0.6,
             "bm25_weight": 0.3,
-            "current_file_weight": 0.1,
             "bm25_top_n": 10,
             "exclude_seed_paths": ["tests/", "test_"],
         },

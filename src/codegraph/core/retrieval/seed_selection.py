@@ -1,9 +1,9 @@
 """Seed selection: score graph nodes as PPR starting points.
 
 Design notes:
-- Three signals combine to form the personalization vector: entity name match
-  (task description contains a known function/class name), BM25 document similarity,
-  and current-file proximity. Weights are configurable via config.yaml.
+- Two signals combine to form the personalization vector: entity name match
+  (task description contains a known function/class name) and BM25 document
+  similarity. Weights are configurable via config.yaml.
 - The resulting PersonalizationVector is normalized to sum to 1.0 before PPR.
 - Seed quality is the dominant factor in retrieval performance — see thesis findings.
 """
@@ -20,10 +20,8 @@ logger = logging.getLogger(__name__)
 # These are overridden by the seed_selection section in config.yaml.
 # entity_match: reward for task description containing a known entity name (highest weight).
 # bm25: reward from BM25 document similarity score.
-# current_file: reward for entities in the currently open file.
 _DEFAULT_ENTITY_MATCH_WEIGHT: float = 0.6
 _DEFAULT_BM25_WEIGHT: float = 0.3
-_DEFAULT_CURRENT_FILE_WEIGHT: float = 0.1
 _DEFAULT_BM25_TOP_N: int = 10
 
 
@@ -34,7 +32,7 @@ class SeedNode:
     node_id: int
     qualified_name: str
     weight: float
-    source: str  # "entity_match", "bm25", "current_file"
+    source: str  # "entity_match", "bm25"
 
 
 @dataclass(frozen=False)
@@ -61,7 +59,6 @@ def extract_seeds(
     driver: Driver,
     task_description: str,
     mentioned_entities: list[str] | None = None,
-    current_file: str | None = None,
     signal_weights: dict[str, float] | None = None,
     project_scope: str | None = None,
     bm25_index: BM25Okapi | None = None,
@@ -74,7 +71,6 @@ def extract_seeds(
         driver: Active Neo4j driver.
         task_description: Free-form task text (e.g., "fix the auth timeout bug").
         mentioned_entities: Explicit entity names mentioned in the task (e.g., ["AuthService"]).
-        current_file: File path the agent is currently editing. Used as a low-weight hint.
         signal_weights: Override default weights for each source signal.
         project_scope: Optional file path prefix. When set, only nodes whose
             file_path starts with this prefix are considered. Use to prevent
@@ -116,13 +112,6 @@ def extract_seeds(
     )
     all_seeds.extend(bm25_seeds)
     logger.debug("BM25 seeds: %d", len(bm25_seeds))
-
-    if current_file:
-        file_seeds = _current_file_seeds(
-            driver, current_file, weights["current_file"], project_scope
-        )
-        all_seeds.extend(file_seeds)
-        logger.debug("Current file seeds: %d", len(file_seeds))
 
     if not all_seeds:
         logger.warning(
@@ -336,43 +325,6 @@ def _bm25_search(
     return seeds
 
 
-def _current_file_seeds(
-    driver: Driver,
-    current_file: str,
-    base_weight: float,
-    project_scope: str | None = None,
-) -> list[SeedNode]:
-    """Return seeds for all entities contained in current_file."""
-    seeds: list[SeedNode] = []
-    # Normalise to forward slashes for cross-platform matching.
-    # Use ENDS WITH so callers can pass a relative suffix like
-    # 'services/auth_service.py' even though the graph stores full paths.
-    normalised = current_file.replace("\\", "/")
-    with driver.session() as session:
-        result = session.run(
-            """
-            MATCH (n)
-            WHERE replace(n.file_path, '\\\\', '/') ENDS WITH $file_path
-              AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
-            RETURN id(n) AS nid, n.qualified_name AS qname
-            """,
-            file_path=normalised,
-            scope=project_scope,
-        )
-        for record in result:
-            seeds.append(
-                SeedNode(
-                    node_id=record["nid"],
-                    qualified_name=record["qname"] or "",
-                    weight=base_weight,
-                    source="current_file",
-                )
-            )
-    if not seeds:
-        logger.debug("Current file seeds: no nodes found for file '%s'", current_file)
-    return seeds
-
-
 # ---------------------------------------------------------------------------
 # Private: normalization and helpers
 # ---------------------------------------------------------------------------
@@ -474,7 +426,6 @@ def _resolve_signal_weights(signal_weights: dict[str, float] | None) -> dict:
     defaults: dict = {
         "entity_match": _DEFAULT_ENTITY_MATCH_WEIGHT,
         "bm25": _DEFAULT_BM25_WEIGHT,
-        "current_file": _DEFAULT_CURRENT_FILE_WEIGHT,
         "bm25_top_n": _DEFAULT_BM25_TOP_N,
     }
     if not signal_weights:

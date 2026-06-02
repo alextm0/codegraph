@@ -28,7 +28,6 @@ ppr:
 seed_selection:
   entity_match_weight: 0.6
   bm25_weight: 0.3
-  current_file_weight: 0.1
 """
     )
 
@@ -52,7 +51,7 @@ seed_selection:
     from codegraph.core.graph.ppr import PPRConfig, create_gds_client
     from codegraph.utils.config import parse_signal_weights, load_raw_config
 
-    query_helper(config_path, "routing blueprint", None, None, 5, 2000, trace=True)
+    query_helper(config_path, "routing blueprint", None, 5, 2000, trace=True)
 
     explain_helper(config_path, "routing blueprint", top_k=3)
     driver = db.get_driver()
