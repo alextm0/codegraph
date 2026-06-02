@@ -10,7 +10,7 @@ See also: [DECISIONS.md](../DECISIONS.md) for binding design choices.
 
 ```
 Source code → tree-sitter parse → entity/edge extraction → Neo4j graph
-→ seed selection (entity + BM25 + current file) → PPR (GDS) → IDF post-processing
+→ seed selection (entity + BM25) → PPR (GDS) → IDF post-processing
 → MCP / CLI / Visualizer
 ```
 
@@ -32,7 +32,6 @@ Source code → tree-sitter parse → entity/edge extraction → Neo4j graph
 |--------|----------------|------------|
 | Entity match | 0.6 | `entity_match` |
 | BM25 | 0.3 | `bm25` |
-| Current file | 0.1 | `current_file` |
 
 Compound tokenization splits `CamelCase` / `snake_case` for BM25 recall. Provenance is stored in `PersonalizationVector.metadata`.
 

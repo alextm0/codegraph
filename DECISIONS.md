@@ -60,12 +60,11 @@ Technical decisions with **Status: ACTIVE** are binding. Do not override without
 ## DEC-006: Seed signal weights
 
 **Status:** ACTIVE  
-**Context:** Personalization vector combines three signals (configurable in `config.yaml`).
+**Context:** Personalization vector combines two signals (configurable in `config.yaml`). Active-file hints were removed because the currently open file is not a reliable relevance signal.
 
 **Decision:** Default weights:
 - `entity_match`: 0.6
 - `bm25`: 0.3
-- `current_file`: 0.1
 
 Store provenance in `PersonalizationVector.metadata[nid]["source"]`.
 

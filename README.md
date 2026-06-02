@@ -16,7 +16,7 @@ Your repo
   → returns ranked source code within a token budget
 ```
 
-Results improve dramatically when the AI mentions specific entity names (e.g. `AuthService`, `validate_token`). Entity name matching is the strongest signal (0.6 weight), followed by BM25 text match (0.3), and current file (0.1).
+Results improve dramatically when the AI mentions specific entity names (e.g. `AuthService`, `validate_token`). Entity name matching is the strongest signal (0.6 weight), followed by BM25 text match (0.3).
 
 ## Use cases
 
@@ -63,7 +63,6 @@ The MCP server exposes two tools:
 ```
 task_description   plain-English description of what you're trying to do
 mentioned_entities list of exact entity names the user mentioned, or null
-current_file       relative path of the file currently open, or null
 top_k              max results (0 = server default ~15)
 token_budget       max total tokens across results (0 = server default ~6000)
 ```
