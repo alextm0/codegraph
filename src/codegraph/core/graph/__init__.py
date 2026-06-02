@@ -9,7 +9,7 @@ from codegraph.core.graph.connection import (
     load_full_config,
 )
 from codegraph.core.graph.database import DatabaseManager, get_database_manager
-from codegraph.core.graph.graph_builder import build_graph, clear_database
+from codegraph.core.graph.graph_builder import GraphBuilder, build_graph, clear_database
 from codegraph.core.graph.ppr import (
     PPRConfig,
     PPRResult,
@@ -45,6 +45,7 @@ __all__ = [
     "close_driver",
     "load_config",
     "load_full_config",
+    "GraphBuilder",
     "build_graph",
     "clear_database",
     "delete_file_entities",
