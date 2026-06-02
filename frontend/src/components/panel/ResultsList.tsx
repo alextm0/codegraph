@@ -273,6 +273,12 @@ function PprRow({
       {highlightPprOnly && (
         <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 4 }}>PPR only — missed by BM25</div>
       )}
+      {res.contribution && (
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+          via <span style={{ color: 'var(--accent)' }}>{res.contribution}</span>
+          {res.seed_sources?.length ? ` · seeds: ${res.seed_sources.join(', ')}` : ''}
+        </div>
+      )}
       {res.path && (
         <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
           ↳ {res.path}

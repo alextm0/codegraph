@@ -15,7 +15,7 @@ export interface SeedInfo {
   id: string
   name: string
   /** "entity" for high-weight seeds, "bm25" for BM25-derived seeds */
-  signal: 'entity' | 'bm25'
+  signal: 'entity' | 'bm25' | 'file'
   weight: number
 }
 
@@ -31,6 +31,9 @@ export interface PPREntityResult {
   path_ids: string[]
   line_number: number
   line_end: number
+  seed_qualified_names?: string[]
+  seed_sources?: string[]
+  contribution?: 'lexical' | 'graph' | 'both'
 }
 
 export interface BM25FileResult {
