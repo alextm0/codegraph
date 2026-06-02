@@ -16,7 +16,6 @@ interface GraphCanvasProps {
   topK?: number
   projectHistory?: ProjectHistoryItem[]
   isDatabaseEmpty?: boolean
-  onIndexed?: () => void
   rebuildActive?: boolean
   rebuildMessage?: WSStatus | null
 }
@@ -84,7 +83,6 @@ export default function GraphCanvas({
   nodes, edges, onNodeSelect, selectedNode,
   dampingFactor = 0.70, topK = 30, projectHistory = [],
   isDatabaseEmpty = false,
-  onIndexed,
   rebuildActive = false,
   rebuildMessage = null,
 }: GraphCanvasProps) {

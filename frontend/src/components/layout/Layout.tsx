@@ -116,7 +116,6 @@ export default function Layout({
             topK={queryResult?.top_k}
             projectHistory={projectHistory}
             isDatabaseEmpty={isDatabaseEmpty}
-            onIndexed={onGraphRefresh}
             rebuildActive={rebuildActive}
             rebuildMessage={lastMessage}
           />
