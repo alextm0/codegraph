@@ -96,6 +96,27 @@ def query_helper(
                 results = format_context(
                     core.ppr_results, project_root_str, effective_budget
                 )
+                if not results and core.ppr_results:
+                    from codegraph.utils.graph_helpers import verify_graph_project_root
+
+                    aligned, sample = verify_graph_project_root(
+                        driver, project_root_str
+                    )
+                    if not aligned:
+                        console.print(
+                            "[yellow]PPR returned results but source files are unreadable.[/yellow]"
+                        )
+                        console.print(
+                            f"  project_root: [blue]{project_root_str}[/blue]"
+                        )
+                        console.print(
+                            f"  sample missing file: [dim]{sample}[/dim]"
+                        )
+                        console.print(
+                            "  [dim]Fix: set project_root to the indexed repo and run "
+                            "[bold]codegraph rebuild[/bold][/dim]"
+                        )
+                        return
             else:
                 results = run_retrieval_pipeline(
                     driver=driver,

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import sys
 from pathlib import Path
 
 from rich import box
@@ -33,10 +35,14 @@ def explain_helper(
     driver = db_manager.get_driver()
 
     if not db_manager.is_connected():
-        console.print("[bold red]ERROR:[/bold red] Cannot reach Neo4j.")
+        if trace:
+            _emit_trace_error(task, "Cannot reach Neo4j.")
+        else:
+            console.print("[bold red]ERROR:[/bold red] Cannot reach Neo4j.")
         return
 
-    console.print(f'\nExplaining: [bold cyan]"{task}"[/bold cyan]\n')
+    if not trace:
+        console.print(f'\nExplaining: [bold cyan]"{task}"[/bold cyan]\n')
 
     ppr_section = raw_config.get("ppr", {})
     ppr_config = PPRConfig(
@@ -55,24 +61,29 @@ def explain_helper(
         exclude_seed_paths=exclude_seed_paths,
     )
     if not core_result:
-        console.print(
-            "[yellow]No seeds found. Is the graph built? Run: codegraph rebuild[/yellow]"
-        )
+        if trace:
+            _emit_trace_error(
+                task,
+                "No seeds found. Is the graph built? Run: codegraph rebuild",
+            )
+        else:
+            console.print(
+                "[yellow]No seeds found. Is the graph built? Run: codegraph rebuild[/yellow]"
+            )
         return
 
-    seed_ids = list(core_result.seeds.seeds.keys())
-    seed_names = fetch_seed_names(driver, seed_ids)
-    _print_seeds_table(core_result.seeds, seed_names)
-
     if trace:
-        import json
         from codegraph.core.retrieval.trace import build_retrieval_trace
 
         trace_data = build_retrieval_trace(
             driver, core_result, ppr_config, task, top_k=top_k
         )
-        console.print(json.dumps(trace_data, indent=2))
+        sys.stdout.write(json.dumps(trace_data, indent=2) + "\n")
         return
+
+    seed_ids = list(core_result.seeds.seeds.keys())
+    seed_names = fetch_seed_names(driver, seed_ids)
+    _print_seeds_table(core_result.seeds, seed_names)
 
     explained = build_explained_results(
         driver, core_result, top_k=top_k, dedupe_by="file"
@@ -118,3 +129,9 @@ def _print_explained_table(explained) -> None:
 
     console.print(results_table)
     console.print()
+
+
+def _emit_trace_error(task: str, message: str) -> None:
+    """Write a structured trace error as JSON to stdout (no Rich output)."""
+    payload = {"task": task, "error": message, "hint": "run codegraph rebuild"}
+    sys.stdout.write(json.dumps(payload, indent=2) + "\n")

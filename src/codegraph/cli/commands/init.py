@@ -102,7 +102,14 @@ def init_helper(config_path: Path, target: str | None = None) -> None:
             return
 
     # 3. Exclude Patterns
-    exclude = [".git", "__pycache__", ".venv", "node_modules", ".pytest_cache"]
+    exclude = [
+        ".git",
+        "__pycache__",
+        ".venv",
+        "node_modules",
+        ".pytest_cache",
+        "tests/fixtures/",
+    ]
     console.print(
         f"\n[bold]3. Default exclusions:[/bold] [dim]{', '.join(exclude)}[/dim]"
     )

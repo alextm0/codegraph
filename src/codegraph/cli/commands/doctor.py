@@ -127,6 +127,29 @@ def doctor_helper(config_path: Path | None = None) -> None:
             total = sum(node_counts.values())
             if total > 0:
                 console.print(f"   [green]+[/green] Graph has {total} nodes")
+                if config_ok:
+                    from codegraph.utils.graph_helpers import verify_graph_project_root
+
+                    aligned, sample = verify_graph_project_root(
+                        db_manager.get_driver(), proj_root
+                    )
+                    if aligned:
+                        console.print(
+                            f"   [green]+[/green] Indexed files resolve under project root"
+                        )
+                    else:
+                        console.print(
+                            "   [yellow]![/yellow] Graph may be out of sync with project_root"
+                        )
+                        console.print(f"       Sample missing file: {sample}")
+                        console.print(
+                            f"       Config project_root: {proj_root}"
+                        )
+                        console.print(
+                            "       [dim]Fix: set project_root to the indexed repo, "
+                            "then run [bold]codegraph rebuild[/bold][/dim]"
+                        )
+                        ok = False
             else:
                 console.print("   [yellow]![/yellow] Graph is empty")
                 console.print(
