@@ -170,6 +170,41 @@ def _run_trace_query(
     return _format_path(result["node_names"], result["rel_types"])
 
 
+def shortest_path_between(
+    driver: Driver,
+    source_qname: str,
+    target_qname: str,
+    max_hops: int = 12,
+) -> dict[str, object]:
+    """Return the shortest undirected path between two entities by qualified_name."""
+    empty: dict[str, object] = {"linked": False, "path_ids": [], "hops": 0}
+    if not source_qname or not target_qname or source_qname == target_qname:
+        if source_qname == target_qname and source_qname:
+            return {"linked": True, "path_ids": [source_qname], "hops": 0}
+        return empty
+
+    try:
+        with driver.session() as session:
+            record = session.run(
+                f"""
+                MATCH (a {{qualified_name: $source}}), (b {{qualified_name: $target}})
+                MATCH p = shortestPath((a)-[*..{max_hops}]-(b))
+                RETURN [node IN nodes(p) | node.qualified_name] AS path_ids
+                LIMIT 1
+                """,
+                source=source_qname,
+                target=target_qname,
+            ).single()
+            if not record:
+                return empty
+            path_ids: list[str] = record["path_ids"] or []
+            hops = max(0, len(path_ids) - 1)
+            return {"linked": True, "path_ids": path_ids, "hops": hops}
+    except Exception as exc:
+        logger.debug("shortest_path_between failed: %s", exc)
+        return empty
+
+
 def _format_path(node_names: list[str], rel_types: list[str]) -> str:
     """Interleave node names and relationship types into a readable path string."""
     _MAX_NODE_LEN = 30

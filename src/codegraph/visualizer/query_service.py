@@ -9,6 +9,7 @@ from typing import Any
 from neo4j import Driver
 
 from codegraph.visualizer.graph_filter import (
+    config_exclude_patterns,
     filter_graph_for_visualizer,
     is_visualizer_excluded,
 )
@@ -61,6 +62,8 @@ def run_query(
     raw_config: dict[str, Any],
     task: str,
     top_k: int,
+    mentioned_entities: list[str] | None = None,
+    token_budget: int = 0,
 ) -> QueryResponse:
     """Run PPR + BM25 + subgraph, return a QueryResponse."""
     from codegraph.core.graph.ppr import PPRConfig, create_gds_client
@@ -71,12 +74,14 @@ def run_query(
     from codegraph.utils.graph_helpers import fetch_seed_names
 
     ppr_section = raw_config.get("ppr", {})
+    mcp_section = raw_config.get("mcp", {})
     damping_factor = ppr_section.get("damping_factor", 0.70)
+    effective_top_k = top_k if top_k > 0 else ppr_section.get("top_k", 30)
     ppr_config = PPRConfig(
         damping_factor=damping_factor,
         max_iterations=ppr_section.get("max_iterations", 20),
         tolerance=ppr_section.get("tolerance", 1e-7),
-        top_k=ppr_section.get("top_k", 30),
+        top_k=effective_top_k,
     )
 
     seed_section = raw_config.get("seed_selection", {})
@@ -88,6 +93,7 @@ def run_query(
         driver=driver,
         gds=gds,
         task_description=task,
+        mentioned_entities=mentioned_entities,
         ppr_config=ppr_config,
         signal_weights=signal_weights,
         exclude_seed_paths=exclude_seed_paths,
@@ -100,8 +106,10 @@ def run_query(
             bm25_results=[],
             graph={"nodes": [], "edges": []},
             damping_factor=damping_factor,
-            top_k=top_k,
+            top_k=effective_top_k,
         )
+
+    exclude_cfg = config_exclude_patterns(raw_config)
 
     seeds = core_result.seeds
     seed_ids = list(seeds.seeds.keys())
@@ -110,8 +118,6 @@ def run_query(
     def _signal_label(source: str) -> str:
         if source == "entity_match":
             return "entity"
-        if source == "current_file":
-            return "file"
         return "bm25"
 
     seeds_out = [
@@ -122,10 +128,10 @@ def run_query(
             weight=round(weight, 4),
         )
         for nid, weight in sorted(seeds.seeds.items(), key=lambda x: -x[1])
-        if not is_visualizer_excluded(seeds.metadata[nid]["qname"])
+        if not is_visualizer_excluded(seeds.metadata[nid]["qname"], exclude_cfg)
     ]
 
-    explained = build_explained_results(driver, core_result, top_k=top_k)
+    explained = build_explained_results(driver, core_result, top_k=effective_top_k)
     ppr_out = [
         PPREntityResult(
             rank=item.rank,
@@ -143,7 +149,7 @@ def run_query(
             contribution=item.contribution,
         )
         for item in explained
-        if not is_visualizer_excluded(item.file_path)
+        if not is_visualizer_excluded(item.file_path, exclude_cfg)
     ]
 
     all_qnames: list[str] = [m["qname"] for m in seeds.metadata.values()]
@@ -153,7 +159,8 @@ def run_query(
     all_qnames = list(dict.fromkeys(all_qnames))
 
     subgraph = filter_graph_for_visualizer(
-        get_subgraph_for_nodes(driver, all_qnames)
+        get_subgraph_for_nodes(driver, all_qnames),
+        exclude_cfg,
     )
     ppr_score_by_qname = {
         r.qualified_name: r.score
@@ -183,12 +190,12 @@ def run_query(
         ppr_results=ppr_out,
         bm25_results=[
             row
-            for row in bm25_file_results(driver, task, top_k)
-            if not is_visualizer_excluded(row.file_path)
+            for row in bm25_file_results(driver, task, effective_top_k)
+            if not is_visualizer_excluded(row.file_path, exclude_cfg)
         ],
         graph={"nodes": annotated_nodes, "edges": subgraph["edges"]},
         damping_factor=damping_factor,
-        top_k=top_k,
+        top_k=effective_top_k,
         git_info=get_git_info(raw_config.get("project_root", ".")),
     )
 

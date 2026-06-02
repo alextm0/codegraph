@@ -11,7 +11,52 @@ class InitRequest(BaseModel):
 
 class QueryRequest(BaseModel):
     task: str
-    top_k: int = 10
+    top_k: int = 30
+    mentioned_entities: list[str] | None = None
+    token_budget: int = 0
+
+
+class SearchResult(BaseModel):
+    qualified_name: str
+    name: str
+    label: str
+    file_path: str
+
+
+class SearchResponse(BaseModel):
+    results: list[SearchResult]
+
+
+class DoctorCheckResult(BaseModel):
+    name: str
+    ok: bool
+    message: str
+    fix_hint: str | None = None
+    severity: str = "error"
+
+
+class DoctorResponse(BaseModel):
+    ok: bool
+    checks: list[DoctorCheckResult]
+
+
+class DeadCodeNode(BaseModel):
+    qualified_name: str
+    name: str
+    label: str
+    file_path: str
+
+
+class DeadCodeResponse(BaseModel):
+    results: list[DeadCodeNode]
+    total: int
+
+
+class StatsResponse(BaseModel):
+    nodes: dict[str, int]
+    edges: dict[str, int]
+    most_connected_files: list[dict[str, int | str]] = []
+    last_build: str | None = None
 
 
 class SeedInfo(BaseModel):
@@ -92,3 +137,24 @@ class DependenciesGraphResponse(BaseModel):
     direction: str
     depth: int
     graph: dict[str, list[dict]]
+
+
+class FileEntitySummary(BaseModel):
+    qualified_name: str
+    name: str
+    label: str
+
+
+class FileSourceResponse(BaseModel):
+    file_path: str
+    content: str
+    line_count: int
+    entities: list[FileEntitySummary] = []
+
+
+class PathBetweenResponse(BaseModel):
+    source: str
+    target: str
+    linked: bool
+    path_ids: list[str] = []
+    hops: int = 0

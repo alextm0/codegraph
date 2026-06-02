@@ -28,6 +28,7 @@ from codegraph.core.graph.queries.path_tracing import (
     _format_path,
     _run_trace_query,
     batch_trace_paths,
+    shortest_path_between,
     trace_path_ids_to_seed,
     trace_path_to_seed,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "NodeInfo",
     "NodeInfoWithRel",
     "batch_trace_paths",
+    "shortest_path_between",
     "count_edges_by_type",
     "count_nodes_by_label",
     "delete_file_entities",

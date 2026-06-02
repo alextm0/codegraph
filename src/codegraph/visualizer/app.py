@@ -184,8 +184,14 @@ def _mount_static(app: FastAPI, dev_mode: bool) -> None:
     @app.get("/", include_in_schema=False)
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str = ""):
-        if full_path.startswith("api/") or full_path.startswith("ws/"):
-            raise HTTPException(status_code=404)
+        if (
+            full_path.startswith("api/")
+            or full_path == "api"
+            or full_path.startswith("ws/")
+            or full_path == "ws"
+            or full_path.startswith("assets/")
+        ):
+            raise HTTPException(status_code=404, detail="API route not found")
         dist_index = STATIC_DIR / "dist" / "index.html"
         if dist_index.exists():
             return FileResponse(str(dist_index))

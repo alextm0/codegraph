@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -12,13 +13,20 @@ from neo4j import Driver
 
 from codegraph.visualizer.context import VisualizerContext
 from codegraph.visualizer.models import (
+    DeadCodeResponse,
     DependenciesGraphResponse,
     DependenciesResponse,
     DependencyResult,
+    DoctorResponse,
+    FileEntitySummary,
+    FileSourceResponse,
     InitRequest,
     NodeDetailResponse,
     QueryRequest,
     QueryResponse,
+    SearchResponse,
+    SearchResult,
+    StatsResponse,
     SubgraphResponse,
 )
 from codegraph.visualizer.query_service import (
@@ -53,6 +61,42 @@ def register_routes(
             return str(clone_path)
         return str(Path(target).resolve())
 
+    def _start_rebuild_job(target_path: str) -> None:
+        """Run rebuild in background and broadcast WS progress."""
+        abs_target_path = str(Path(target_path).resolve())
+
+        def _rebuild_job() -> None:
+            try:
+                ctx.schedule_broadcast(
+                    {"type": "rebuild_started", "path": abs_target_path}
+                )
+                from codegraph.cli.cli_helpers import rebuild_helper
+
+                def _on_progress(payload: dict) -> None:
+                    ctx.schedule_broadcast(
+                        {"type": "rebuild_progress", **payload}
+                    )
+
+                rebuild_helper(ctx.config_path, progress_callback=_on_progress)
+                ctx.schedule_broadcast(
+                    {
+                        "type": "rebuild_complete",
+                        "path": abs_target_path,
+                        "git_info": get_git_info(target_path),
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
+            except Exception as exc:
+                logger.exception("Background rebuild failed")
+                ctx.schedule_broadcast(
+                    {"type": "rebuild_error", "detail": str(exc)}
+                )
+            finally:
+                with ctx.index_lock:
+                    ctx.indexing_in_progress["value"] = False
+
+        threading.Thread(target=_rebuild_job, daemon=True).start()
+
     @app.post("/api/init")
     def initialize_project(req: InitRequest):
         """Clone (if URL) and rebuild the graph in the background."""
@@ -83,36 +127,7 @@ def register_routes(
             )
             save_raw_config(ctx.config_path, ctx.raw_config)
 
-            def _rebuild_job() -> None:
-                try:
-                    ctx.schedule_broadcast(
-                        {"type": "rebuild_started", "path": abs_target_path}
-                    )
-                    from codegraph.cli.cli_helpers import rebuild_helper
-
-                    def _on_progress(payload: dict) -> None:
-                        ctx.schedule_broadcast(
-                            {"type": "rebuild_progress", **payload}
-                        )
-
-                    rebuild_helper(ctx.config_path, progress_callback=_on_progress)
-                    ctx.schedule_broadcast(
-                        {
-                            "type": "rebuild_complete",
-                            "path": abs_target_path,
-                            "git_info": get_git_info(target_path),
-                        }
-                    )
-                except Exception as exc:
-                    logger.exception("Background rebuild failed")
-                    ctx.schedule_broadcast(
-                        {"type": "rebuild_error", "detail": str(exc)}
-                    )
-                finally:
-                    with ctx.index_lock:
-                        ctx.indexing_in_progress["value"] = False
-
-            threading.Thread(target=_rebuild_job, daemon=True).start()
+            _start_rebuild_job(target_path)
             return {"status": "started", "path": abs_target_path}
         except subprocess.CalledProcessError as exc:
             with ctx.index_lock:
@@ -131,12 +146,40 @@ def register_routes(
             logger.exception("Failed to initialize project via UI")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @app.post("/api/rebuild")
+    def rebuild_current():
+        """Rebuild the graph for the current project_root."""
+        with ctx.index_lock:
+            if ctx.indexing_in_progress["value"]:
+                raise HTTPException(
+                    status_code=409, detail="Indexing already in progress"
+                )
+            ctx.indexing_in_progress["value"] = True
+
+        if not ctx.config_path:
+            with ctx.index_lock:
+                ctx.indexing_in_progress["value"] = False
+            raise HTTPException(
+                status_code=500, detail="Config path not known by server"
+            )
+
+        target_path = ctx.raw_config.get("project_root", ctx.project_root)
+        _start_rebuild_job(str(target_path))
+        return {"status": "started", "path": str(Path(target_path).resolve())}
+
     @app.post("/api/query", response_model=QueryResponse)
     def query(req: QueryRequest):
         """Run PPR + BM25 retrieval and return graph data for visualization."""
         try:
             active_driver = _active_driver()
-            return run_query(active_driver, ctx.raw_config, req.task, req.top_k)
+            return run_query(
+                active_driver,
+                ctx.raw_config,
+                req.task,
+                req.top_k,
+                mentioned_entities=req.mentioned_entities,
+                token_budget=req.token_budget,
+            )
         except Exception as exc:
             logger.exception("Query failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -151,22 +194,91 @@ def register_routes(
             "project_history": ctx.raw_config.get("project_history", []),
         }
 
-    @app.get("/api/stats")
+    @app.get("/api/stats", response_model=StatsResponse)
     def stats():
-        """Return node and edge counts by type."""
+        """Return node and edge counts by type plus top files and last build."""
         try:
+            from codegraph.cli.commands._shared import _read_build_timestamp
             from codegraph.core.graph.queries import (
                 count_edges_by_type,
                 count_nodes_by_label,
+                get_most_connected_files,
             )
 
             active_driver = _active_driver()
-            return {
-                "nodes": count_nodes_by_label(active_driver),
-                "edges": count_edges_by_type(active_driver),
-            }
+            last_build = None
+            if ctx.config_path:
+                last_build = _read_build_timestamp(ctx.config_path)
+
+            return StatsResponse(
+                nodes=count_nodes_by_label(active_driver),
+                edges=count_edges_by_type(active_driver),
+                most_connected_files=get_most_connected_files(active_driver, limit=5),
+                last_build=last_build,
+            )
         except Exception as exc:
             logger.exception("Stats endpoint failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/api/search", response_model=SearchResponse)
+    def search_nodes(q: str = ""):
+        """Search entities by name or qualified_name pattern."""
+        if not q.strip():
+            return SearchResponse(results=[])
+        try:
+            from codegraph.core.graph.queries import find_node_by_pattern
+
+            active_driver = _active_driver()
+            nodes = find_node_by_pattern(active_driver, q.strip())
+            return SearchResponse(
+                results=[
+                    SearchResult(
+                        qualified_name=n.qualified_name,
+                        name=n.name,
+                        label=n.label,
+                        file_path=n.file_path,
+                    )
+                    for n in nodes
+                ]
+            )
+        except Exception as exc:
+            logger.exception("Search endpoint failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/api/doctor", response_model=DoctorResponse)
+    def doctor():
+        """Run health diagnostics and return structured results."""
+        try:
+            from codegraph.cli.commands.doctor import run_doctor_checks
+
+            result = run_doctor_checks(ctx.config_path)
+            return DoctorResponse(**result)
+        except Exception as exc:
+            logger.exception("Doctor endpoint failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/api/dead-code", response_model=DeadCodeResponse)
+    def dead_code(limit: int = 50):
+        """Return uncalled functions and methods."""
+        try:
+            from codegraph.core.graph.queries import find_dead_code
+
+            active_driver = _active_driver()
+            results = find_dead_code(active_driver, limit)
+            return DeadCodeResponse(
+                results=[
+                    {
+                        "qualified_name": n.qualified_name,
+                        "name": n.name,
+                        "label": n.label,
+                        "file_path": n.file_path,
+                    }
+                    for n in results
+                ],
+                total=len(results),
+            )
+        except Exception as exc:
+            logger.exception("Dead code endpoint failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.get("/api/dependencies", response_model=DependenciesResponse)
@@ -252,9 +364,15 @@ def register_routes(
             from codegraph.core.graph.queries import get_full_graph
 
             active_driver = _active_driver()
-            from codegraph.visualizer.graph_filter import filter_graph_for_visualizer
+            from codegraph.visualizer.graph_filter import (
+                config_exclude_patterns,
+                filter_graph_for_visualizer,
+            )
 
-            return filter_graph_for_visualizer(get_full_graph(active_driver))
+            return filter_graph_for_visualizer(
+                get_full_graph(active_driver),
+                config_exclude_patterns(ctx.raw_config),
+            )
         except Exception as exc:
             logger.exception("Base graph endpoint failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -298,6 +416,43 @@ def register_routes(
             raise
         except Exception as exc:
             logger.exception("Node detail endpoint failed")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/api/files/source", response_model=FileSourceResponse)
+    def file_source(file_path: str = ""):
+        """Return full source text for a file under project_root."""
+        if not file_path.strip():
+            raise HTTPException(status_code=400, detail="file_path is required")
+        try:
+            from codegraph.core.graph.queries import get_file_contents
+            from codegraph.core.graph.utils import normalize_path
+            from codegraph.visualizer.file_source import resolve_source_file
+
+            active_root = ctx.raw_config.get("project_root", ctx.project_root)
+            rel = normalize_path(file_path.strip())
+            disk_path = resolve_source_file(str(active_root), rel)
+            content = disk_path.read_text(encoding="utf-8", errors="replace")
+            entities = get_file_contents(_active_driver(), rel)
+            return FileSourceResponse(
+                file_path=rel,
+                content=content,
+                line_count=len(content.splitlines()),
+                entities=[
+                    FileEntitySummary(
+                        qualified_name=e.qualified_name,
+                        name=e.name,
+                        label=e.label,
+                        file_path=e.file_path,
+                    )
+                    for e in entities
+                ],
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=f"File not found: {exc}") from exc
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("File source endpoint failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.get("/api/subgraph", response_model=SubgraphResponse)
