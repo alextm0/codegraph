@@ -4,6 +4,8 @@ import type { D3Node, D3Edge } from '../../types/graph'
 import type { GraphNode } from '../../types/api'
 import { nodeColor, edgeColor } from './graphHelpers'
 
+import { initializeProject, ProjectHistoryItem } from '../../api/client'
+
 interface GraphCanvasProps {
   nodes: D3Node[]
   edges: D3Edge[]
@@ -11,6 +13,8 @@ interface GraphCanvasProps {
   selectedNode?: GraphNode | null
   dampingFactor?: number
   topK?: number
+  projectHistory?: ProjectHistoryItem[]
+  isDatabaseEmpty?: boolean
 }
 
 const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const
@@ -63,7 +67,8 @@ function hideTooltip(tt: HTMLDivElement) { tt.style.display = 'none' }
 /* ── Main component ───────────────────────────────────────── */
 export default function GraphCanvas({
   nodes, edges, onNodeSelect, selectedNode,
-  dampingFactor = 0.70, topK = 30,
+  dampingFactor = 0.70, topK = 30, projectHistory = [],
+  isDatabaseEmpty = false
 }: GraphCanvasProps) {
   const svgRef   = useRef<SVGSVGElement>(null)
   const simRef   = useRef<d3.Simulation<D3Node, D3Edge> | null>(null)
@@ -416,29 +421,76 @@ export default function GraphCanvas({
         </div>
       )}
 
-      {/* Empty state */}
-      {!hasData && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-          }}
-        >
-          <div style={{ fontSize: 36, color: 'var(--text-muted)', lineHeight: 1 }}>⬡</div>
-          <div
-            style={{
-              fontSize: 11,
-              color: 'var(--text-dim)',
-              letterSpacing: '0.16em',
-              textTransform: 'uppercase',
-            }}
-          >
-            awaiting query
+      {/* Empty state / Onboarding */}
+      {isDatabaseEmpty && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface2)', padding: 32, border: '1px solid var(--border)', borderRadius: 8, width: 440 }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 16, color: 'var(--text)' }}>Welcome to CodeGraph</h2>
+            
+            {projectHistory.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <h3 style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Previous Projects</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {projectHistory.map((proj, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        initializeProject(proj.url || proj.path).then(() => window.location.reload())
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'border-color 120ms'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>{proj.name}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{proj.url || proj.path}</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>→</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <h3 style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Index New Repository</h3>
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              const target = (e.currentTarget.elements.namedItem('target') as HTMLInputElement).value
+              
+              const btn = e.currentTarget.querySelector('button')
+              if (btn) {
+                btn.disabled = true
+                btn.textContent = 'Indexing...'
+              }
+              
+              initializeProject(target).then(() => window.location.reload()).catch(err => {
+                alert('Failed to initialize: ' + err)
+                if (btn) {
+                  btn.disabled = false
+                  btn.textContent = 'Index Repository'
+                }
+              })
+            }}>
+              <input 
+                name="target"
+                placeholder="e.g., . or https://github.com/user/repo"
+                style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', marginBottom: 16, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+              />
+              <button type="submit" style={{ width: '100%', padding: '10px', background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
+                Index Repository
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -454,7 +506,7 @@ export default function GraphCanvas({
       />
 
       {/* Graph overlays */}
-      {hasData && (
+      {!isDatabaseEmpty && (
         <>
           <PPRReadout
             nodeCount={filteredNodes.length}

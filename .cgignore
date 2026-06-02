@@ -47,7 +47,7 @@ docker-compose.yml
 devfile.yaml 
 
 # local scratch
-
+projects/
 javascript.py.bak
 *.bak
 

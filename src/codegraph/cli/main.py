@@ -64,12 +64,15 @@ def rebuild(ctx: typer.Context):
 
 
 @app.command()
-def init(ctx: typer.Context):
+def init(
+    ctx: typer.Context,
+    target: str = typer.Argument(None, help="Local path or GitHub URL to index"),
+):
     """
     Initialize a new CodeGraph project with an interactive wizard.
     """
     config_path = get_config_path(ctx)
-    init_helper(config_path)
+    init_helper(config_path, target)
 
 
 @app.command()

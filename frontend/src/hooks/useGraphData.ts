@@ -6,6 +6,7 @@ interface GraphData {
   nodes: D3Node[]
   edges: D3Edge[]
   loading: boolean
+  isDatabaseEmpty: boolean
 }
 
 export function useGraphData(response: QueryResponse | null, baseGraph: ApiGraphData | null): GraphData {
@@ -13,7 +14,9 @@ export function useGraphData(response: QueryResponse | null, baseGraph: ApiGraph
 
   return useMemo(() => {
     const activeGraph = response?.graph || baseGraph
-    if (!activeGraph) return { nodes: [], edges: [], loading: false }
+    const isDatabaseEmpty = !baseGraph || (baseGraph.nodes.length === 0 && !response)
+
+    if (!activeGraph) return { nodes: [], edges: [], loading: false, isDatabaseEmpty }
 
     // Reuse existing node objects to preserve x/y/vx/vy positions
     const nextNodes: D3Node[] = activeGraph.nodes.map(n => {
@@ -39,6 +42,7 @@ export function useGraphData(response: QueryResponse | null, baseGraph: ApiGraph
       type: e.type,
     }))
 
-    return { nodes: nextNodes, edges, loading: false }
-  }, [response, baseGraph])
-}
+    return { nodes: nextNodes, edges: edges, loading: false, isDatabaseEmpty }
+    }, [response, baseGraph])
+    }
+

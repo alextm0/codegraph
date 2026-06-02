@@ -1,16 +1,29 @@
+import { useState } from 'react'
 import { useTheme } from '../../context/ThemeContext'
+import ProjectSettingsModal from './ProjectSettingsModal'
+
+import { ProjectHistoryItem } from '../../api/client'
 
 interface TopBarProps {
   gitInfo?: { repo: string; commit: string }
+  projectHistory?: ProjectHistoryItem[]
 }
 
 export default function TopBar({
-  gitInfo,
+  gitInfo, projectHistory = [],
 }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
+  const [showProjectModal, setShowProjectModal] = useState(false)
 
   return (
     <>
+      {showProjectModal && (
+        <ProjectSettingsModal 
+          onClose={() => setShowProjectModal(false)} 
+          history={projectHistory}
+        />
+      )}
+      
       {/* Primary top bar — 40px */}
       <div
         style={{
@@ -48,10 +61,30 @@ export default function TopBar({
         </div>
 
         {gitInfo && (
-          <>
+          <div style={{ display: 'flex', height: '100%', alignItems: 'center' }}>
             <MetaChip label="repo" value={gitInfo.repo} />
             <MetaChip label="commit" value={gitInfo.commit} />
-          </>
+            <button
+              onClick={() => setShowProjectModal(true)}
+              style={{
+                height: '100%',
+                padding: '0 12px',
+                background: 'none',
+                border: 'none',
+                borderLeft: '1px solid var(--border)',
+                color: 'var(--text-muted)',
+                fontSize: 9,
+                letterSpacing: '0.10em',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+                transition: 'color 120ms',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+            >
+              [SWITCH]
+            </button>
+          </div>
         )}
 
         <div style={{ flex: 1 }} />

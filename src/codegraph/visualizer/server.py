@@ -32,6 +32,9 @@ STATIC_DIR = Path(__file__).parent / "static"
 # ---------------------------------------------------------------------------
 
 
+class InitRequest(BaseModel):
+    target: str
+
 class QueryRequest(BaseModel):
     task: str
     top_k: int = 10
@@ -257,7 +260,7 @@ def _run_query(
         graph={"nodes": annotated_nodes, "edges": subgraph["edges"]},
         damping_factor=damping_factor,
         top_k=top_k,
-        git_info=_get_git_info(),
+        git_info=_get_git_info(raw_config.get("project_root", ".")),
     )
 
 
@@ -266,34 +269,106 @@ def _run_query(
 # ---------------------------------------------------------------------------
 
 
-def _get_git_info() -> dict[str, str]:
-    """Fetch current git branch and commit hash."""
+def _get_git_info(project_root: str) -> dict[str, str]:
+    """Fetch current git branch and commit hash for the target project."""
     import subprocess
+    from pathlib import Path
 
     try:
+        root_path = Path(project_root).resolve()
+        repo_name = root_path.name
+        
         branch = (
-            subprocess.check_output(["git", "branch", "--show-current"])
+            subprocess.check_output(["git", "branch", "--show-current"], cwd=str(root_path))
             .decode()
             .strip()
         )
         commit = (
-            subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
+            subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=str(root_path))
             .decode()
             .strip()
         )
-        return {"repo": f"codegraph @ {branch}", "commit": commit}
+        return {"repo": f"{repo_name} @ {branch}", "commit": commit}
     except Exception:
-        return {"repo": "codegraph", "commit": "unknown"}
+        repo_name = Path(project_root).resolve().name if project_root else "unknown"
+        return {"repo": repo_name, "commit": "unknown"}
+
+
+def _update_project_history(raw_config: dict, target_path: str, url: str | None = None) -> None:
+    """Add a project to history with robust path normalization and deduplication."""
+    from pathlib import Path
+    
+    try:
+        abs_target = str(Path(target_path).resolve())
+    except Exception:
+        abs_target = target_path
+
+    history = raw_config.get("project_history") or []
+    
+    # 1. Full deduplication: remove any existing entry pointing to the same physical folder
+    # We use list comprehension with Path.resolve() for safety
+    def get_abs(p):
+        try:
+            return str(Path(p).resolve())
+        except Exception:
+            return p
+
+    history = [h for h in history if get_abs(h.get("path", "")) != abs_target]
+    
+    # 2. Add new entry to the top
+    history.insert(0, {
+        "name": Path(abs_target).name,
+        "path": abs_target,
+        "url": url
+    })
+    
+    # 3. Limit to 5 most recent
+    raw_config["project_history"] = history[:5]
 
 
 def create_app(
     driver: Driver,
     raw_config: dict[str, Any],
     project_root: str = "",
+    config_path: Path | None = None,
     dev_mode: bool = False,
     watch_mode: bool = False,
 ):
     """Create and return the FastAPI application."""
+    # The directory where config.yaml lives is our stable 'Workspaces' base
+    base_dir = config_path.parent if config_path else Path.cwd()
+
+    # Ensure current project is in history and clean up duplicates
+    if config_path and config_path.exists():
+        from codegraph.utils.config import save_raw_config
+        
+        # 1. Global cleanup of existing history (deduplicate all)
+        history = raw_config.get("project_history") or []
+        cleaned_history = []
+        seen_abs = set()
+        
+        def get_abs(p):
+            try:
+                return str(Path(p).resolve())
+            except Exception:
+                return p
+
+        for item in history:
+            abs_p = get_abs(item.get("path", ""))
+            if abs_p not in seen_abs:
+                seen_abs.add(abs_p)
+                cleaned_history.append(item)
+        
+        raw_config["project_history"] = cleaned_history[:5]
+        
+        # 2. Add/Move current project to top
+        old_history = list(raw_config.get("project_history") or [])
+        _update_project_history(raw_config, project_root)
+        
+        # Only save if history actually changed
+        if raw_config.get("project_history") != old_history:
+            save_raw_config(config_path, raw_config)
+
     app = FastAPI(
         title="CodeGraph Visualizer",
         description="Interactive graph visualization for CodeGraph retrieval results.",
@@ -355,11 +430,66 @@ def create_app(
             _stop_poll.set()
             watcher.stop()
 
+    @app.post("/api/init")
+    def initialize_project(req: InitRequest):
+        """Clone (if URL) and build the graph for a target path."""
+        import subprocess
+        from pathlib import Path
+        try:
+            target = req.target
+            if target.startswith("http://") or target.startswith("https://"):
+                repo_name = target.rstrip("/").split("/")[-1].replace(".git", "")
+                
+                # Dedicated folder for cloned projects to keep root clean
+                projects_dir = base_dir / "projects"
+                projects_dir.mkdir(exist_ok=True)
+                
+                clone_path = projects_dir / repo_name
+                if not clone_path.exists():
+                    subprocess.run(["git", "clone", target, str(clone_path)], check=True)
+                else:
+                    # If it already exists, pull the latest changes
+                    subprocess.run(["git", "pull"], cwd=str(clone_path), check=True)
+                target_path = str(clone_path)
+            else:
+                target_path = str(Path(target).resolve())
+                
+            from codegraph.cli.cli_helpers import rebuild_helper
+            from codegraph.utils.config import save_raw_config
+            
+            # Use absolute path for target_path to ensure consistent comparison
+            abs_target_path = str(Path(target_path).resolve())
+            
+            # Update config with new project root
+            # Note: config_path was provided at app creation
+            if not config_path:
+                 raise HTTPException(status_code=500, detail="Config path not known by server")
+                 
+            raw_config["project_root"] = target_path
+            
+            # Maintain project history with helper
+            _update_project_history(raw_config, target_path, url=target if target.startswith("http") else None)
+            
+            save_raw_config(config_path, raw_config)
+            
+            # Rebuild graph for the new target
+            rebuild_helper(config_path)
+            
+            return {"status": "ok", "path": abs_target_path}
+        except subprocess.CalledProcessError as e:
+            logger.error("Failed to clone repository: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to clone repository") from e
+        except Exception as e:
+            logger.exception("Failed to initialize project via UI")
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
     @app.post("/api/query", response_model=QueryResponse)
     def query(req: QueryRequest):
         """Run PPR + BM25 retrieval and return graph data for visualization."""
         try:
-            return _run_query(driver, raw_config, req.task, req.top_k)
+            from codegraph.core.graph.database import get_database_manager
+            active_driver = get_database_manager().get_driver()
+            return _run_query(active_driver, raw_config, req.task, req.top_k)
         except Exception as e:
             logger.exception("Query failed")
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -367,7 +497,12 @@ def create_app(
     @app.get("/api/health")
     def health():
         """Health check endpoint."""
-        return {"status": "ok", "git_info": _get_git_info()}
+        active_root = raw_config.get("project_root", project_root)
+        return {
+            "status": "ok", 
+            "git_info": _get_git_info(active_root),
+            "project_history": raw_config.get("project_history", [])
+        }
 
     @app.post("/api/open")
     def open_file_in_ide(file_path: str, line: int = 1):
@@ -423,8 +558,10 @@ def create_app(
         """Return the entire graph of the repository."""
         try:
             from codegraph.core.graph.queries import get_full_graph
+            from codegraph.core.graph.database import get_database_manager
 
-            data = get_full_graph(driver)
+            active_driver = get_database_manager().get_driver()
+            data = get_full_graph(active_driver)
             return data
         except Exception as e:
             logger.exception("Base graph endpoint failed")
@@ -435,8 +572,10 @@ def create_app(
         """Return full detail for a single node."""
         try:
             from codegraph.core.graph.queries import get_node_detail
+            from codegraph.core.graph.database import get_database_manager
 
-            detail = get_node_detail(driver, qname)
+            active_driver = get_database_manager().get_driver()
+            detail = get_node_detail(active_driver, qname)
             if not detail:
                 raise HTTPException(status_code=404, detail=f"Node '{qname}' not found")
 
@@ -444,9 +583,10 @@ def create_app(
             file_path = detail["node"].get("file_path")
             line_start = detail["node"].get("line_number", 0)
             line_end = detail["node"].get("end_line", 0)
+            active_project_root = raw_config.get("project_root", project_root)
 
-            if file_path and project_root:
-                full_path = Path(project_root) / file_path
+            if file_path and active_project_root:
+                full_path = Path(active_project_root) / file_path
                 if full_path.exists() and line_start > 0:
                     try:
                         with open(full_path, "r", encoding="utf-8") as f:
@@ -469,8 +609,10 @@ def create_app(
         """Return a subgraph filtered by file_path prefix."""
         try:
             from codegraph.core.graph.queries import get_subgraph_by_prefix
+            from codegraph.core.graph.database import get_database_manager
 
-            data = get_subgraph_by_prefix(driver, focus)
+            active_driver = get_database_manager().get_driver()
+            data = get_subgraph_by_prefix(active_driver, focus)
             return SubgraphResponse(graph=data, focus_path=focus)
         except Exception as e:
             logger.exception("Subgraph endpoint failed")

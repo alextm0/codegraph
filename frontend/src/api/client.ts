@@ -38,7 +38,27 @@ export async function openInIDE(filePath: string, line: number): Promise<{ statu
   return res.json()
 }
 
-export async function getHealth(): Promise<{ status: string; git_info?: { repo: string; commit: string } }> {
+export async function initializeProject(target: string): Promise<{ status: string; path: string }> {
+  const res = await fetch(`${BASE}/api/init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export interface ProjectHistoryItem {
+  name: string
+  path: string
+  url: string | null
+}
+
+export async function getHealth(): Promise<{ 
+  status: string; 
+  git_info?: { repo: string; commit: string };
+  project_history?: ProjectHistoryItem[];
+}> {
   const res = await fetch(`${BASE}/api/health`)
   if (!res.ok) throw new Error(await res.text())
   return res.json()

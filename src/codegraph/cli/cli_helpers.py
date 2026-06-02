@@ -53,13 +53,33 @@ def _initialize_db(config_path: Path):
     return db_manager
 
 
-def init_helper(config_path: Path) -> None:
-    """Run an interactive setup wizard to create/update config.yaml."""
+def init_helper(config_path: Path, target: str | None = None) -> None:
+    """Run an interactive setup wizard to create/update config.yaml and clone/index."""
+    import subprocess
+    
     console.print("\n[bold cyan]CodeGraph Setup Wizard[/bold cyan]\n")
+
+    if not target:
+        target = Prompt.ask("[bold blue]Enter a local folder path or GitHub URL to index[/bold blue]", default=".")
+        
+    project_root = "."
+    if target.startswith("http://") or target.startswith("https://"):
+        repo_name = target.rstrip("/").split("/")[-1].replace(".git", "")
+        clone_path = Path.cwd() / repo_name
+        console.print(f"\n[bold yellow]Cloning {target} into {clone_path}...[/bold yellow]")
+        try:
+            subprocess.run(["git", "clone", target, str(clone_path)], check=True)
+            project_root = str(clone_path)
+            console.print("   [green]+[/green] Cloned successfully!")
+        except subprocess.CalledProcessError as e:
+            console.print(f"   [red]-[/red] Clone failed: {e}")
+            return
+    else:
+        project_root = str(Path(target).resolve())
 
     if config_path.exists():
         if not Confirm.ask(
-            f"Config file [blue]{config_path.name}[/blue] already exists. Overwrite?"
+            f"\nConfig file [blue]{config_path.name}[/blue] already exists. Overwrite?"
         ):
             return
 
@@ -102,21 +122,20 @@ def init_helper(config_path: Path) -> None:
 
     # 2. Project Settings
     console.print("\n[bold]2. Project Settings[/bold]")
-    while True:
-        project_root = Prompt.ask(
-            "Project root directory (absolute or relative to config)", default="."
-        )
-        resolved = (
-            (config_path.parent / project_root).resolve()
-            if not Path(project_root).is_absolute()
-            else Path(project_root)
-        )
-        if resolved.exists():
-            break
+    
+    # We already have project_root from the target, but let user confirm
+    project_root = Prompt.ask(
+        "Project root directory (absolute or relative to config)", default=project_root
+    )
+    resolved = (
+        (config_path.parent / project_root).resolve()
+        if not Path(project_root).is_absolute()
+        else Path(project_root)
+    )
+    if not resolved.exists():
         console.print(f"   [red]-[/red] Directory not found: {resolved}")
         if not Confirm.ask("Use it anyway?"):
-            continue
-        break
+            return
 
     # 3. Exclude Patterns
     exclude = [".git", "__pycache__", ".venv", "node_modules", ".pytest_cache"]
@@ -173,8 +192,12 @@ def init_helper(config_path: Path) -> None:
                     f.write(f"{p}\n")
             console.print(f"   [green]+[/green] Created {ignore_file}")
 
-    if Confirm.ask("\nRun [bold]codegraph rebuild[/bold] now?"):
+    if target and (target.startswith("http://") or target.startswith("https://")):
+        console.print(f"\n[bold green]Auto-indexing {project_root}...[/bold green]")
         rebuild_helper(config_path)
+    else:
+        if Confirm.ask("\nRun [bold]codegraph rebuild[/bold] now?", default=True):
+            rebuild_helper(config_path)
 
 
 def _write_env_password(env_file: Path, password: str) -> None:
@@ -224,6 +247,7 @@ def visualize_helper(
         driver,
         raw_config,
         project_root=str(project_root),
+        config_path=config_path,
         dev_mode=dev,
         watch_mode=watch,
     )

@@ -199,6 +199,17 @@ def query_dependencies_impl(
         depth,
     )
 
+    if _graph_is_empty(state):
+        logger.warning("query_dependencies: graph is empty — triggering auto-index")
+        _start_background_index(state)
+        return json.dumps(
+            {
+                "error": "Graph index is empty — indexing is now running in the background.",
+                "action": "Wait for indexing to complete, then call query_dependencies again.",
+                "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
+            }
+        )
+
     try:
         nodes = query_entity_dependencies(
             driver=state.driver,

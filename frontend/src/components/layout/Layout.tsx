@@ -1,4 +1,5 @@
 import type { QueryResponse, GraphNode, GraphData } from '../../types/api'
+import { ProjectHistoryItem } from '../../api/client'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
 import { useGraphData } from '../../hooks/useGraphData'
 import { useWebSocket } from '../../hooks/useWebSocket'
@@ -16,6 +17,7 @@ interface LayoutProps {
   baseGraph: GraphData | null
   selectedNode: GraphNode | null
   gitInfo?: { repo: string; commit: string }
+  projectHistory?: ProjectHistoryItem[]
   onQueryResult: (result: QueryResponse) => void
   onNodeSelect: (node: GraphNode | null) => void
 }
@@ -27,6 +29,7 @@ export default function Layout({
   onNodeSelect,
   selectedNode,
   gitInfo,
+  projectHistory = [],
 }: LayoutProps) {
   const {
     task, setTask, topK, setTopK,
@@ -36,7 +39,7 @@ export default function Layout({
   const { width: rightPanelWidth, handleMouseDown: handleRightMouseDown } =
     useResizablePanel(380, 250, 600, 'left')
 
-  const { nodes, edges, loading: graphLoading } = useGraphData(queryResult, baseGraph)
+  const { nodes, edges, loading: graphLoading, isDatabaseEmpty } = useGraphData(queryResult, baseGraph)
   const wsState = useWebSocket()
 
   const seeds       = queryResult?.seeds ?? []
@@ -56,6 +59,7 @@ export default function Layout({
     >
       <TopBar
         gitInfo={gitInfo}
+        projectHistory={projectHistory}
       />
 
       {/* Left Rail */}
@@ -86,6 +90,8 @@ export default function Layout({
             selectedNode={selectedNode}
             dampingFactor={queryResult?.damping_factor}
             topK={queryResult?.top_k}
+            projectHistory={projectHistory}
+            isDatabaseEmpty={isDatabaseEmpty}
           />
 
           {/* Loading overlay */}

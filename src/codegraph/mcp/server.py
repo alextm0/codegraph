@@ -144,6 +144,11 @@ def get_relevant_context(
     ALWAYS call this first when the user asks about code, asks you to write code, or asks
     you to refactor. Do NOT guess at file locations or function signatures — retrieve them.
 
+    CRITICAL USAGE HINTS:
+    - Use the returned 'file_path' and 'lines' to read the source code or make modifications.
+    - Results are ranked by structural relevance. Trust the top-ranked files.
+    - If the graph is empty, this tool will auto-trigger a rebuild and ask you to wait. Wait 15-30s and retry.
+
     Returns a JSON object:
       summary.result_count   — number of items returned
       summary.total_tokens   — tokens consumed across all results
@@ -188,6 +193,10 @@ def query_dependencies(
 
     Do NOT use this as the first tool — you need to confirm entity names exist first
     via get_relevant_context.
+
+    CRITICAL USAGE HINTS:
+    - Use 'depth=1' for direct dependencies, or 'depth=2' to see transitive dependencies.
+    - If the graph is empty, this tool will auto-trigger a rebuild and ask you to wait.
 
     Returns a JSON array, each item:
       qualified_name    — fully qualified identifier (e.g. "src/auth.py::AuthService.login")

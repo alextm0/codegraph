@@ -259,7 +259,10 @@ class TestMCPToolsWithMockedState:
             relationship_type="CALLS",
         )
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]),
+        ):
             output = query_dependencies_impl("login", "downstream", 1, state)
 
         payload = json.loads(output)
@@ -272,7 +275,10 @@ class TestMCPToolsWithMockedState:
 
         state = _make_mock_state()
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", side_effect=ValueError("Invalid direction")):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", side_effect=ValueError("Invalid direction")),
+        ):
             output = query_dependencies_impl("login", "sideways", 1, state)
 
         payload = json.loads(output)
@@ -284,7 +290,10 @@ class TestMCPToolsWithMockedState:
 
         state = _make_mock_state()
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[]),
+        ):
             output = query_dependencies_impl("GhostEntity", "both", 1, state)
 
         payload = json.loads(output)
@@ -305,7 +314,10 @@ class TestMCPToolsWithMockedState:
             relationship_type="IMPORTS",
         )
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]),
+        ):
             output = query_dependencies_impl("login", "upstream", 1, state)
 
         payload = json.loads(output)
