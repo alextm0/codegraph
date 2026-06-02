@@ -203,3 +203,20 @@ def update_project_history(
         {"name": Path(abs_target).name, "path": abs_target, "url": url},
     )
     raw_config["project_history"] = history[:5]
+
+
+def run_dependencies_graph(
+    driver: Driver,
+    entity: str,
+    direction: str = "both",
+    depth: int = 1,
+) -> dict[str, list[dict]]:
+    """Return a focused subgraph for an entity and its dependencies."""
+    from codegraph.core.graph.queries import (
+        get_subgraph_for_nodes,
+        query_entity_dependencies,
+    )
+
+    deps = query_entity_dependencies(driver, entity, direction, depth)
+    qnames = list({entity, *(d.qualified_name for d in deps if d.qualified_name)})
+    return get_subgraph_for_nodes(driver, qnames)

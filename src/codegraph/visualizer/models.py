@@ -85,3 +85,10 @@ class DependenciesResponse(BaseModel):
     direction: str
     depth: int
     results: list[DependencyResult]
+
+
+class DependenciesGraphResponse(BaseModel):
+    entity: str
+    direction: str
+    depth: int
+    graph: dict[str, list[dict]]
