@@ -1,6 +1,16 @@
 import * as d3 from 'd3'
 import type { D3Node, D3Edge } from '../../types/graph'
-import { nodeColor } from './graphHelpers'
+
+/** CSS custom property for a node label fill (auto-updates on theme change). */
+function nodeFillVar(label: string): string {
+  switch (label) {
+    case 'File':     return 'var(--node-file)'
+    case 'Class':    return 'var(--node-class)'
+    case 'Function': return 'var(--node-function)'
+    case 'Method':   return 'var(--node-method)'
+    default:         return 'var(--text-muted)'
+  }
+}
 
 /** Radius used for force layout collision and sizing. */
 export function nodeRadius(d: D3Node): number {
@@ -41,11 +51,12 @@ export function linkPhase(d: D3Edge): number {
 /** Draw entity shape into a D3 selection group centered at 0,0. */
 export function appendNodeShape(
   group: d3.Selection<SVGGElement, D3Node, SVGGElement, unknown>,
+  enableGlow = true,
 ): void {
   group.each(function (d) {
     const g = d3.select(this)
     const r = nodeRadius(d)
-    const fill = nodeColor(d.label)
+    const fill = nodeFillVar(d.label)
     g.selectAll('*').remove()
 
     if (d.label === 'File') {
@@ -78,7 +89,7 @@ export function appendNodeShape(
         .attr('stroke-width', 1.5)
     }
 
-    if ((d.ppr_score || 0) > 0.05 || d.is_seed) {
+    if (enableGlow && ((d.ppr_score || 0) > 0.05 || d.is_seed)) {
       g.attr('filter', 'url(#glow)')
     }
   })

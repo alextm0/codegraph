@@ -3,14 +3,17 @@ import * as d3 from 'd3'
 import type { D3Node, D3Edge } from '../../types/graph'
 import type { GraphNode } from '../../types/api'
 import {
-  edgeColor,
   fileNodeIds,
   fitGraphToView,
   zoomByFactor,
+  resolveThemeColors,
+  type GraphColors,
 } from './graphHelpers'
-import { nodeRadius, linkPath, linkPointAt, linkPhase, appendNodeShape } from './graphShapes'
+import { nodeRadius, appendNodeShape } from './graphShapes'
+import { drawScene, sizeCanvas, type HighlightState } from './canvasRenderer'
 import { initializeProject, ProjectHistoryItem } from '../../api/client'
 import type { WSStatus } from '../../hooks/useWebSocket'
+import { useTheme } from '../../context/ThemeContext'
 import GraphControls from './GraphControls'
 
 interface GraphCanvasProps {
@@ -32,8 +35,13 @@ interface GraphCanvasProps {
   rebuildMessage?: WSStatus | null
 }
 
-const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const
 const PARTICLE_MAX_EDGES = 500
+/* Level-of-detail zoom thresholds (in transform scale k). */
+const LOD_PARTICLE_SCALE = 0.5
+const LOD_LABEL_SCALE = 0.7
+const LOD_ARROW_SCALE = 0.85
+/* Above this many glowing nodes, skip the SVG glow filter (avoids flicker). */
+const GLOW_NODE_LIMIT = 80
 
 /* ── Tooltip ──────────────────────────────────────────────── */
 function createTooltipEl(): HTMLDivElement {
@@ -110,13 +118,28 @@ export default function GraphCanvas({
     if (!rebuildActive) setIndexing(false)
   }, [rebuildActive])
 
-  const svgRef   = useRef<SVGSVGElement>(null)
-  const simRef   = useRef<d3.Simulation<D3Node, D3Edge> | null>(null)
-  const zoomRef  = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
-  const sizeRef  = useRef({ w: 800, h: 600 })
-  const ttRef    = useRef<HTMLDivElement | null>(null)
-  const rafRef   = useRef<number>()
-  const scaleRef = useRef(1)
+  const { theme } = useTheme()
+
+  const svgRef    = useRef<SVGSVGElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const simRef    = useRef<d3.Simulation<D3Node, D3Edge> | null>(null)
+  const zoomRef   = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
+  const sizeRef   = useRef({ w: 800, h: 600 })
+  const ttRef     = useRef<HTMLDivElement | null>(null)
+  const rafRef    = useRef<number>(0)
+  const scaleRef  = useRef(1)
+
+  /* Canvas/render state shared across effects. */
+  const colorsRef        = useRef<GraphColors | null>(null)
+  const dprRef           = useRef(1)
+  const linksRef         = useRef<D3Edge[]>([])
+  const particleLinksRef = useRef<D3Edge[]>([])
+  const transformRef     = useRef<d3.ZoomTransform>(d3.zoomIdentity)
+  const highlightRef     = useRef<HighlightState | null>(null)
+  const simRunningRef    = useRef(false)
+  const requestDrawRef   = useRef<(() => void) | null>(null)
+  const labelShowAllRef  = useRef(true)
+  const labelSelRef       = useRef<d3.Selection<SVGTextElement, D3Node, SVGGElement, unknown> | null>(null)
 
   const [hiddenNodeTypes, setHiddenNodeTypes] = useState<Set<string>>(new Set())
   const [hiddenEdgeTypes, setHiddenEdgeTypes] = useState<Set<string>>(new Set())
@@ -144,7 +167,11 @@ export default function GraphCanvas({
     const ro = new ResizeObserver(entries => {
       if (!entries[0]) return
       const { width, height } = entries[0].contentRect
-      sizeRef.current = { w: Math.floor(width), h: Math.floor(height) }
+      const w = Math.floor(width)
+      const h = Math.floor(height)
+      sizeRef.current = { w, h }
+      if (canvasRef.current) sizeCanvas(canvasRef.current, w, h, dprRef.current)
+      requestDrawRef.current?.()
     })
     ro.observe(parent)
     return () => ro.disconnect()
@@ -153,7 +180,8 @@ export default function GraphCanvas({
   /* Build graph */
   useEffect(() => {
     const svg = svgRef.current
-    if (!svg) return
+    const canvas = canvasRef.current
+    if (!svg || !canvas) return
 
     const tt = createTooltipEl()
     ttRef.current = tt
@@ -161,8 +189,22 @@ export default function GraphCanvas({
     d3.select(svg).selectAll('*').remove()
     if (simRef.current) { simRef.current.stop(); simRef.current = null }
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    rafRef.current = 0
+    highlightRef.current = null
+    simRunningRef.current = false
+
+    const dpr = window.devicePixelRatio || 1
+    dprRef.current = dpr
+    colorsRef.current = resolveThemeColors()
+
+    const ctx = canvas.getContext('2d')
 
     if (!filteredNodes.length) {
+      linksRef.current = []
+      particleLinksRef.current = []
+      labelSelRef.current = null
+      requestDrawRef.current = null
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height)
       return () => { tt.remove(); ttRef.current = null }
     }
 
@@ -170,11 +212,13 @@ export default function GraphCanvas({
     const rect   = parent?.getBoundingClientRect()
     const W = sizeRef.current.w || rect?.width  || 800
     const H = sizeRef.current.h || rect?.height || 600
+    sizeRef.current = { w: W, h: H }
+    sizeCanvas(canvas, W, H, dpr)
 
     const svgSel = d3.select(svg)
     const defs   = svgSel.append('defs')
 
-    /* Glow filter */
+    /* Glow filter (nodes only; gated by count to avoid filter flicker) */
     const glow = defs.append('filter')
       .attr('id', 'glow')
       .attr('x', '-80%').attr('y', '-80%')
@@ -184,56 +228,42 @@ export default function GraphCanvas({
     glowMerge.append('feMergeNode').attr('in', 'coloredBlur')
     glowMerge.append('feMergeNode').attr('in', 'SourceGraphic')
 
-    /* Arrow markers */
-    EDGE_TYPES.forEach(rel => {
-      const color = edgeColor(rel)
-      ;[['arr', color, 1], ['arr-dim', color, 0.06]].forEach(([id, fill, opacity]) => {
-        defs.append('marker')
-          .attr('id', `${id}-${rel}`)
-          .attr('viewBox', '0 -4 8 8')
-          .attr('refX', 18).attr('refY', 0)
-          .attr('markerWidth', 5).attr('markerHeight', 5)
-          .attr('orient', 'auto')
-          .append('path')
-          .attr('d', 'M0,-4L8,0L0,4')
-          .attr('fill', fill as string)
-          .attr('fill-opacity', opacity as number)
-      })
-    })
-
-    // Special marker for the active reasoning path
-    defs.append('marker')
-      .attr('id', 'arr-path-active')
-      .attr('viewBox', '0 -4 8 8')
-      .attr('refX', 18).attr('refY', 0)
-      .attr('markerWidth', 6).attr('markerHeight', 6)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M0,-4L8,0L0,4')
-      .attr('fill', 'var(--accent)')
-      .attr('fill-opacity', 1)
-
     const g    = svgSel.append('g')
-    
+
     // Inherit existing transform to prevent jumps on touch
     const currentTransform = d3.zoomTransform(svg)
     g.attr('transform', currentTransform.toString())
     scaleRef.current = currentTransform.k
+    transformRef.current = currentTransform
+
+    /* Toggle label visibility on a LOD threshold crossing (cheap, rare). */
+    const applyLabelLOD = (k: number, force = false) => {
+      const showAll = k >= LOD_LABEL_SCALE
+      if (!force && showAll === labelShowAllRef.current) return
+      labelShowAllRef.current = showAll
+      labelSelRef.current?.attr('display', d =>
+        showAll || d.is_seed || (d.ppr_score || 0) > 0.04 ? null : 'none',
+      )
+    }
 
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.25, 6])
       .on('zoom', e => {
         g.attr('transform', e.transform)
         scaleRef.current = e.transform.k
-        // update scale corner tick
+        transformRef.current = e.transform
+        applyLabelLOD(e.transform.k)
         const scaleTick = svg.parentElement?.querySelector('.lattice-scale-tick') as HTMLElement | null
         if (scaleTick) scaleTick.textContent = `scale: ${e.transform.k.toFixed(2)}×`
+        // Routed through the ref so the synchronous zoom.transform() call during
+        // build (before draw/loop are wired) is a safe no-op.
+        requestDrawRef.current?.()
       })
-    
+
     svgSel.call(zoom)
     // Synchronize zoom state if it was already modified
     svgSel.call(zoom.transform, currentTransform)
-    
+
     zoomRef.current = zoom
 
     const nodeById: Record<string, D3Node> = {}
@@ -250,54 +280,18 @@ export default function GraphCanvas({
         typeof e.source === 'object' &&
         typeof e.target === 'object',
       )
+    linksRef.current = links
 
-    /* Edges — curved paths */
-    const linkSel = g.append('g')
-      .selectAll<SVGPathElement, D3Edge>('path.link')
-      .data(links)
-      .join('path')
-      .attr('class', 'link')
-      .attr('fill', 'none')
-      .attr('stroke', d => edgeColor(d.type))
-      .attr('stroke-width', d => (d.type === 'CONTAINS' || d.type === 'INHERITS_FROM') ? 1 : 1.2)
-      .attr('stroke-opacity', 0.38)
-      .attr('stroke-dasharray', d =>
-        d.type === 'CONTAINS' || d.type === 'INHERITS_FROM' ? '4 4' : null,
-      )
-      .attr('marker-end', d => `url(#arr-${d.type})`)
-
-    /* Particles on CALLS / IMPORTS only */
-    const particleGroup = g.append('g')
+    /* Particles on CALLS / IMPORTS only — rendered on canvas. */
     const animatedLinks = links.filter(l => l.type === 'CALLS' || l.type === 'IMPORTS')
     const enableParticles = animatedLinks.length <= PARTICLE_MAX_EDGES
-    const particles = particleGroup
-      .selectAll<SVGCircleElement, D3Edge>('circle.particle')
-      .data(enableParticles ? animatedLinks : [])
-      .join('circle')
-      .attr('class', 'particle')
-      .attr('r', 1.8)
-      .attr('fill', d => edgeColor(d.type))
-      .attr('opacity', 0.85)
+    particleLinksRef.current = enableParticles ? animatedLinks : []
 
-    const t0 = Date.now()
-    const animate = () => {
-      if (enableParticles && scaleRef.current >= 0.5 && animatedLinks.length > 0) {
-        const elapsed = Date.now() - t0
-        particles.attr('cx', (d: D3Edge) => {
-          const period = d.type === 'CALLS' ? 1800 : 2200
-          const phase = linkPhase(d)
-          const t = ((elapsed % period) / period + phase) % 1
-          return linkPointAt(d, t).x
-        }).attr('cy', (d: D3Edge) => {
-          const period = d.type === 'CALLS' ? 1800 : 2200
-          const phase = linkPhase(d)
-          const t = ((elapsed % period) / period + phase) % 1
-          return linkPointAt(d, t).y
-        })
-      }
-      rafRef.current = requestAnimationFrame(animate)
-    }
-    rafRef.current = requestAnimationFrame(animate)
+    /* Glow LOD: skip per-node SVG filter on dense result sets. */
+    const glowCount = filteredNodes.filter(
+      d => (d.ppr_score || 0) > 0.05 || d.is_seed,
+    ).length
+    const enableGlow = glowCount <= GLOW_NODE_LIMIT
 
     const nodeGroup = g.append('g')
 
@@ -333,7 +327,7 @@ export default function GraphCanvas({
       .on('mousemove', e => moveTooltip(tt, e as unknown as MouseEvent))
       .on('mouseout', () => hideTooltip(tt))
 
-    appendNodeShape(nodeSel)
+    appendNodeShape(nodeSel, enableGlow)
 
     /* Labels */
     const labelSel = g.append('g')
@@ -353,24 +347,70 @@ export default function GraphCanvas({
       .attr('pointer-events', 'none')
       .attr('letter-spacing', '0.04em')
       .style('text-shadow', '0 1px 4px var(--bg), 0 0 6px var(--bg)')
+    labelSelRef.current = labelSel
+    labelShowAllRef.current = true
+    applyLabelLOD(currentTransform.k, true)
 
-    /* Simulation */
+    /* Canvas render loop (edges + particles) and SVG position sync. */
+    const t0 = Date.now()
+    const draw = () => {
+      const c = colorsRef.current
+      if (!ctx || !c) return
+      const t = transformRef.current
+      const { w, h } = sizeRef.current
+      drawScene(ctx, {
+        links: linksRef.current,
+        particleLinks: particleLinksRef.current,
+        transform: { k: t.k, x: t.x, y: t.y },
+        colors: c,
+        dpr: dprRef.current,
+        width: w,
+        height: h,
+        highlight: highlightRef.current,
+        showParticles: particleLinksRef.current.length > 0 && t.k >= LOD_PARTICLE_SCALE,
+        showArrows: t.k >= LOD_ARROW_SCALE,
+        elapsed: Date.now() - t0,
+      })
+      if (simRunningRef.current) {
+        nodeSel.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
+        seedRings.attr('cx', d => d.x ?? 0).attr('cy', d => d.y ?? 0)
+        labelSel.attr('x', d => d.x ?? 0).attr('y', d => d.y ?? 0)
+      }
+    }
+
+    const shouldAnimate = () =>
+      simRunningRef.current ||
+      (particleLinksRef.current.length > 0 && transformRef.current.k >= LOD_PARTICLE_SCALE)
+
+    const loop = () => {
+      draw()
+      rafRef.current = shouldAnimate() ? requestAnimationFrame(loop) : 0
+    }
+    const requestDraw = () => {
+      if (!rafRef.current) rafRef.current = requestAnimationFrame(loop)
+    }
+    requestDrawRef.current = requestDraw
+
+    /* Simulation — tuned to settle quickly, then freeze the render loop. */
     const sim = d3.forceSimulation<D3Node, D3Edge>(filteredNodes)
       .force('link', d3.forceLink<D3Node, D3Edge>(links).id(d => d.id).distance(100).strength(0.25))
       .force('charge', d3.forceManyBody<D3Node>().strength(-220))
       .force('center', d3.forceCenter(W / 2, H / 2))
       .force('collision', d3.forceCollide<D3Node>().radius(d => nodeRadius(d) + 8))
-      .on('tick', () => {
-        linkSel.attr('d', linkPath)
-        nodeSel.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
-        seedRings.attr('cx', d => d.x ?? 0).attr('cy', d => d.y ?? 0)
-        labelSel.attr('x', d => d.x ?? 0).attr('y', d => d.y ?? 0)
-      })
+      .velocityDecay(0.45)
+      .alphaDecay(0.05)
+      .on('tick', () => { simRunningRef.current = true; requestDraw() })
+      .on('end', () => { simRunningRef.current = false; requestDraw() })
+
+    simRunningRef.current = true
+    requestDraw()
 
     nodeSel.call(
       d3.drag<SVGGElement, D3Node>()
         .on('start', (e, d) => {
           if (!e.active) sim.alphaTarget(0.3).restart()
+          simRunningRef.current = true
+          requestDraw()
           d.fx = d.x; d.fy = d.y
         })
         .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y })
@@ -385,6 +425,10 @@ export default function GraphCanvas({
     return () => {
       sim.stop()
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+      simRunningRef.current = false
+      requestDrawRef.current = null
+      labelSelRef.current = null
       hideTooltip(tt)
       tt.remove()
       ttRef.current = null
@@ -422,25 +466,24 @@ export default function GraphCanvas({
   /* Selection / file / path highlight */
   useEffect(() => {
     if (!svgRef.current) return
-    const svg         = d3.select(svgRef.current)
-    const nodeSel     = svg.selectAll<SVGGElement, D3Node>('g.node')
-    const linkSel     = svg.selectAll<SVGPathElement, D3Edge>('path.link')
-    const labelSel    = svg.selectAll<SVGTextElement, D3Node>('text')
-    const ringSel     = svg.selectAll<SVGCircleElement, D3Node>('circle.seed-ring')
-    const particleSel = svg.selectAll<SVGCircleElement, D3Edge>('circle.particle')
+    const svg      = d3.select(svgRef.current)
+    const nodeSel  = svg.selectAll<SVGGElement, D3Node>('g.node')
+    const labelSel = svg.selectAll<SVGTextElement, D3Node>('text')
+    const ringSel  = svg.selectAll<SVGCircleElement, D3Node>('circle.seed-ring')
+
+    const showAll = labelShowAllRef.current
+    const baseLabelDisplay = (d: D3Node) =>
+      showAll || d.is_seed || (d.ppr_score || 0) > 0.04 ? null : 'none'
 
     const resetStyles = () => {
+      highlightRef.current = null
       nodeSel.attr('opacity', 1)
       ringSel.attr('opacity', 1)
-      linkSel
-        .attr('stroke', d => edgeColor(d.type))
-        .attr('stroke-opacity', 0.38)
-        .attr('stroke-width', d => (d.type === 'CONTAINS' || d.type === 'INHERITS_FROM') ? 1 : 1.2)
-        .attr('filter', null)
-        .attr('marker-end', d => `url(#arr-${d.type})`)
-      labelSel.attr('opacity', d => d.is_seed || (d.ppr_score || 0) > 0.04 ? 0.9 : 0.35)
+      labelSel
+        .attr('display', baseLabelDisplay)
+        .attr('opacity', d => d.is_seed || (d.ppr_score || 0) > 0.04 ? 0.9 : 0.35)
         .style('font-weight', '400')
-      particleSel.attr('opacity', 0.85).attr('r', 1.8)
+      requestDrawRef.current?.()
     }
 
     const externalPath = pathHighlightIds.length > 1
@@ -476,82 +519,20 @@ export default function GraphCanvas({
       isPathActive = false
     }
 
+    // Drive the canvas edge/particle layer via the shared highlight ref.
+    highlightRef.current = { isPathActive, pathNodeIds, highlightIds }
+
     nodeSel.attr('opacity', d => highlightIds.has(d.id) ? 1 : (isPathActive ? 0.12 : 0.05))
     ringSel.attr('opacity', d => highlightIds.has(d.id) ? 1 : 0)
-    labelSel.attr('opacity', d => {
-      if (highlightIds.has(d.id)) return 1.0 // Active path labels are 100% visible
-      return isPathActive ? 0.08 : 0.03
-    }).style('font-weight', d => highlightIds.has(d.id) ? '600' : '400')
-
-    linkSel
-      .attr('stroke', d => {
-        const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
-        const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-        if (isPathActive) {
-          const onPath = pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)
-          return onPath ? 'var(--accent)' : edgeColor(d.type)
-        }
-        return edgeColor(d.type)
-      })
-      .attr('stroke-opacity', d => {
-        const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
-        const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-        if (isPathActive) {
-          const onPath = pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)
-          return onPath ? 1.0 : 0.04
-        }
-        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
-        return inHighlight ? 1.0 : 0.03
-      })
-      .attr('stroke-width', d => {
-        if (isPathActive) {
-          const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
-          const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 3.5 : 1.0
-        }
-        const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
-        const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
-        return inHighlight ? 2.0 : 1.0
-      })
-      .attr('filter', d => {
-        if (isPathActive) {
-          const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
-          const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 'url(#glow)' : null
-        }
-        return null
-      })
-      .attr('marker-end', d => {
-        const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
-        const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-        if (isPathActive) {
-          const onPath = pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)
-          return onPath ? 'url(#arr-path-active)' : `url(#arr-dim-${d.type})`
-        }
-        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
-        return inHighlight ? `url(#arr-${d.type})` : `url(#arr-dim-${d.type})`
-      })
-
-    particleSel
+    labelSel
+      .attr('display', d => highlightIds.has(d.id) ? null : baseLabelDisplay(d))
       .attr('opacity', d => {
-        const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
-        const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-        if (isPathActive) {
-          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 1.0 : 0.05
-        }
-        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
-        return inHighlight ? 1.0 : 0.04
+        if (highlightIds.has(d.id)) return 1.0 // Active path labels are 100% visible
+        return isPathActive ? 0.08 : 0.03
       })
-      .attr('r', d => {
-        const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
-        const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-        if (isPathActive) {
-          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 3.5 : 1.8
-        }
-        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
-        return inHighlight ? 3 : 1.8
-      })
+      .style('font-weight', d => highlightIds.has(d.id) ? '600' : '400')
+
+    requestDrawRef.current?.()
 
     if (focusNodeId && zoomRef.current && svgRef.current) {
       const { w: W, h: H } = sizeRef.current
@@ -570,6 +551,12 @@ export default function GraphCanvas({
       }
     }
   }, [selectedNode, highlightFilePath, pathHighlightIds, filteredNodes, filteredEdges])
+
+  /* Recompute cached canvas colors on theme change (SVG uses CSS vars). */
+  useEffect(() => {
+    colorsRef.current = resolveThemeColors()
+    requestDrawRef.current?.()
+  }, [theme])
 
   /* Fit entire graph in view after restoring full codebase */
   useEffect(() => {
@@ -629,7 +616,7 @@ export default function GraphCanvas({
 
       {/* Empty state / Onboarding */}
       {isDatabaseEmpty && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'absolute', inset: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="surface-elevated" style={{ padding: 32, width: 440 }}>
             <h2 style={{ margin: '0 0 16px', fontSize: 18, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>Welcome to CodeGraph</h2>
             
@@ -714,9 +701,23 @@ export default function GraphCanvas({
         </div>
       )}
 
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          pointerEvents: 'none',
+        }}
+      />
+
       <svg
         ref={svgRef}
         style={{
+          position: 'absolute',
+          inset: 0,
           width: '100%',
           height: '100%',
           display: 'block',

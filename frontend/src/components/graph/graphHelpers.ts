@@ -54,6 +54,61 @@ export function edgeColor(type: string): string {
   }
 }
 
+/**
+ * Snapshot of every theme color the canvas renderer needs, resolved once.
+ *
+ * Canvas 2D cannot resolve `var(--x)` strings, so we read the CSS custom
+ * properties a single time per theme change instead of calling
+ * `getComputedStyle` per element on every build/tick (the old hot path).
+ */
+export interface GraphColors {
+  bg: string
+  accent: string
+  seed: string
+  text: string
+  textMuted: string
+  /** Keyed by node label: File / Class / Function / Method. */
+  node: Record<string, string>
+  /** Keyed by edge type: CALLS / IMPORTS / CONTAINS / INHERITS_FROM. */
+  edge: Record<string, string>
+}
+
+/** Resolve all graph theme colors in one pass (call on theme change only). */
+export function resolveThemeColors(): GraphColors {
+  const s = getComputedStyle(document.documentElement)
+  const read = (name: string, fallback: string) =>
+    s.getPropertyValue(name).trim() || fallback
+  return {
+    bg: read('--bg', 'oklch(0.13 0.005 240)'),
+    accent: read('--accent', 'oklch(0.82 0.16 145)'),
+    seed: read('--seed', 'oklch(0.82 0.16 75)'),
+    text: read('--text', 'oklch(0.96 0.005 80)'),
+    textMuted: read('--text-muted', 'oklch(0.55 0.010 70)'),
+    node: {
+      File: read('--node-file', 'oklch(0.70 0.12 240)'),
+      Class: read('--node-class', 'oklch(0.74 0.14 145)'),
+      Function: read('--node-function', 'oklch(0.80 0.14 75)'),
+      Method: read('--node-method', 'oklch(0.74 0.14 290)'),
+    },
+    edge: {
+      CALLS: read('--edge-calls', 'oklch(0.68 0.13 145)'),
+      IMPORTS: read('--edge-imports', 'oklch(0.68 0.12 240)'),
+      CONTAINS: read('--edge-contains', 'oklch(0.45 0.008 60)'),
+      INHERITS_FROM: read('--edge-inherits', 'oklch(0.72 0.14 35)'),
+    },
+  }
+}
+
+/** Resolved edge color from a cached snapshot. */
+export function edgeColorFrom(colors: GraphColors, type: string): string {
+  return colors.edge[type] ?? colors.textMuted
+}
+
+/** Resolved node color from a cached snapshot. */
+export function nodeColorFrom(colors: GraphColors, label: string): string {
+  return colors.node[label] ?? colors.textMuted
+}
+
 export function formatScore(score: number): string {
   return score.toFixed(4)
 }
