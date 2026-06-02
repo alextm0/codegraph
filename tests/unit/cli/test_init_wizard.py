@@ -4,11 +4,11 @@ from unittest.mock import patch
 
 runner = CliRunner()
 
-@patch("codegraph.cli.cli_helpers.Prompt.ask")
-@patch("codegraph.cli.cli_helpers.Confirm.ask")
+@patch("codegraph.cli.commands.init.Prompt.ask")
+@patch("codegraph.cli.commands.init.Confirm.ask")
 @patch("codegraph.core.graph.database.DatabaseManager")
-@patch("codegraph.cli.cli_helpers.rebuild_helper")
-@patch("codegraph.cli.cli_helpers.save_raw_config")
+@patch("codegraph.cli.commands.init.rebuild_helper")
+@patch("codegraph.cli.commands.init.save_raw_config")
 def test_init_prompts_when_no_args(mock_save, mock_rebuild, mock_db, mock_confirm, mock_ask):
     # Setup mocks
     mock_ask.side_effect = [".", "neo4j://test", "neo4j", "pass", "."]
