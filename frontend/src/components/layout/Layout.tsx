@@ -44,7 +44,8 @@ export default function Layout({
 
   const seeds       = queryResult?.seeds ?? []
   const pprResults  = queryResult?.ppr_results ?? []
-  const hasResults  = pprResults.length > 0
+  const bm25Results = queryResult?.bm25_results ?? []
+  const hasResults  = pprResults.length > 0 || bm25Results.length > 0
 
   return (
     <div
@@ -168,7 +169,11 @@ export default function Layout({
           </>
         ) : hasResults ? (
           <div style={{ width: 380, flexShrink: 0 }}>
-            <ResultsList results={pprResults} onNodeSelect={onNodeSelect} />
+            <ResultsList
+              results={pprResults}
+              bm25Results={bm25Results}
+              onNodeSelect={onNodeSelect}
+            />
           </div>
         ) : null}
       </div>
