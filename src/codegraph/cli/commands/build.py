@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from rich.progress import (
     BarColumn,
@@ -28,8 +30,27 @@ from codegraph.cli.commands._shared import (
 )
 
 
-def rebuild_helper(config_path: Path) -> None:
-    """Rebuild the graph with progress output."""
+def _graph_totals(counts: dict[str, int]) -> tuple[int, int]:
+    """Return (node_count, edge_count) from build_graph counts."""
+    node_keys = ("File", "Function", "Class", "Method")
+    edge_keys = ("CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM")
+    return (
+        sum(counts.get(k, 0) for k in node_keys),
+        sum(counts.get(k, 0) for k in edge_keys),
+    )
+
+
+def rebuild_helper(
+    config_path: Path,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> None:
+    """Rebuild the graph with progress output.
+
+    Args:
+        config_path: Path to config.yaml.
+        progress_callback: Optional callable invoked with progress payloads for
+            live indexing UIs (e.g. visualizer WebSocket ``rebuild_progress``).
+    """
     setup_logging(level=logging.INFO)
 
     raw_config = load_raw_config(config_path)
@@ -82,6 +103,15 @@ def rebuild_helper(config_path: Path) -> None:
                     completed=current,
                     description=f"Parsing {Path(file_path).name}",
                 )
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "stage": "parsing",
+                            "files_parsed": current,
+                            "files_total": total,
+                            "current_file": Path(file_path).name,
+                        }
+                    )
 
             all_entities = parse_directory(
                 str(project_root),
@@ -93,8 +123,33 @@ def rebuild_helper(config_path: Path) -> None:
 
         console.print("Building graph...")
 
+        build_counts: dict[str, int] = {}
+        stage_to_key = {
+            "File nodes": "File",
+            "Function nodes": "Function",
+            "Class nodes": "Class",
+            "Method nodes": "Method",
+            "CONTAINS edges": "CONTAINS",
+            "CALLS edges": "CALLS",
+            "IMPORTS edges": "IMPORTS",
+            "INHERITS_FROM edges": "INHERITS_FROM",
+        }
+
         def graph_progress(stage: str, count: int) -> None:
             console.print(f"  {stage}: [bold]{count}[/bold]")
+            key = stage_to_key.get(stage)
+            if key:
+                build_counts[key] = count
+            if progress_callback:
+                nodes, edges = _graph_totals(build_counts)
+                progress_callback(
+                    {
+                        "stage": "building",
+                        "build_stage": stage,
+                        "node_count": nodes,
+                        "edge_count": edges,
+                    }
+                )
 
         counts = build_graph(
             driver,
