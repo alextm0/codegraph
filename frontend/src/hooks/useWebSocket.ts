@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 
 export interface WSStatus {
-  type: 'file_changed' | 'rebuild_started' | 'rebuild_complete'
+  type: 'file_changed' | 'rebuild_started' | 'rebuild_complete' | 'rebuild_error'
   path?: string
+  detail?: string
   timestamp: string
 }
 

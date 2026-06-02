@@ -1,5 +1,6 @@
 import type { QueryResponse, GraphNode, GraphData } from '../../types/api'
-import { ProjectHistoryItem } from '../../api/client'
+import { ProjectHistoryItem, type GraphStats } from '../../api/client'
+import { useEffect } from 'react'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
 import { useGraphData } from '../../hooks/useGraphData'
 import { useWebSocket } from '../../hooks/useWebSocket'
@@ -20,6 +21,8 @@ interface LayoutProps {
   projectHistory?: ProjectHistoryItem[]
   onQueryResult: (result: QueryResponse) => void
   onNodeSelect: (node: GraphNode | null) => void
+  onGraphRefresh?: () => void
+  graphStats?: GraphStats
 }
 
 export default function Layout({
@@ -30,6 +33,8 @@ export default function Layout({
   selectedNode,
   gitInfo,
   projectHistory = [],
+  onGraphRefresh,
+  graphStats,
 }: LayoutProps) {
   const {
     task, setTask, topK, setTopK,
@@ -41,6 +46,13 @@ export default function Layout({
 
   const { nodes, edges, loading: graphLoading, isDatabaseEmpty } = useGraphData(queryResult, baseGraph)
   const wsState = useWebSocket()
+  const { lastMessage } = wsState
+
+  useEffect(() => {
+    if (lastMessage?.type === 'rebuild_complete' && onGraphRefresh) {
+      onGraphRefresh()
+    }
+  }, [lastMessage, onGraphRefresh])
 
   const seeds       = queryResult?.seeds ?? []
   const pprResults  = queryResult?.ppr_results ?? []
@@ -61,6 +73,7 @@ export default function Layout({
       <TopBar
         gitInfo={gitInfo}
         projectHistory={projectHistory}
+        onGraphRefresh={onGraphRefresh}
       />
 
       {/* Left Rail */}
@@ -93,6 +106,7 @@ export default function Layout({
             topK={queryResult?.top_k}
             projectHistory={projectHistory}
             isDatabaseEmpty={isDatabaseEmpty}
+            onIndexed={onGraphRefresh}
           />
 
           {/* Loading overlay */}
@@ -164,6 +178,7 @@ export default function Layout({
                 onClose={() => onNodeSelect(null)}
                 onNodeSelect={onNodeSelect}
                 width={rightPanelWidth}
+                seeds={seeds}
               />
             </ErrorBoundary>
           </>
@@ -172,6 +187,7 @@ export default function Layout({
             <ResultsList
               results={pprResults}
               bm25Results={bm25Results}
+              task={task}
               onNodeSelect={onNodeSelect}
             />
           </div>
@@ -182,6 +198,7 @@ export default function Layout({
         wsState={wsState}
         nodeCount={nodes.length}
         edgeCount={edges.length}
+        graphStats={graphStats}
       />
     </div>
   )

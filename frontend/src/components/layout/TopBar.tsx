@@ -7,10 +7,11 @@ import { ProjectHistoryItem } from '../../api/client'
 interface TopBarProps {
   gitInfo?: { repo: string; commit: string }
   projectHistory?: ProjectHistoryItem[]
+  onGraphRefresh?: () => void
 }
 
 export default function TopBar({
-  gitInfo, projectHistory = [],
+  gitInfo, projectHistory = [], onGraphRefresh,
 }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
   const [showProjectModal, setShowProjectModal] = useState(false)
@@ -21,6 +22,7 @@ export default function TopBar({
         <ProjectSettingsModal 
           onClose={() => setShowProjectModal(false)} 
           history={projectHistory}
+          onIndexed={onGraphRefresh}
         />
       )}
       

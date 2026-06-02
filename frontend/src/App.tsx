@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { ThemeProvider } from './context/ThemeContext'
 import Layout from './components/layout/Layout'
-import { getHealth, getBaseGraph, ProjectHistoryItem } from './api/client'
+import { getHealth, getBaseGraph, getStats, ProjectHistoryItem, type GraphStats } from './api/client'
 import type { QueryResponse, GraphNode, GraphData } from './types/api'
 
 export default function App() {
@@ -10,17 +10,20 @@ export default function App() {
   const [gitInfo, setGitInfo] = useState<{ repo: string; commit: string } | undefined>()
   const [baseGraph, setBaseGraph] = useState<GraphData | null>(null)
   const [projectHistory, setProjectHistory] = useState<ProjectHistoryItem[]>([])
+  const [graphStats, setGraphStats] = useState<GraphStats | null>(null)
 
-  useEffect(() => {
+  const refreshGraph = useCallback(() => {
+    getBaseGraph().then(setBaseGraph).catch(err => console.error('Failed to fetch base graph', err))
+    getStats().then(setGraphStats).catch(err => console.error('Failed to fetch stats', err))
     getHealth().then(res => {
       if (res.git_info) setGitInfo(res.git_info)
       if (res.project_history) setProjectHistory(res.project_history)
-    }).catch(err => console.error('Failed to fetch git info', err))
-
-    getBaseGraph().then(res => {
-      setBaseGraph(res)
-    }).catch(err => console.error('Failed to fetch base graph', err))
+    }).catch(err => console.error('Failed to fetch health', err))
   }, [])
+
+  useEffect(() => {
+    refreshGraph()
+  }, [refreshGraph])
 
   const handleQueryResult = useCallback((result: QueryResponse) => {
     setQueryResult(result)
@@ -38,6 +41,8 @@ export default function App() {
         projectHistory={projectHistory}
         onQueryResult={handleQueryResult}
         onNodeSelect={setSelectedNode}
+        onGraphRefresh={refreshGraph}
+        graphStats={graphStats ?? undefined}
       />
     </ThemeProvider>
   )

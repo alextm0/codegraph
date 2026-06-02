@@ -4,6 +4,7 @@ import type { PPREntityResult, BM25FileResult, GraphNode } from '../../types/api
 interface ResultsListProps {
   results: PPREntityResult[]
   bm25Results?: BM25FileResult[]
+  task?: string
   onNodeSelect?: (node: GraphNode) => void
 }
 
@@ -12,8 +13,10 @@ type ViewMode = 'ppr' | 'bm25' | 'compare'
 export default function ResultsList({
   results,
   bm25Results = [],
+  task = '',
   onNodeSelect,
 }: ResultsListProps) {
+  const [copied, setCopied] = useState(false)
   const [mode, setMode] = useState<ViewMode>('ppr')
 
   const bm25RankByFile = useMemo(
@@ -141,9 +144,43 @@ export default function ResultsList({
             fontSize: 9,
             color: 'var(--text-dim)',
             flexShrink: 0,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
-          PPR: {results.length} · BM25: {bm25Results.length}
+          <span>PPR: {results.length} · BM25: {bm25Results.length}</span>
+          <button
+            type="button"
+            onClick={() => {
+              const payload = {
+                task_description: task,
+                summary: { result_count: results.length },
+                results: results.map(r => ({
+                  entity_name: r.name,
+                  entity_type: r.label,
+                  qualified_name: r.qualified_name,
+                  file_path: r.file_path,
+                  lines: [r.line_number, r.line_end],
+                  relevance_score: r.score,
+                  reasoning_path: r.path,
+                })),
+              }
+              navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            }}
+            style={{
+              fontSize: 9,
+              padding: '3px 8px',
+              border: '1px solid var(--border)',
+              background: 'transparent',
+              color: copied ? 'var(--accent)' : 'var(--text-muted)',
+              cursor: 'pointer',
+            }}
+          >
+            {copied ? 'copied' : 'copy MCP context'}
+          </button>
         </div>
       )}
     </div>

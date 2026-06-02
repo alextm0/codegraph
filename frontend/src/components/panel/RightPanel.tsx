@@ -1,22 +1,30 @@
 import { useState, useEffect, useRef } from 'react'
-import { getNodeDetail, openInIDE } from '../../api/client'
-import type { GraphNode, NodeDetailResponse, NodeRelation } from '../../types/api'
+import { getNodeDetail, openInIDE, getDependencies } from '../../api/client'
+import type { GraphNode, NodeDetailResponse, NodeRelation, SeedInfo } from '../../types/api'
 
 interface RightPanelProps {
   selectedNode: GraphNode | null
   onClose: () => void
   onNodeSelect: (node: GraphNode | null) => void
   width?: number
+  seeds?: SeedInfo[]
 }
 
 export default function RightPanel({
-  selectedNode, onClose, onNodeSelect, width = 380,
+  selectedNode, onClose, onNodeSelect, width = 380, seeds = [],
 }: RightPanelProps) {
   const [detail, setDetail] = useState<NodeDetailResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [ideError, setIdeError] = useState<string | null>(null)
+  const [extraRelations, setExtraRelations] = useState<NodeRelation[]>([])
+  const [depsLoading, setDepsLoading] = useState(false)
   const reqIdRef = useRef(0)
 
+  const seedMeta = seeds.find(s => s.id === selectedNode?.id)
+
   useEffect(() => {
+    setExtraRelations([])
+    setIdeError(null)
     if (!selectedNode) { setDetail(null); setLoading(false); return }
     const id = ++reqIdRef.current
     setLoading(true)
@@ -112,9 +120,10 @@ export default function RightPanel({
             <button
               onClick={() => {
                 const line = selectedNode.line_number || detail?.node?.line_number || 1
+                setIdeError(null)
                 openInIDE(selectedNode.file_path, line).catch(err => {
+                  setIdeError('Failed to open in IDE. Install cursor or code CLI.')
                   console.error('Failed to open in IDE', err)
-                  alert('Failed to open in IDE. Make sure "code" CLI is installed.')
                 })
               }}
               style={{
@@ -167,6 +176,10 @@ export default function RightPanel({
           </div>
           {selectedNode.is_seed && (
             <div style={{ padding: 12 }}>
+              <div style={statLabel}>seed signal</div>
+              <div style={{ fontSize: 11, color: 'var(--seed)', marginBottom: 6 }}>
+                {seedMeta?.signal === 'entity' ? 'entity_match (0.6)' : 'bm25 (0.3)'}
+              </div>
               <div style={statLabel}>seed weight</div>
               <div
                 style={{
@@ -179,6 +192,48 @@ export default function RightPanel({
               </div>
             </div>
           )}
+        </div>
+
+        {ideError && (
+          <div style={{ padding: '8px 12px', fontSize: 10, color: 'oklch(0.80 0.14 25)' }}>{ideError}</div>
+        )}
+
+        <div style={{ padding: '8px 12px', borderBottom: '1px dashed var(--border)', display: 'flex', gap: 6 }}>
+          {(['upstream', 'downstream', 'both'] as const).map(dir => (
+            <button
+              key={dir}
+              type="button"
+              disabled={depsLoading}
+              onClick={() => {
+                setDepsLoading(true)
+                getDependencies(selectedNode.name, dir, 1)
+                  .then(res => {
+                    setExtraRelations(
+                      res.results.map(r => ({
+                        qualified_name: r.qualified_name,
+                        name: r.name,
+                        label: r.label,
+                        file_path: r.file_path,
+                        relationship: r.relationship_type,
+                      })),
+                    )
+                  })
+                  .catch(console.error)
+                  .finally(() => setDepsLoading(false))
+              }}
+              style={{
+                flex: 1,
+                fontSize: 9,
+                padding: '4px 6px',
+                border: '1px solid var(--border)',
+                background: 'var(--surface2)',
+                color: 'var(--text-dim)',
+                cursor: 'pointer',
+              }}
+            >
+              {dir}
+            </button>
+          ))}
         </div>
 
         {/* Relations + source */}
@@ -195,7 +250,7 @@ export default function RightPanel({
           </div>
         ) : detail ? (
           <>
-            {(detail.incoming.length > 0 || detail.outgoing.length > 0) && (
+            {(detail.incoming.length > 0 || detail.outgoing.length > 0 || extraRelations.length > 0) && (
               <div style={{ padding: 12, borderBottom: '1px dashed var(--border)' }}>
                 <div style={statLabel}>relations</div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -210,6 +265,14 @@ export default function RightPanel({
                   {detail.outgoing.map((rel, i) => (
                     <RelationRow
                       key={`out-${i}`}
+                      rel={rel}
+                      direction="outgoing"
+                      onNodeSelect={onNodeSelect}
+                    />
+                  ))}
+                  {extraRelations.map((rel, i) => (
+                    <RelationRow
+                      key={`dep-${i}`}
                       rel={rel}
                       direction="outgoing"
                       onNodeSelect={onNodeSelect}

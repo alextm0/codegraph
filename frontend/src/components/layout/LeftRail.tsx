@@ -1,4 +1,4 @@
-import { useState, useCallback, type KeyboardEvent } from 'react'
+import { useState, useCallback, useMemo, type KeyboardEvent } from 'react'
 import type { SeedInfo, GraphNode } from '../../types/api'
 
 interface LeftRailProps {
@@ -23,6 +23,20 @@ export default function LeftRail({
 }: LeftRailProps) {
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
+  const [search, setSearch] = useState('')
+
+  const searchMatches = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return []
+    return nodes
+      .filter(
+        n =>
+          n.name?.toLowerCase().includes(q) ||
+          n.id?.toLowerCase().includes(q) ||
+          n.file_path?.toLowerCase().includes(q),
+      )
+      .slice(0, 12)
+  }, [search, nodes])
 
   const handleRun = useCallback(() => {
     if (task.trim()) {
@@ -170,6 +184,51 @@ export default function LeftRail({
         >
           ⌘↵ run · ↑/↓ history
         </div>
+      </div>
+
+      <div style={{ padding: '0 12px 10px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+        <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>
+          graph search
+        </div>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="class, function, or file…"
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+          }}
+        />
+        {searchMatches.length > 0 && (
+          <div style={{ marginTop: 4, maxHeight: 120, overflowY: 'auto' }}>
+            {searchMatches.map(n => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => onNodeSelect?.(n)}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '4px 6px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                {n.name} <span style={{ color: 'var(--text-dim)' }}>({n.label[0]})</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ▸ seed.signals header */}

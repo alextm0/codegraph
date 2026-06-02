@@ -15,6 +15,7 @@ interface GraphCanvasProps {
   topK?: number
   projectHistory?: ProjectHistoryItem[]
   isDatabaseEmpty?: boolean
+  onIndexed?: () => void
 }
 
 const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const
@@ -68,8 +69,11 @@ function hideTooltip(tt: HTMLDivElement) { tt.style.display = 'none' }
 export default function GraphCanvas({
   nodes, edges, onNodeSelect, selectedNode,
   dampingFactor = 0.70, topK = 30, projectHistory = [],
-  isDatabaseEmpty = false
+  isDatabaseEmpty = false,
+  onIndexed,
 }: GraphCanvasProps) {
+  const [initError, setInitError] = useState<string | null>(null)
+  const [indexing, setIndexing] = useState(false)
   const svgRef   = useRef<SVGSVGElement>(null)
   const simRef   = useRef<d3.Simulation<D3Node, D3Edge> | null>(null)
   const zoomRef  = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
@@ -160,6 +164,18 @@ export default function GraphCanvas({
           .attr('fill-opacity', opacity as number)
       })
     })
+
+    // Special marker for the active reasoning path
+    defs.append('marker')
+      .attr('id', 'arr-path-active')
+      .attr('viewBox', '0 -4 8 8')
+      .attr('refX', 18).attr('refY', 0)
+      .attr('markerWidth', 6).attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M0,-4L8,0L0,4')
+      .attr('fill', 'var(--accent)')
+      .attr('fill-opacity', 1)
 
     const g    = svgSel.append('g')
     
@@ -359,40 +375,65 @@ export default function GraphCanvas({
     }
 
     const pathNodeIds = new Set<string>(selectedNode.reasoning_path || [])
-    const isPathActive = pathNodeIds.size > 0
+    // Only use path tracing mode if the path has at least 2 nodes (i.e. not a direct seed)
+    const isPathActive = pathNodeIds.size > 1
 
     const connected = new Set<string>([selectedNode.id])
-    if (!isPathActive) {
-      filteredEdges.forEach(e => {
-        const sid = typeof e.source === 'object' ? (e.source as D3Node).id : e.source
-        const tid = typeof e.target === 'object' ? (e.target as D3Node).id : e.target
-        if (sid === selectedNode.id) connected.add(tid as string)
-        if (tid === selectedNode.id) connected.add(sid as string)
+    // Always calculate neighborhood for fallback or context
+    filteredEdges.forEach(e => {
+      const sid = typeof e.source === 'object' ? (e.source as D3Node).id : e.source
+      const tid = typeof e.target === 'object' ? (e.target as D3Node).id : e.target
+      if (sid === selectedNode.id) connected.add(tid as string)
+      if (tid === selectedNode.id) connected.add(sid as string)
+    })
+
+    const highlightIds = isPathActive ? pathNodeIds : connected
+    
+    // Debug path tracing
+    if (selectedNode) {
+      console.debug('[GraphCanvas] Selection:', {
+        id: selectedNode.id,
+        isPathActive,
+        pathSize: pathNodeIds.size,
+        highlightSize: highlightIds.size
       })
     }
 
-    const highlightIds = isPathActive ? pathNodeIds : connected
-
-    nodeSel.attr('opacity', d => highlightIds.has(d.id) ? 1 : (isPathActive ? 0.15 : 0.06))
+    nodeSel.attr('opacity', d => highlightIds.has(d.id) ? 1 : (isPathActive ? 0.12 : 0.05))
     ringSel.attr('opacity', d => highlightIds.has(d.id) ? 1 : 0)
-    labelSel.attr('opacity', d => highlightIds.has(d.id) ? 0.9 : (isPathActive ? 0.1 : 0.04))
+    labelSel.attr('opacity', d => {
+      if (highlightIds.has(d.id)) return 1.0 // Active path labels are 100% visible
+      return isPathActive ? 0.08 : 0.03
+    }).style('font-weight', d => highlightIds.has(d.id) ? '600' : '400')
 
     linkSel
+      .attr('stroke', d => {
+        const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
+        const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+        if (isPathActive) {
+          const onPath = pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)
+          return onPath ? 'var(--accent)' : edgeColor(d.type)
+        }
+        return edgeColor(d.type)
+      })
       .attr('stroke-opacity', d => {
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
         const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
         if (isPathActive) {
-          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 1.0 : 0.05
+          const onPath = pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)
+          return onPath ? 1.0 : 0.04
         }
-        return (sid === selectedNode.id || tid === selectedNode.id) ? 1.0 : 0.04
+        return (sid === selectedNode.id || tid === selectedNode.id) ? 1.0 : 0.03
       })
       .attr('stroke-width', d => {
         if (isPathActive) {
           const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
           const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 2.5 : 1.1
+          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 3.5 : 1.0
         }
-        return 1.1
+        const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
+        const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
+        return (sid === selectedNode.id || tid === selectedNode.id) ? 2.0 : 1.0
       })
       .attr('filter', d => {
         if (isPathActive) {
@@ -406,9 +447,8 @@ export default function GraphCanvas({
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
         const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
         if (isPathActive) {
-          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string))
-            ? `url(#arr-${d.type})`
-            : `url(#arr-dim-${d.type})`
+          const onPath = pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)
+          return onPath ? 'url(#arr-path-active)' : `url(#arr-dim-${d.type})`
         }
         return (sid === selectedNode.id || tid === selectedNode.id)
           ? `url(#arr-${d.type})`
@@ -428,7 +468,7 @@ export default function GraphCanvas({
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
         const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
         if (isPathActive) {
-          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 3 : 1.8
+          return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 3.5 : 1.8
         }
         return (sid === selectedNode.id || tid === selectedNode.id) ? 3 : 1.8
       })
@@ -472,8 +512,14 @@ export default function GraphCanvas({
                     <button
                       key={idx}
                       onClick={() => {
-                        initializeProject(proj.url || proj.path).then(() => window.location.reload())
+                        setInitError(null)
+                        setIndexing(true)
+                        initializeProject(proj.url || proj.path)
+                          .then(() => onIndexed?.())
+                          .catch(err => setInitError(String(err)))
+                          .finally(() => setIndexing(false))
                       }}
+                      disabled={indexing}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -511,23 +557,33 @@ export default function GraphCanvas({
                 btn.textContent = 'Indexing...'
               }
               
-              initializeProject(target).then(() => window.location.reload()).catch(err => {
-                alert('Failed to initialize: ' + err)
-                if (btn) {
-                  btn.disabled = false
-                  btn.textContent = 'Index Repository'
-                }
-              })
+              setInitError(null)
+              setIndexing(true)
+              initializeProject(target)
+                .then(() => onIndexed?.())
+                .catch(err => setInitError(String(err)))
+                .finally(() => {
+                  setIndexing(false)
+                  if (btn) {
+                    btn.disabled = false
+                    btn.textContent = 'Index Repository'
+                  }
+                })
             }}>
               <input 
                 name="target"
                 placeholder="e.g., . or https://github.com/user/repo"
                 style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', marginBottom: 16, fontFamily: 'var(--font-mono)', fontSize: 11 }}
               />
-              <button type="submit" style={{ width: '100%', padding: '10px', background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
-                Index Repository
+              <button type="submit" disabled={indexing} style={{ width: '100%', padding: '10px', background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontWeight: 600, cursor: 'pointer', opacity: indexing ? 0.6 : 1 }}>
+                {indexing ? 'Indexing…' : 'Index Repository'}
               </button>
             </form>
+            {initError && (
+              <div style={{ marginTop: 12, padding: 8, fontSize: 10, color: 'oklch(0.80 0.14 25)', border: '1px solid oklch(0.40 0.10 25)', background: 'oklch(0.22 0.05 25)' }}>
+                {initError}
+              </div>
+            )}
           </div>
         </div>
       )}

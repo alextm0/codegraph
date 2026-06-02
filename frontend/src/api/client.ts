@@ -62,3 +62,33 @@ export async function getBaseGraph(): Promise<GraphData> {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+export interface GraphStats {
+  nodes: Record<string, number>
+  edges: Record<string, number>
+}
+
+export async function getStats(): Promise<GraphStats> {
+  const res = await fetch(`${BASE}/api/stats`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export interface DependencyRow {
+  qualified_name: string
+  name: string
+  label: string
+  file_path: string
+  relationship_type: string
+}
+
+export async function getDependencies(
+  entity: string,
+  direction: 'upstream' | 'downstream' | 'both',
+  depth: number = 1,
+): Promise<{ results: DependencyRow[] }> {
+  const params = new URLSearchParams({ entity, direction, depth: String(depth) })
+  const res = await fetch(`${BASE}/api/dependencies?${params}`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}

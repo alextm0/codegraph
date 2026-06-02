@@ -1,8 +1,4 @@
-export interface WSStatus {
-  type: 'file_changed' | 'rebuild_started' | 'rebuild_complete'
-  path?: string
-  timestamp: string
-}
+import type { WSStatus } from '../../hooks/useWebSocket'
 
 interface StatusBarProps {
   wsState: {
@@ -11,9 +7,10 @@ interface StatusBarProps {
   }
   nodeCount: number
   edgeCount: number
+  graphStats?: { nodes: Record<string, number>; edges: Record<string, number> }
 }
 
-export default function StatusBar({ wsState, nodeCount, edgeCount }: StatusBarProps) {
+export default function StatusBar({ wsState, nodeCount, edgeCount, graphStats }: StatusBarProps) {
   const { connected, lastMessage } = wsState
   const now = new Date().toLocaleTimeString('en-GB', { hour12: false })
 
@@ -22,6 +19,8 @@ export default function StatusBar({ wsState, nodeCount, edgeCount }: StatusBarPr
       ? `incremental update: ${lastMessage.path?.split('/').pop()}`
       : lastMessage.type === 'rebuild_complete'
       ? `graph synced: ${lastMessage.timestamp}`
+      : lastMessage.type === 'rebuild_error'
+      ? `rebuild failed: ${lastMessage.detail ?? 'error'}`
       : 'rebuilding graph...'
     : `graph synced: ${now}`
 
@@ -64,6 +63,12 @@ export default function StatusBar({ wsState, nodeCount, edgeCount }: StatusBarPr
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontFamily: 'var(--font-mono)' }}>
         <span>nodes: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{nodeCount}</span></span>
         <span>edges: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{edgeCount}</span></span>
+        {graphStats && (
+          <span style={{ color: 'var(--text-dim)', fontSize: 8 }}>
+            fn {graphStats.nodes.Function ?? 0} · cls {graphStats.nodes.Class ?? 0} · calls{' '}
+            {graphStats.edges.CALLS ?? 0}
+          </span>
+        )}
       </div>
     </div>
   )

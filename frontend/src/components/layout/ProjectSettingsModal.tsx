@@ -4,9 +4,10 @@ import { initializeProject, ProjectHistoryItem } from '../../api/client'
 interface ProjectSettingsModalProps {
   onClose: () => void
   history?: ProjectHistoryItem[]
+  onIndexed?: () => void
 }
 
-export default function ProjectSettingsModal({ onClose, history = [] }: ProjectSettingsModalProps) {
+export default function ProjectSettingsModal({ onClose, history = [], onIndexed }: ProjectSettingsModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,9 +25,11 @@ export default function ProjectSettingsModal({ onClose, history = [] }: ProjectS
     
     try {
       await initializeProject(target)
-      window.location.reload()
+      onIndexed?.()
+      onClose()
     } catch (err) {
       setError(String(err))
+    } finally {
       setLoading(false)
     }
   }
