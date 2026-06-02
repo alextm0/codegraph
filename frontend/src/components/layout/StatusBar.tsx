@@ -1,4 +1,9 @@
+import { useRef, useState } from 'react'
 import type { WSStatus } from '../../hooks/useWebSocket'
+import type { GraphStats } from '../../api/client'
+import LatticeButton from '../ui/LatticeButton'
+import StatsPopover from './StatsPopover'
+import { formatDisplayTimestamp } from '../../utils/formatTime'
 
 interface StatusBarProps {
   wsState: {
@@ -7,73 +12,95 @@ interface StatusBarProps {
   }
   nodeCount: number
   edgeCount: number
-  graphStats?: { nodes: Record<string, number>; edges: Record<string, number> }
+  graphStats?: GraphStats
+  graphViewMode?: 'full' | 'query' | 'focus'
 }
 
-export default function StatusBar({ wsState, nodeCount, edgeCount, graphStats }: StatusBarProps) {
+export default function StatusBar({
+  wsState, nodeCount, edgeCount, graphStats,
+  graphViewMode = 'full',
+}: StatusBarProps) {
   const { connected, lastMessage } = wsState
-  const now = new Date().toLocaleTimeString('en-GB', { hour12: false })
+  const [statsOpen, setStatsOpen] = useState(false)
+  const statsBtnRef = useRef<HTMLButtonElement>(null)
 
   const syncMsg = lastMessage
     ? lastMessage.type === 'file_changed'
       ? `incremental update: ${lastMessage.path?.split('/').pop()}`
       : lastMessage.type === 'rebuild_progress'
       ? lastMessage.stage === 'parsing'
-        ? `parsing ${lastMessage.files_parsed ?? 0}/${lastMessage.files_total ?? '?'} ${lastMessage.current_file ?? ''}`.trim()
-        : `building graph · ${lastMessage.node_count ?? 0} nodes · ${lastMessage.edge_count ?? 0} edges`
+        ? `parsing ${lastMessage.files_parsed ?? 0}/${lastMessage.files_total ?? '?'}`
+        : `building · ${lastMessage.node_count ?? 0} nodes`
       : lastMessage.type === 'rebuild_complete'
-      ? `graph synced: ${lastMessage.timestamp}`
+      ? `graph synced · ${formatDisplayTimestamp(lastMessage.timestamp ?? new Date())}`
       : lastMessage.type === 'rebuild_error'
       ? `rebuild failed: ${lastMessage.detail ?? 'error'}`
-      : 'rebuilding graph...'
-    : `graph synced: ${now}`
+      : 'rebuilding graph…'
+    : graphStats?.last_build
+    ? `graph synced · ${formatDisplayTimestamp(graphStats.last_build)}`
+    : 'graph ready'
 
   return (
-    <div
-      style={{
-        gridColumn: '1 / -1',
-        height: 'var(--statusbar-h)',
-        borderTop: '1px solid var(--border)',
-        background: 'var(--surface2)',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 12px',
-        gap: 16,
-        fontSize: 9,
-        color: 'var(--text-dim)',
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        flexShrink: 0,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: connected ? 'var(--accent)' : 'var(--text-muted)',
-            boxShadow: connected ? '0 0 8px var(--accent)' : 'none',
-            transition: 'all 0.3s ease',
-          }}
-        />
-        <span style={{ color: connected ? 'var(--text)' : 'var(--text-dim)' }}>
-          {syncMsg}
-        </span>
+    <>
+      <div
+        style={{
+          gridColumn: '1 / -1',
+          height: 'var(--statusbar-h)',
+          borderTop: '1px solid var(--border)',
+          background: 'var(--surface2)',
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
+          alignItems: 'center',
+          padding: '0 12px',
+          fontSize: 9,
+          color: 'var(--text-dim)',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifySelf: 'start' }}>
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: connected ? 'var(--accent)' : 'var(--text-muted)',
+              boxShadow: connected ? '0 0 8px var(--accent)' : 'none',
+            }}
+          />
+          <span style={{ color: connected ? 'var(--text)' : 'var(--text-dim)' }}>{syncMsg}</span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, fontVariantNumeric: 'tabular-nums', justifySelf: 'center' }}>
+          {graphViewMode !== 'full' && (
+            <span style={{ color: 'var(--accent)' }}>
+              {graphViewMode === 'query' ? 'filtered' : 'file focus'}
+            </span>
+          )}
+          <span>nodes: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{nodeCount}</span></span>
+          <span>edges: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{edgeCount}</span></span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifySelf: 'end' }}>
+          <LatticeButton
+            ref={statsBtnRef}
+            variant="bracket"
+            active={statsOpen}
+            onClick={() => setStatsOpen(o => !o)}
+            style={{ fontSize: 9, padding: '0 8px' }}
+          >
+            [stats]
+          </LatticeButton>
+        </div>
       </div>
 
-      <div style={{ flex: 1 }} />
-
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontFamily: 'var(--font-mono)' }}>
-        <span>nodes: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{nodeCount}</span></span>
-        <span>edges: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{edgeCount}</span></span>
-        {graphStats && (
-          <span style={{ color: 'var(--text-dim)', fontSize: 8 }}>
-            fn {graphStats.nodes.Function ?? 0} · cls {graphStats.nodes.Class ?? 0} · calls{' '}
-            {graphStats.edges.CALLS ?? 0}
-          </span>
-        )}
-      </div>
-    </div>
+      <StatsPopover
+        stats={graphStats}
+        open={statsOpen}
+        onClose={() => setStatsOpen(false)}
+        anchorRef={statsBtnRef}
+      />
+    </>
   )
 }

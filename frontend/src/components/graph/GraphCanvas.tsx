@@ -2,18 +2,30 @@ import { useEffect, useRef, useState, useMemo } from 'react'
 import * as d3 from 'd3'
 import type { D3Node, D3Edge } from '../../types/graph'
 import type { GraphNode } from '../../types/api'
-import { nodeColor, edgeColor } from './graphHelpers'
-
+import {
+  edgeColor,
+  fileNodeIds,
+  fitGraphToView,
+  zoomByFactor,
+} from './graphHelpers'
+import { nodeRadius, linkPath, linkPointAt, linkPhase, appendNodeShape } from './graphShapes'
 import { initializeProject, ProjectHistoryItem } from '../../api/client'
 import type { WSStatus } from '../../hooks/useWebSocket'
+import GraphControls from './GraphControls'
 
 interface GraphCanvasProps {
   nodes: D3Node[]
   edges: D3Edge[]
   onNodeSelect: (node: GraphNode | null) => void
   selectedNode?: GraphNode | null
+  highlightFilePath?: string | null
+  pathHighlightIds?: string[]
+  viewMode?: 'full' | 'query' | 'focus'
   dampingFactor?: number
   topK?: number
+  showPprReadout?: boolean
+  fitViewKey?: number
+  fileFocusKey?: number
   projectHistory?: ProjectHistoryItem[]
   isDatabaseEmpty?: boolean
   rebuildActive?: boolean
@@ -21,27 +33,25 @@ interface GraphCanvasProps {
 }
 
 const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const
-
-function nodeRadius(d: D3Node): number {
-  const base = d.is_seed ? 11 : 6
-  return base + Math.sqrt(Math.max(0, d.ppr_score || 0)) * 28
-}
+const PARTICLE_MAX_EDGES = 500
 
 /* ── Tooltip ──────────────────────────────────────────────── */
 function createTooltipEl(): HTMLDivElement {
   const el = document.createElement('div')
   el.style.cssText = [
     'position:fixed',
-    'background:var(--surface2)',
+    'background:var(--overlay)',
+    'backdrop-filter:blur(10px)',
     'border:1px solid var(--border)',
-    'padding:8px 12px',
+    'border-radius:var(--radius-sm)',
+    'padding:10px 14px',
     'pointer-events:none',
     'z-index:999',
     'max-width:280px',
-    'font-size:10px',
+    'font-size:11px',
     'font-family:var(--font-mono)',
     'display:none',
-    'letter-spacing:0.02em',
+    'box-shadow:var(--elev-1)',
   ].join(';')
   document.body.appendChild(el)
   return el
@@ -81,7 +91,12 @@ function rebuildStatusLabel(msg: WSStatus | null | undefined): string {
 
 export default function GraphCanvas({
   nodes, edges, onNodeSelect, selectedNode,
-  dampingFactor = 0.70, topK = 30, projectHistory = [],
+  highlightFilePath = null,
+  pathHighlightIds = [],
+  viewMode = 'full',
+  dampingFactor = 0.70, topK = 30, showPprReadout = false, fitViewKey = 0,
+  fileFocusKey = 0,
+  projectHistory = [],
   isDatabaseEmpty = false,
   rebuildActive = false,
   rebuildMessage = null,
@@ -236,22 +251,28 @@ export default function GraphCanvas({
         typeof e.target === 'object',
       )
 
-    /* Edges */
+    /* Edges — curved paths */
     const linkSel = g.append('g')
-      .selectAll<SVGLineElement, D3Edge>('line')
+      .selectAll<SVGPathElement, D3Edge>('path.link')
       .data(links)
-      .join('line')
+      .join('path')
+      .attr('class', 'link')
+      .attr('fill', 'none')
       .attr('stroke', d => edgeColor(d.type))
-      .attr('stroke-width', 1.1)
+      .attr('stroke-width', d => (d.type === 'CONTAINS' || d.type === 'INHERITS_FROM') ? 1 : 1.2)
       .attr('stroke-opacity', 0.38)
+      .attr('stroke-dasharray', d =>
+        d.type === 'CONTAINS' || d.type === 'INHERITS_FROM' ? '4 4' : null,
+      )
       .attr('marker-end', d => `url(#arr-${d.type})`)
 
-    /* Particles */
-    const particleGroup  = g.append('g')
-    const animatedLinks  = links.filter(l => l.type === 'CALLS' || l.type === 'IMPORTS')
-    const particles      = particleGroup
+    /* Particles on CALLS / IMPORTS only */
+    const particleGroup = g.append('g')
+    const animatedLinks = links.filter(l => l.type === 'CALLS' || l.type === 'IMPORTS')
+    const enableParticles = animatedLinks.length <= PARTICLE_MAX_EDGES
+    const particles = particleGroup
       .selectAll<SVGCircleElement, D3Edge>('circle.particle')
-      .data(animatedLinks)
+      .data(enableParticles ? animatedLinks : [])
       .join('circle')
       .attr('class', 'particle')
       .attr('r', 1.8)
@@ -260,19 +281,20 @@ export default function GraphCanvas({
 
     const t0 = Date.now()
     const animate = () => {
-      const elapsed = (Date.now() - t0) % 2000
-      const t = elapsed / 2000
-      particles
-        .attr('cx', d => {
-          const x1 = (d.source as D3Node).x || 0
-          const x2 = (d.target as D3Node).x || 0
-          return x1 + (x2 - x1) * t
+      if (enableParticles && scaleRef.current >= 0.5 && animatedLinks.length > 0) {
+        const elapsed = Date.now() - t0
+        particles.attr('cx', (d: D3Edge) => {
+          const period = d.type === 'CALLS' ? 1800 : 2200
+          const phase = linkPhase(d)
+          const t = ((elapsed % period) / period + phase) % 1
+          return linkPointAt(d, t).x
+        }).attr('cy', (d: D3Edge) => {
+          const period = d.type === 'CALLS' ? 1800 : 2200
+          const phase = linkPhase(d)
+          const t = ((elapsed % period) / period + phase) % 1
+          return linkPointAt(d, t).y
         })
-        .attr('cy', d => {
-          const y1 = (d.source as D3Node).y || 0
-          const y2 = (d.target as D3Node).y || 0
-          return y1 + (y2 - y1) * t
-        })
+      }
       rafRef.current = requestAnimationFrame(animate)
     }
     rafRef.current = requestAnimationFrame(animate)
@@ -299,22 +321,19 @@ export default function GraphCanvas({
       .attr('dur', '2s')
       .attr('repeatCount', 'indefinite')
 
-    /* Node circles */
+    /* Node shapes */
     const nodeSel = nodeGroup
-      .selectAll<SVGCircleElement, D3Node>('circle.node')
+      .selectAll<SVGGElement, D3Node>('g.node')
       .data(filteredNodes)
-      .join('circle')
+      .join('g')
       .attr('class', 'node')
-      .attr('r', nodeRadius)
-      .attr('fill', d => nodeColor(d.label))
-      .attr('stroke', 'var(--bg)')
-      .attr('stroke-width', 1.5)
-      .attr('filter', d => (d.ppr_score || 0) > 0.05 ? 'url(#glow)' : null)
       .attr('cursor', 'pointer')
       .on('click', (_e, d) => onNodeSelect(d))
       .on('mouseover', (_e, d) => showTooltip(tt, _e as unknown as MouseEvent, d))
       .on('mousemove', e => moveTooltip(tt, e as unknown as MouseEvent))
       .on('mouseout', () => hideTooltip(tt))
+
+    appendNodeShape(nodeSel)
 
     /* Labels */
     const labelSel = g.append('g')
@@ -342,18 +361,14 @@ export default function GraphCanvas({
       .force('center', d3.forceCenter(W / 2, H / 2))
       .force('collision', d3.forceCollide<D3Node>().radius(d => nodeRadius(d) + 8))
       .on('tick', () => {
-        linkSel
-          .attr('x1', d => (d.source as D3Node).x ?? 0)
-          .attr('y1', d => (d.source as D3Node).y ?? 0)
-          .attr('x2', d => (d.target as D3Node).x ?? 0)
-          .attr('y2', d => (d.target as D3Node).y ?? 0)
-        nodeSel.attr('cx', d => d.x ?? 0).attr('cy', d => d.y ?? 0)
+        linkSel.attr('d', linkPath)
+        nodeSel.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`)
         seedRings.attr('cx', d => d.x ?? 0).attr('cy', d => d.y ?? 0)
         labelSel.attr('x', d => d.x ?? 0).attr('y', d => d.y ?? 0)
       })
 
     nodeSel.call(
-      d3.drag<SVGCircleElement, D3Node>()
+      d3.drag<SVGGElement, D3Node>()
         .on('start', (e, d) => {
           if (!e.active) sim.alphaTarget(0.3).restart()
           d.fx = d.x; d.fy = d.y
@@ -374,50 +389,91 @@ export default function GraphCanvas({
       tt.remove()
       ttRef.current = null
     }
-  }, [filteredNodes, filteredEdges, onNodeSelect])
+  }, [filteredNodes, filteredEdges, onNodeSelect, viewMode])
 
-  /* Selection highlight */
+  const handleZoomIn = () => {
+    const svg = svgRef.current
+    const zoom = zoomRef.current
+    if (!svg || !zoom) return
+    const { w, h } = sizeRef.current
+    zoomByFactor(svg, zoom, 1.35, w, h)
+  }
+
+  const handleZoomOut = () => {
+    const svg = svgRef.current
+    const zoom = zoomRef.current
+    if (!svg || !zoom) return
+    const { w, h } = sizeRef.current
+    zoomByFactor(svg, zoom, 1 / 1.35, w, h)
+  }
+
+  const handleFitView = () => {
+    const svg = svgRef.current
+    const zoom = zoomRef.current
+    if (!svg || !zoom || !filteredNodes.length) return
+    const { w, h } = sizeRef.current
+    fitGraphToView(svg, filteredNodes, zoom, w, h, {
+      padding: 72,
+      maxScale: 1.0,
+      duration: 650,
+    })
+  }
+
+  /* Selection / file / path highlight */
   useEffect(() => {
     if (!svgRef.current) return
     const svg         = d3.select(svgRef.current)
-    const nodeSel     = svg.selectAll<SVGCircleElement, D3Node>('circle.node')
-    const linkSel     = svg.selectAll<SVGLineElement, D3Edge>('line')
+    const nodeSel     = svg.selectAll<SVGGElement, D3Node>('g.node')
+    const linkSel     = svg.selectAll<SVGPathElement, D3Edge>('path.link')
     const labelSel    = svg.selectAll<SVGTextElement, D3Node>('text')
     const ringSel     = svg.selectAll<SVGCircleElement, D3Node>('circle.seed-ring')
     const particleSel = svg.selectAll<SVGCircleElement, D3Edge>('circle.particle')
 
-    if (!selectedNode) {
+    const resetStyles = () => {
       nodeSel.attr('opacity', 1)
       ringSel.attr('opacity', 1)
-      linkSel.attr('stroke-opacity', 0.38).attr('marker-end', d => `url(#arr-${d.type})`)
+      linkSel
+        .attr('stroke', d => edgeColor(d.type))
+        .attr('stroke-opacity', 0.38)
+        .attr('stroke-width', d => (d.type === 'CONTAINS' || d.type === 'INHERITS_FROM') ? 1 : 1.2)
+        .attr('filter', null)
+        .attr('marker-end', d => `url(#arr-${d.type})`)
       labelSel.attr('opacity', d => d.is_seed || (d.ppr_score || 0) > 0.04 ? 0.9 : 0.35)
+        .style('font-weight', '400')
       particleSel.attr('opacity', 0.85).attr('r', 1.8)
+    }
+
+    const externalPath = pathHighlightIds.length > 1
+      ? new Set(pathHighlightIds)
+      : null
+
+    if (!selectedNode && !highlightFilePath && !externalPath) {
+      resetStyles()
       return
     }
 
-    const pathNodeIds = new Set<string>(selectedNode.reasoning_path || [])
-    // Only use path tracing mode if the path has at least 2 nodes (i.e. not a direct seed)
-    const isPathActive = pathNodeIds.size > 1
+    let pathNodeIds = externalPath ?? new Set<string>()
+    let isPathActive = pathNodeIds.size > 1
+    let highlightIds = new Set<string>()
+    let focusNodeId: string | null = null
 
-    const connected = new Set<string>([selectedNode.id])
-    // Always calculate neighborhood for fallback or context
-    filteredEdges.forEach(e => {
-      const sid = typeof e.source === 'object' ? (e.source as D3Node).id : e.source
-      const tid = typeof e.target === 'object' ? (e.target as D3Node).id : e.target
-      if (sid === selectedNode.id) connected.add(tid as string)
-      if (tid === selectedNode.id) connected.add(sid as string)
-    })
-
-    const highlightIds = isPathActive ? pathNodeIds : connected
-    
-    // Debug path tracing
-    if (selectedNode) {
-      console.debug('[GraphCanvas] Selection:', {
-        id: selectedNode.id,
-        isPathActive,
-        pathSize: pathNodeIds.size,
-        highlightSize: highlightIds.size
+    if (externalPath) {
+      highlightIds = pathNodeIds
+    } else if (selectedNode) {
+      pathNodeIds = new Set(selectedNode.reasoning_path || [])
+      isPathActive = pathNodeIds.size > 1
+      const connected = new Set<string>([selectedNode.id])
+      filteredEdges.forEach(e => {
+        const sid = typeof e.source === 'object' ? (e.source as D3Node).id : e.source
+        const tid = typeof e.target === 'object' ? (e.target as D3Node).id : e.target
+        if (sid === selectedNode.id) connected.add(tid as string)
+        if (tid === selectedNode.id) connected.add(sid as string)
       })
+      highlightIds = isPathActive ? pathNodeIds : connected
+      focusNodeId = selectedNode.id
+    } else if (highlightFilePath) {
+      highlightIds = fileNodeIds(highlightFilePath, filteredNodes)
+      isPathActive = false
     }
 
     nodeSel.attr('opacity', d => highlightIds.has(d.id) ? 1 : (isPathActive ? 0.12 : 0.05))
@@ -444,7 +500,8 @@ export default function GraphCanvas({
           const onPath = pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)
           return onPath ? 1.0 : 0.04
         }
-        return (sid === selectedNode.id || tid === selectedNode.id) ? 1.0 : 0.03
+        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
+        return inHighlight ? 1.0 : 0.03
       })
       .attr('stroke-width', d => {
         if (isPathActive) {
@@ -454,7 +511,8 @@ export default function GraphCanvas({
         }
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
         const tid = typeof d.target === 'object' ? (d.target as D3Node).id : d.target
-        return (sid === selectedNode.id || tid === selectedNode.id) ? 2.0 : 1.0
+        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
+        return inHighlight ? 2.0 : 1.0
       })
       .attr('filter', d => {
         if (isPathActive) {
@@ -471,9 +529,8 @@ export default function GraphCanvas({
           const onPath = pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)
           return onPath ? 'url(#arr-path-active)' : `url(#arr-dim-${d.type})`
         }
-        return (sid === selectedNode.id || tid === selectedNode.id)
-          ? `url(#arr-${d.type})`
-          : `url(#arr-dim-${d.type})`
+        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
+        return inHighlight ? `url(#arr-${d.type})` : `url(#arr-dim-${d.type})`
       })
 
     particleSel
@@ -483,7 +540,8 @@ export default function GraphCanvas({
         if (isPathActive) {
           return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 1.0 : 0.05
         }
-        return (sid === selectedNode.id || tid === selectedNode.id) ? 1.0 : 0.04
+        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
+        return inHighlight ? 1.0 : 0.04
       })
       .attr('r', d => {
         const sid = typeof d.source === 'object' ? (d.source as D3Node).id : d.source
@@ -491,30 +549,80 @@ export default function GraphCanvas({
         if (isPathActive) {
           return (pathNodeIds.has(sid as string) && pathNodeIds.has(tid as string)) ? 3.5 : 1.8
         }
-        return (sid === selectedNode.id || tid === selectedNode.id) ? 3 : 1.8
+        const inHighlight = highlightIds.has(sid as string) && highlightIds.has(tid as string)
+        return inHighlight ? 3 : 1.8
       })
 
-    const sn = filteredNodes.find(n => n.id === selectedNode.id)
-    if (sn?.x !== undefined && sn?.y !== undefined && zoomRef.current) {
+    if (focusNodeId && zoomRef.current && svgRef.current) {
       const { w: W, h: H } = sizeRef.current
-      // Soften the zoom level — 1.4 is a good balance between focus and context
-      const scale = 1.4
-      d3.select(svgRef.current!)
-        .transition().duration(750)
-        .call(
-          zoomRef.current.transform,
-          d3.zoomIdentity.translate(W / 2 - sn.x * scale, H / 2 - sn.y * scale).scale(scale),
-        )
+      const focusNodes = filteredNodes.filter(
+        n => highlightIds.has(n.id) && n.x !== undefined && n.y !== undefined,
+      )
+      const frame = focusNodes.length
+        ? focusNodes
+        : filteredNodes.filter(n => n.id === focusNodeId && n.x !== undefined)
+      if (frame.length) {
+        fitGraphToView(svgRef.current, frame, zoomRef.current, W, H, {
+          padding: 96,
+          maxScale: 1.6,
+          duration: 700,
+        })
+      }
     }
-  }, [selectedNode, filteredNodes, filteredEdges])
+  }, [selectedNode, highlightFilePath, pathHighlightIds, filteredNodes, filteredEdges])
+
+  /* Fit entire graph in view after restoring full codebase */
+  useEffect(() => {
+    if (!fitViewKey || !svgRef.current || !zoomRef.current || !filteredNodes.length) return
+    const svg = svgRef.current
+    const zoom = zoomRef.current
+    const { w, h } = sizeRef.current
+    const id = window.setTimeout(() => {
+      fitGraphToView(svg, filteredNodes, zoom, w, h, {
+        padding: 72,
+        maxScale: 1.0,
+        duration: 750,
+      })
+    }, 750)
+    return () => window.clearTimeout(id)
+  }, [fitViewKey, filteredNodes])
+
+  /* Zoom to file cluster when selected from project tree */
+  useEffect(() => {
+    if (!fileFocusKey || !highlightFilePath || !svgRef.current || !zoomRef.current) return
+    const svg = svgRef.current
+    const zoom = zoomRef.current
+    const { w, h } = sizeRef.current
+    const ids = fileNodeIds(highlightFilePath, filteredNodes)
+    const focusNodes = filteredNodes.filter(
+      n => ids.has(n.id) && n.x !== undefined && n.y !== undefined,
+    )
+    if (!focusNodes.length) return
+    const id = window.setTimeout(() => {
+      fitGraphToView(svg, focusNodes, zoom, w, h, {
+        padding: 96,
+        maxScale: 1.5,
+        duration: 700,
+      })
+    }, 350)
+    return () => window.clearTimeout(id)
+  }, [fileFocusKey, highlightFilePath, filteredNodes, filteredEdges])
 
   const hasData = nodes.length > 0
 
   return (
     <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minWidth: 0, height: '100%' }}>
       {/* Subtle scale tick — bottom-left corner */}
+      {hasData && !isDatabaseEmpty && (
+        <GraphControls
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onFitView={handleFitView}
+        />
+      )}
+
       {hasData && (
-        <div className="lattice-scale-tick" style={cornerTick({ bottom: 8, right: 8 })}>
+        <div className="lattice-scale-tick font-mono" style={cornerTick({ bottom: 10, right: 10 })}>
           scale: 1.00×
         </div>
       )}
@@ -522,8 +630,8 @@ export default function GraphCanvas({
       {/* Empty state / Onboarding */}
       {isDatabaseEmpty && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--surface2)', padding: 32, border: '1px solid var(--border)', borderRadius: 8, width: 440 }}>
-            <h2 style={{ margin: '0 0 16px', fontSize: 16, color: 'var(--text)' }}>Welcome to CodeGraph</h2>
+          <div className="surface-elevated" style={{ padding: 32, width: 440 }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 18, color: 'var(--text)', fontFamily: 'var(--font-display)' }}>Welcome to CodeGraph</h2>
             
             {projectHistory.length > 0 && (
               <div style={{ marginBottom: 24 }}>
@@ -619,13 +727,15 @@ export default function GraphCanvas({
       {/* Graph overlays */}
       {!isDatabaseEmpty && (
         <>
-          <PPRReadout
-            nodeCount={filteredNodes.length}
-            edgeCount={filteredEdges.length}
-            seedCount={filteredNodes.filter(n => n.is_seed).length}
-            dampingFactor={dampingFactor}
-            topK={topK}
-          />
+          {showPprReadout && (
+            <PPRReadout
+              nodeCount={filteredNodes.length}
+              edgeCount={filteredEdges.length}
+              seedCount={filteredNodes.filter(n => n.is_seed).length}
+              dampingFactor={dampingFactor}
+              topK={topK}
+            />
+          )}
           <LatticeLegend 
             hiddenNodeTypes={hiddenNodeTypes} 
             setHiddenNodeTypes={setHiddenNodeTypes}
@@ -676,40 +786,31 @@ function PPRReadout({
     return (
       <button
         onClick={() => setOpen(true)}
+        className="surface-elevated"
         style={{
           position: 'absolute',
           top: 12,
           right: 12,
-          background: 'color-mix(in oklch, var(--surface) 50%, transparent)',
-          backdropFilter: 'blur(4px)',
-          border: '1px solid var(--border)',
-          padding: '4px 8px',
-          fontSize: 8.5,
-          color: 'var(--text-dim)',
-          fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.10em',
-          textTransform: 'uppercase',
+          padding: '6px 12px',
+          fontSize: 11,
+          color: 'var(--text-muted)',
           cursor: 'pointer',
-          borderRadius: 2,
         }}
       >
-        ppr.readout +
+        PPR stats
       </button>
     )
   }
 
   return (
     <div
+      className="surface-elevated"
       style={{
         position: 'absolute',
         top: 12,
         right: 12,
-        background: 'color-mix(in oklch, var(--surface) 92%, transparent)',
-        backdropFilter: 'blur(10px)',
-        border: '1px solid var(--border)',
         minWidth: 180,
-        fontSize: 10,
-        boxShadow: 'var(--shadow)',
+        fontSize: 11,
       }}
     >
       <button
@@ -732,7 +833,7 @@ function PPRReadout({
           cursor: 'pointer',
         }}
       >
-        <span>▸ ppr.readout</span>
+        <span>PPR stats</span>
         <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>–</span>
       </button>
 
@@ -794,61 +895,54 @@ function LatticeLegend({
     return (
       <button
         onClick={() => setOpen(true)}
+        className="surface-elevated"
         style={{
           position: 'absolute',
           bottom: 12,
-          left: 12,
-          background: 'color-mix(in oklch, var(--surface) 88%, transparent)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid var(--border)',
-          padding: '6px 10px',
-          fontSize: 9,
+          right: 12,
+          padding: '8px 12px',
+          fontSize: 11,
           color: 'var(--text-muted)',
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          fontFamily: 'var(--font-mono)',
           cursor: 'pointer',
         }}
       >
-        ▸ legend +
+        Legend
       </button>
     )
   }
 
   return (
     <div
+      className="surface-elevated"
       style={{
         position: 'absolute',
         bottom: 12,
-        left: 12,
-        background: 'color-mix(in oklch, var(--surface) 88%, transparent)',
-        backdropFilter: 'blur(8px)',
-        border: '1px solid var(--border)',
-        fontSize: 9,
+        right: 12,
+        fontSize: 11,
+        minWidth: 200,
       }}
     >
       <button
         onClick={() => setOpen(false)}
         style={{
           width: '100%',
-          padding: '6px 10px',
+          padding: '8px 12px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: 8,
           background: 'transparent',
           border: 'none',
-          borderBottom: '1px dashed var(--border)',
-          color: 'var(--text-muted)',
-          fontSize: 9,
-          fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
+          borderBottom: '1px solid var(--border)',
+          color: 'var(--text)',
+          fontSize: 12,
+          fontWeight: 600,
           cursor: 'pointer',
+          fontFamily: 'var(--font-body)',
         }}
       >
-        <span>▸ legend</span>
-        <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>–</span>
+        <span>Legend</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>×</span>
       </button>
       <div style={{ display: 'flex', gap: 16, padding: 10 }}>
       <div>

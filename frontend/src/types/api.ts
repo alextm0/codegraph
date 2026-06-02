@@ -5,6 +5,8 @@
 export interface QueryRequest {
   task: string
   top_k?: number
+  mentioned_entities?: string[] | null
+  token_budget?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -15,7 +17,7 @@ export interface SeedInfo {
   id: string
   name: string
   /** "entity" for high-weight seeds, "bm25" for BM25-derived seeds */
-  signal: 'entity' | 'bm25' | 'file'
+  signal: 'entity' | 'bm25'
   weight: number
 }
 

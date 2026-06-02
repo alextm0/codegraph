@@ -33,9 +33,9 @@ export default class ErrorBoundary extends Component<Props, State> {
           justifyContent: 'center',
           gap: 8,
           padding: 24,
-          color: 'var(--red)',
+          color: 'var(--danger)',
           fontSize: 12,
-          fontFamily: 'var(--mono)',
+          fontFamily: 'var(--font-mono)',
         }}>
           <div style={{ fontWeight: 600 }}>Something went wrong</div>
           <div style={{ color: 'var(--text-dim)', wordBreak: 'break-all', textAlign: 'center' }}>

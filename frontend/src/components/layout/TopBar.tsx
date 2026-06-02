@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useTheme } from '../../context/ThemeContext'
 import ProjectSettingsModal from './ProjectSettingsModal'
-
 import { ProjectHistoryItem } from '../../api/client'
 
 interface TopBarProps {
@@ -10,23 +9,20 @@ interface TopBarProps {
   onGraphRefresh?: () => void
 }
 
-export default function TopBar({
-  gitInfo, projectHistory = [], onGraphRefresh,
-}: TopBarProps) {
+export default function TopBar({ gitInfo, projectHistory = [], onGraphRefresh }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
   const [showProjectModal, setShowProjectModal] = useState(false)
 
   return (
     <>
       {showProjectModal && (
-        <ProjectSettingsModal 
-          onClose={() => setShowProjectModal(false)} 
+        <ProjectSettingsModal
+          onClose={() => setShowProjectModal(false)}
           history={projectHistory}
           onIndexed={onGraphRefresh}
         />
       )}
-      
-      {/* Primary top bar — 40px */}
+
       <div
         style={{
           gridColumn: '1 / -1',
@@ -38,28 +34,9 @@ export default function TopBar({
           flexShrink: 0,
         }}
       >
-        {/* Wordmark */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '0 16px',
-            height: '100%',
-            borderRight: '1px solid var(--border)',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: '100%', borderRight: '1px solid var(--border)' }}>
           <LatticeLogoMark />
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: '0.06em',
-              color: 'var(--text)',
-            }}
-          >
-            CODEGRAPH
-          </span>
+          <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text)', fontFamily: 'var(--font-display)' }}>CodeGraph</span>
         </div>
 
         {gitInfo && (
@@ -81,10 +58,10 @@ export default function TopBar({
                 fontFamily: 'var(--font-mono)',
                 transition: 'color 120ms',
               }}
-              onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
             >
-              [SWITCH]
+              Switch
             </button>
           </div>
         )}
@@ -115,7 +92,7 @@ export default function TopBar({
             e.currentTarget.style.background = 'none'
           }}
         >
-          {theme === 'dark' ? '[LIGHT]' : '[DARK]'}
+          {theme === 'dark' ? 'Light' : 'Dark'}
         </button>
       </div>
     </>

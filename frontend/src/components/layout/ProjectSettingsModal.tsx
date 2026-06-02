@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { initializeProject, ProjectHistoryItem } from '../../api/client'
+import { rebuildProject, initializeProject, ProjectHistoryItem } from '../../api/client'
 
 interface ProjectSettingsModalProps {
   onClose: () => void
@@ -131,7 +131,28 @@ export default function ProjectSettingsModal({ onClose, history = [], onIndexed 
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm('Rebuild the current project graph?')) return
+                  setLoading(true)
+                  setError(null)
+                  try {
+                    await rebuildProject()
+                    onIndexed?.()
+                    onClose()
+                  } catch (err) {
+                    setError(String(err))
+                  } finally {
+                    setLoading(false)
+                  }
+                }}
+                disabled={loading}
+                style={{ padding: '8px 16px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
+              >
+                Rebuild current
+              </button>
               <button 
                 type="button" 
                 onClick={onClose}

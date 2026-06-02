@@ -1,23 +1,38 @@
-/* Lattice design system — scientific instrument aesthetic */
-/* IBM Plex Mono dominant, signal-green accent, cool near-black ground */
+/* Lattice design system — modern minimal, scientific accent */
+/* IBM Plex Sans for UI chrome; IBM Plex Mono for code/data */
 
 :root {
-  --font-display: 'IBM Plex Mono', ui-monospace, monospace;
-  --font-body:    'IBM Plex Mono', ui-monospace, monospace;
+  --font-display: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-body:    'IBM Plex Sans', system-ui, sans-serif;
   --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
 
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
 
-  --topbar-h:    40px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 350ms;
+
+  --topbar-h:    44px;
   --subbar-h:    28px;
-  --statusbar-h: 24px;
+  --statusbar-h: 28px;
+  --rail-w:      280px;
 }
 
 /* ── Dark theme (Lattice default) ──────────────────────── */
 :root,
 [data-theme="dark"] {
+  color-scheme: dark;
+
   --bg:            oklch(0.13 0.005 240);
   --surface:       oklch(0.16 0.006 240);
   --surface2:      oklch(0.20 0.007 240);
@@ -27,11 +42,15 @@
   --text-dim:      oklch(0.66 0.010 240);
   --text-muted:    oklch(0.48 0.010 240);
 
-  --accent:        oklch(0.82 0.16 145);   /* signal green */
+  --accent:        oklch(0.82 0.16 145);
   --accent-soft:   oklch(0.28 0.08 145);
   --accent-ink:    oklch(0.85 0.16 145);
 
-  --seed:          oklch(0.82 0.16 75);    /* amber */
+  --seed:          oklch(0.82 0.16 75);
+
+  --success:       oklch(0.82 0.16 145);
+  --warning:       oklch(0.82 0.16 75);
+  --danger:        oklch(0.80 0.14 25);
 
   --node-file:     oklch(0.78 0.13 240);
   --node-class:    oklch(0.82 0.16 145);
@@ -43,35 +62,49 @@
   --edge-contains: oklch(0.42 0.008 240);
   --edge-inherits: oklch(0.78 0.16 35);
 
-  --shadow: 0 1px 3px oklch(0 0 0 / 0.5), 0 4px 16px oklch(0 0 0 / 0.4);
+  --elev-1: 0 1px 2px oklch(0 0 0 / 0.35), 0 4px 12px oklch(0 0 0 / 0.25);
+  --elev-2: 0 2px 8px oklch(0 0 0 / 0.4), 0 12px 32px oklch(0 0 0 / 0.35);
+  --shadow: var(--elev-1);
+
+  --overlay: color-mix(in oklch, var(--surface) 92%, transparent);
 }
 
 /* ── Light theme (Lattice paper) ───────────────────────── */
 [data-theme="light"] {
-  --bg:            oklch(0.99 0.002 240);
-  --surface:       oklch(0.97 0.003 240);
-  --surface2:      oklch(0.94 0.004 240);
-  --border:        oklch(0.86 0.006 240);
-  --border-strong: oklch(0.72 0.008 240);
-  --text:          oklch(0.18 0.008 240);
-  --text-dim:      oklch(0.45 0.010 240);
-  --text-muted:    oklch(0.60 0.008 240);
+  color-scheme: light;
 
-  --accent:        oklch(0.50 0.18 145);
-  --accent-soft:   oklch(0.92 0.05 145);
-  --accent-ink:    oklch(0.42 0.18 145);
+  --bg:            oklch(0.97 0.008 85);
+  --surface:       oklch(0.99 0.006 85);
+  --surface2:      oklch(0.94 0.010 85);
+  --border:        oklch(0.82 0.012 85);
+  --border-strong: oklch(0.68 0.014 85);
+  --text:          oklch(0.22 0.012 240);
+  --text-dim:      oklch(0.42 0.012 240);
+  --text-muted:    oklch(0.55 0.010 240);
 
-  --seed:          oklch(0.62 0.16 75);
+  --accent:        oklch(0.48 0.18 145);
+  --accent-soft:   oklch(0.90 0.06 145);
+  --accent-ink:    oklch(0.38 0.18 145);
 
-  --node-file:     oklch(0.50 0.13 240);
-  --node-class:    oklch(0.50 0.16 145);
-  --node-function: oklch(0.62 0.14 75);
-  --node-method:   oklch(0.50 0.16 320);
+  --seed:          oklch(0.58 0.18 75);
 
-  --edge-calls:    oklch(0.55 0.14 145);
-  --edge-imports:  oklch(0.55 0.13 240);
-  --edge-contains: oklch(0.75 0.005 240);
-  --edge-inherits: oklch(0.58 0.16 35);
+  --success:       oklch(0.48 0.18 145);
+  --warning:       oklch(0.58 0.18 75);
+  --danger:        oklch(0.52 0.20 25);
 
-  --shadow: 0 1px 3px oklch(0 0 0 / 0.10), 0 4px 16px oklch(0 0 0 / 0.06);
+  --node-file:     oklch(0.48 0.16 240);
+  --node-class:    oklch(0.46 0.18 145);
+  --node-function: oklch(0.55 0.17 75);
+  --node-method:   oklch(0.48 0.18 320);
+
+  --edge-calls:    oklch(0.50 0.16 145);
+  --edge-imports:  oklch(0.50 0.15 240);
+  --edge-contains: oklch(0.62 0.008 240);
+  --edge-inherits: oklch(0.52 0.17 35);
+
+  --elev-1: 0 1px 2px oklch(0 0 0 / 0.06), 0 4px 12px oklch(0 0 0 / 0.04);
+  --elev-2: 0 2px 8px oklch(0 0 0 / 0.08), 0 12px 28px oklch(0 0 0 / 0.06);
+  --shadow: var(--elev-1);
+
+  --overlay: color-mix(in oklch, var(--surface) 94%, transparent);
 }

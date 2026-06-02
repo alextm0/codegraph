@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { formatTimeHms } from '../utils/formatTime'
 
 export interface WSStatus {
   type: 'file_changed' | 'rebuild_started' | 'rebuild_progress' | 'rebuild_complete' | 'rebuild_error'
@@ -30,7 +31,7 @@ export function useWebSocket() {
         const data = JSON.parse(event.data)
         setLastMessage({
           ...data,
-          timestamp: new Date().toLocaleTimeString()
+          timestamp: data.timestamp ? formatTimeHms(data.timestamp) : formatTimeHms(new Date()),
         })
       } catch (err) {
         console.error('WS parse error', err)
