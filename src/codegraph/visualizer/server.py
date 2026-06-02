@@ -148,8 +148,7 @@ def _run_query(
     )
     from codegraph.core.retrieval.pipeline import run_core_retrieval
     from codegraph.core.graph.queries import (
-        trace_path_to_seed,
-        trace_path_ids_to_seed,
+        batch_trace_paths,
         get_subgraph_for_nodes,
     )
     from codegraph.utils.config import parse_signal_weights
@@ -214,6 +213,10 @@ def _run_query(
         for nid, weight in sorted(seeds.seeds.items(), key=lambda x: -x[1])
     ]
 
+    # Batch trace paths for efficiency and to collect all path IDs for the subgraph
+    file_paths = list(dict.fromkeys([r.file_path for r in top_results if r.file_path]))
+    traced_paths = batch_trace_paths(driver, seed_ids, file_paths)
+
     # Add reasoning paths and format as PPREntityResult
     ppr_out = [
         PPREntityResult(
@@ -223,8 +226,8 @@ def _run_query(
             label=r.label,
             file_path=r.file_path,
             score=round(r.score, 5),
-            path=trace_path_to_seed(driver, seed_ids, r.file_path),
-            path_ids=trace_path_ids_to_seed(driver, seed_ids, r.file_path),
+            path=traced_paths.get(r.file_path, {}).get("path_str", "(no path traced)"),
+            path_ids=traced_paths.get(r.file_path, {}).get("path_ids", []),
             line_number=r.line_start,
             line_end=r.line_end,
         )
@@ -236,6 +239,11 @@ def _run_query(
     for r in ppr_results_raw:
         if r.qualified_name:
             all_qnames.append(r.qualified_name)
+    
+    # CRITICAL: Add all intermediate nodes from reasoning paths to ensure they are in subgraph
+    for p in ppr_out:
+        all_qnames.extend(p.path_ids)
+
     all_qnames = list(dict.fromkeys(all_qnames))
 
     subgraph = get_subgraph_for_nodes(driver, all_qnames)

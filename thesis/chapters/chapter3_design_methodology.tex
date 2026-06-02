@@ -9,9 +9,7 @@ Code retrieval for AI agents faces a fundamental tension. The context a language
 
 CodeGraph addresses this tension by combining the two. Lexical methods identify where to begin, a small set of \emph{seed} entities drawn from the task description, and Personalized PageRank (PPR) propagates relevance from those seeds through the code graph, producing a globally ranked result set. Chapter~2 surveyed the underlying algorithms; this chapter shows how CodeGraph configures, combines, and tunes them, with empirical justification for each decision.
 
-The chapter follows the data through the pipeline. \Cref{sec:architecture} introduces the five-stage architecture and its central design principle. CodeGraph is designed to bridge the four research gaps identified in \cref{sec:gaps} through its hybrid, deterministic, and ranked retrieval engine. By using PPR for propagation, it provides globally ranked structural relevance (Gap 1); by combining lexical and entity signals into a unified personalization vector, it treats disparate signals within a single mathematical framework (Gap 2); by avoiding LLMs in the retrieval loop and optimizing the GDS projection, it remains deterministic and computationally cheap (Gap 3); and by evaluating exclusively on the SWE-bench Lite repository-level benchmark, it grounds its design decisions in end-to-end task success (Gap 4).
-
-\Cref{sec:parsing} describes how source code becomes a set of typed entities. \Cref{sec:graph-construction} details how those entities assemble into a weighted property graph. \Cref{sec:seed-selection} translates a natural language task into PPR seed nodes. \Cref{sec:ppr-config} presents the PPR configuration and the rationale for each parameter choice. \Cref{sec:post-processing} covers the post-processing that produces the final output. \Cref{sec:mcp-integration} describes how the pipeline is exposed to AI agents through the Model Context Protocol. \Cref{sec:design-limitations} closes the chapter with the design-level trade-offs and their practical consequences.
+The chapter follows the data through the pipeline. \Cref{sec:architecture} introduces the five-stage architecture and its central design principle. \Cref{sec:parsing} describes how source code becomes a set of typed entities. \Cref{sec:graph-construction} details how those entities assemble into a weighted property graph. \Cref{sec:seed-selection} translates a natural language task into PPR seed nodes. \Cref{sec:ppr-config} presents the PPR configuration and the rationale for each parameter choice. \Cref{sec:post-processing} covers the post-processing that produces the final output. \Cref{sec:mcp-integration} describes how the pipeline is exposed to AI agents through the Model Context Protocol. \Cref{sec:design-limitations} closes the chapter with the design-level trade-offs and their practical consequences.
 
 
 % =============================================================================
@@ -173,7 +171,6 @@ The design principle this example illustrates is \emph{signal amplification}. Se
     \caption[Per-stage computational complexity]{Computational complexity for each pipeline stage. Symbols: $n$ = number of files; $m$ = average file size in tokens; $|V|,|E|$ = graph nodes and edges; $q$ = query length; $t$ = PPR iterations (empirically 6--10); $k$ = result count.}
     \label{tab:stage-complexity}
     \renewcommand{\arraystretch}{1.2}
-    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.0cm}
                                   >{\centering\arraybackslash}p{1.8cm}
                                   >{\raggedright\arraybackslash}X
@@ -182,7 +179,7 @@ The design principle this example illustrates is \emph{signal amplification}. Se
         \rowcolor{black!6}
         \textbf{Stage} & \textbf{Phase} & \textbf{Dominant Operation} & \textbf{Complexity} \\
         \midrule
-        Stage 1: Parsing & Offline & Tree-sitter CST traversal and entity extraction & $O(n \cdot m)$ \\
+        Stage 1: Parsing & Offline & tree-sitter CST traversal and entity extraction & $O(n \cdot m)$ \\
         Stage 2: Graph Construction & Offline & Batched \texttt{UNWIND+MERGE} node/edge writes & $O(|V| + |E|)$ \\
         IDF Reweighting & Online & Edge weight update across all edges & $O(|E|)$ \\
         Stage 3: Seed Selection & Online & BM25 index query and entity lookup & $O(q \cdot |V|)$ \\
@@ -190,10 +187,9 @@ The design principle this example illustrates is \emph{signal amplification}. Se
         Stage 5: Context Delivery & Online & Sort and token budget scan & $O(k \log k)$ \\
         \bottomrule
     \end{tabularx}
-    \end{adjustbox}
 \end{table}
 
-The pipeline degrades gracefully under failure rather than failing hard. A file with a syntax error produces no entities and is consequently absent from the graph. Unresolved imports and ambiguous calls are dropped rather than guessed, trading a small amount of recall for graph precision. If seed selection yields an empty personalization vector (for example, when the task description contains no recognizable identifiers and BM25 matches nothing), the pipeline returns an empty result and reports the failure explicitly. The guiding policy is to prefer returning nothing over returning a misleading result.
+The pipeline degrades gracefully under failure rather than failing hard. A file with a syntax error produces no entities and is simply absent from the graph. Unresolved imports and ambiguous calls are dropped rather than guessed, trading a small amount of recall for graph precision. If seed selection yields an empty personalization vector (for example, when the task description contains no recognizable identifiers and BM25 matches nothing), the pipeline returns an empty result and reports the failure explicitly. The guiding policy is to prefer returning nothing over returning a misleading result.
 
 The following sections examine each stage in detail, beginning with how raw source code is transformed into structured entities.
 
@@ -204,18 +200,17 @@ The following sections examine each stage in detail, beginning with how raw sour
 \section{Source Code Parsing}
 \label{sec:parsing}
 
-Graph-based retrieval requires an explicit representation of which code units exist and how they relate to each other. A Python source file is just text until a parser identifies meaningful units, classes, functions, methods, and the relationships between them. This section describes how CodeGraph uses Tree-sitter to convert source files into a typed entity model that feeds directly into graph construction (\cref{sec:graph-construction}).
+Graph-based retrieval requires an explicit representation of which code units exist and how they relate to each other. A Python source file is just text until a parser identifies meaningful units, classes, functions, methods, and the relationships between them. This section describes how CodeGraph uses tree-sitter to convert source files into a typed entity model that feeds directly into graph construction (\cref{sec:graph-construction}).
 
 The granularity at which entities are extracted shapes both graph size and retrieval quality, so it warrants explicit justification. A file-level model is too coarse: if \texttt{auth.py} contains both \texttt{LoginView.authenticate()} and the unrelated helper \texttt{parse\_user\_agent()}, both collapse into a single node and retrieval cannot separate them. Tracking every AST node is the opposite extreme, local variables and expressions inflate the graph into hundreds of thousands of nodes, PPR convergence slows past ten seconds, and local-scope noise overwhelms the structural signal.
 
-The four-entity model (files, classes, functions, methods) occupies the productive middle ground. It captures the cross-file relationships developers typically reason about, such as the \texttt{authenticate} method calling \texttt{hash\_password}, while keeping the graph small enough for sub-second retrieval. These four units also match how Python code is organized: classes, functions, and methods are the importable and callable components, which is the granularity at which dependency-driven retrieval is most effective. \Cref{tab:entity-granularity} compares the three options across graph size, retrieval speed, and recall.
+The four-entity model (files, classes, functions, methods) occupies the productive middle ground. It captures the cross-file relationships developers actually reason about, such as the \texttt{authenticate} method calling \texttt{hash\_password}, while keeping the graph small enough for sub-second retrieval. These four units also match how Python code is organized: classes, functions, and methods are the importable and callable components, which is the granularity at which dependency-driven retrieval is most effective. \Cref{fig:entity-granularity} compares the three options across graph size, retrieval speed, and recall.
 
 \begin{table}[H]
     \centering
     \caption[Entity granularity options]{Comparison of three entity granularity options. The four-type model achieves the best recall while preserving sub-second query latency. \checkmark\,indicates the selected design.}
-    \label{tab:entity-granularity}
+    \label{fig:entity-granularity}
     \renewcommand{\arraystretch}{1.3}
-    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X
                                   >{\centering\arraybackslash}p{2.2cm}
                                   >{\centering\arraybackslash}p{2.2cm}
@@ -231,17 +226,16 @@ The four-entity model (files, classes, functions, methods) occupies the producti
         \midrule
         \rowcolor[HTML]{FEF2F2}
         Limitation & Cannot distinguish methods within a file &
-           ---  &
+           ,  &
             Too slow; local variable noise overwhelms signal \\
         \bottomrule
     \end{tabularx}
-    \end{adjustbox}
 \end{table}
 
-\subsection{Parsing with Tree-sitter}
+\subsection{Parsing with tree-sitter}
 \label{sec:parsing-treesitter}
 
-CodeGraph employs Tree-sitter for source code parsing, as introduced in \cref{ch:background}. From each Python file, the parser extracts four types of code entities: files, classes, functions, and methods. Each entity receives a \emph{qualified name}, a string that uniquely identifies it within the repository.
+CodeGraph employs tree-sitter for source code parsing, as introduced in \cref{ch:background}. From each Python file, the parser extracts four types of code entities: files, classes, functions, and methods. Each entity receives a \emph{qualified name}, a string that uniquely identifies it within the repository.
 
 \Cref{tab:entity-types} summarizes the four entity types, their key properties, and the qualified name format for each.
 
@@ -250,7 +244,6 @@ CodeGraph employs Tree-sitter for source code parsing, as introduced in \cref{ch
     \caption[Entity types extracted by the parser]{The four entity types extracted from Python source files. The \texttt{qualified\_name} (double-colon separator) uniquely identifies each entity within the repository.}
     \label{tab:entity-types}
     \renewcommand{\arraystretch}{1.3}
-    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.8cm}
                                   >{\raggedright\arraybackslash}p{4.2cm}
                                   >{\raggedright\arraybackslash}X
@@ -277,7 +270,6 @@ CodeGraph employs Tree-sitter for source code parsing, as introduced in \cref{ch
             \texttt{file::Class.method} \\
         \bottomrule
     \end{tabularx}
-    \end{adjustbox}
 \end{table}
 
 The qualified name scheme ensures global uniqueness across the repository. Two files may each define a function named \texttt{process}, but \texttt{models/user.py::process} and \texttt{utils/http.py::process} are distinct nodes in the graph. This identity scheme serves as the primary node key throughout the system for deduplication, lookup, and cross-referencing.
@@ -285,7 +277,7 @@ The qualified name scheme ensures global uniqueness across the repository. Two f
 \subsection{Import Resolution}
 \label{sec:import-resolution}
 
-Import statements declare cross-file dependencies, but Tree-sitter returns only the raw import string; it does not identify which file on disk that string refers to. Import resolution closes this gap, turning each import into an \texttt{IMPORTS} edge between the importing file and its target.
+Import statements declare cross-file dependencies, but tree-sitter returns only the raw import string; it does not identify which file on disk that string refers to. Import resolution closes this gap, turning each import into an \texttt{IMPORTS} edge between the importing file and its target.
 
 The resolver handles three categories of imports:
 \begin{itemize}[leftmargin=*, itemsep=2pt]
@@ -384,11 +376,11 @@ Ambiguous calls, those whose callee name matches multiple definitions, are dropp
 
 Three edge cases are worth calling out because they occur in real-world repositories.
 
-\paragraph{Circular imports.} Python permits circular imports at module level as long as symbols are not accessed at import time. CodeGraph handles them correctly because each file is parsed independently: import statements are recorded without immediate resolution, not followed. The two-pass construction in \cref{sec:two-pass} then creates all \texttt{IMPORTS} edges once every file has been indexed, capturing both directions of a cycle without recursion.
+\paragraph{Circular imports.} Python permits circular imports at module level as long as symbols are not accessed at import time. CodeGraph handles them correctly because each file is parsed independently: import statements are simply recorded, not followed. The two-pass construction in \cref{sec:two-pass} then creates all \texttt{IMPORTS} edges once every file has been indexed, capturing both directions of a cycle without recursion.
 
 \paragraph{Dynamic imports.} \texttt{importlib.import\_module()}, \texttt{\_\_import\_\_()}, and plugin-loading frameworks pass module names as runtime strings, which static analysis cannot resolve. These patterns are silently dropped. In heavily plugin-based codebases, the missing edges noticeably shrink the reachable set for queries that traverse them.
 
-\paragraph{Large files.} Tree-sitter parses in linear time, so a 5{,}000-line file costs only marginally more than five 1{,}000-line files. The bottleneck on large repositories is graph construction (Neo4j writes), not parsing. Files above roughly 10{,}000 lines are rare in well-maintained projects and did not appear in the SWE-bench evaluation set.
+\paragraph{Large files.} tree-sitter parses in linear time, so a 5{,}000-line file costs only marginally more than five 1{,}000-line files. The bottleneck on large repositories is graph construction (Neo4j writes), not parsing. Files above roughly 10{,}000 lines are rare in well-maintained projects and did not appear in the SWE-bench evaluation set.
 
 \Cref{fig:parsing-extraction} shows the full parsing pipeline, from source code through entity extraction to resolved edges. The next stage assembles these entities into a weighted property graph.
 
@@ -465,7 +457,6 @@ Four edge types capture the structural relationships between code entities. \Cre
     \caption[Edge types in the CodeGraph schema]{The four edge types in the code graph. All edges are created with a uniform base weight of 1.0, then overwritten by IDF-based reweighting (\cref{sec:idf-reweighting}) before each PPR computation.}
     \label{tab:edge-types}
     \renewcommand{\arraystretch}{1.3}
-    \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.0cm}
                                   >{\raggedright\arraybackslash}p{3.8cm}
                                   >{\raggedright\arraybackslash}X
@@ -488,7 +479,6 @@ Four edge types capture the structural relationships between code entities. \Cre
             A class extends a parent class & 1.0 \\
         \bottomrule
     \end{tabularx}
-    \end{adjustbox}
 \end{table}
 
 \Cref{fig:graph-schema} shows the schema as an entity-relationship diagram. Together the four node types and four edge types capture the primary structural relationships in a Python codebase: containment, invocation, module dependency, and class inheritance.
@@ -615,7 +605,7 @@ The second pass resolves forward references: a call in file~A may target a funct
 
 \noindent\textbf{Pass 1,  intra-file construction:}
 \begin{enumerate}[leftmargin=*, itemsep=3pt]
-    \item Parse each Python file with Tree-sitter to produce a concrete syntax tree.
+    \item Parse each Python file with tree-sitter to produce a concrete syntax tree.
     \item Extract all entities: \texttt{File}, \texttt{Class}, \texttt{Function}, and \texttt{Method} nodes.
     \item Write entity nodes to Neo4j using batched \texttt{UNWIND+MERGE} operations (idempotent).
     \item Create \texttt{CONTAINS} edges: File $\to$ Class/Function, and Class $\to$ Method.
@@ -1061,7 +1051,7 @@ CodeGraph implements an MCP server that wraps the entire retrieval pipeline as a
     \label{fig:agent-workflow}
 \end{figure}
 
-This workflow integrates naturally into existing agent frameworks that support MCP, including Claude Code, Cursor, and VS~Code Copilot. The agent requires no knowledge of graph algorithms or code parsing; it calls a tool with a task description and receives relevant source code in return.
+This workflow integrates naturally into existing agent frameworks that support MCP, including Claude Code, Cursor, and VS~Code Copilot. The agent requires no knowledge of graph algorithms or code parsing, it simply calls a tool with a task description and receives relevant source code in return.
 
 \subsection{System Prompt and Agent Guidance}
 \label{sec:system-prompt}
@@ -1094,7 +1084,7 @@ Every design involves trade-offs. The decisions described in this chapter, stati
 \section{Chapter Summary}
 \label{sec:design-summary}
 
-This chapter presented the design of the CodeGraph retrieval pipeline. The system transforms a Python repository into a weighted property graph via Tree-sitter parsing and two-pass graph construction, translates a natural language task description into a personalization vector via multi-signal seed selection, ranks all graph nodes by structural relevance via Personalized PageRank, and delivers the top-$k$ results to an AI agent through an MCP server interface.
+This chapter presented the design of the CodeGraph retrieval pipeline. The system transforms a Python repository into a weighted property graph via tree-sitter parsing and two-pass graph construction, translates a natural language task description into a personalization vector via multi-signal seed selection, ranks all graph nodes by structural relevance via Personalized PageRank, and delivers the top-$k$ results to an AI agent through an MCP server interface.
 
 Three organizing principles guided the design decisions described in this chapter. \emph{Parsimony}: CodeGraph performs only static analysis, avoiding the complexity and runtime cost of dynamic analysis, type inference, or execution tracing, accepting known blind spots (dynamic imports, duck-typed calls) in exchange for simplicity and speed. \emph{Composability}: each stage has a well-defined input and output type, so individual components can be improved, replaced, or extended without affecting the rest of the pipeline, as demonstrated by the iterative seed quality improvements in \cref{ch:evaluation}. \emph{Empiricism}: parameter choices, damping factor, top-$k$, signal weights, token budget, were selected based on measured benchmark performance rather than theoretical defaults. Together, these principles produce a system that is easy to reason about, straightforward to extend, and grounded in observed rather than assumed behavior.
 

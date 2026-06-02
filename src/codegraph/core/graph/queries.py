@@ -427,6 +427,69 @@ def _row_to_node_info_with_rel(record: Any) -> NodeInfoWithRel:
     )
 
 
+def batch_trace_paths(
+    driver: Driver,
+    seed_ids: list[int],
+    file_paths: list[str],
+    max_hops: int = 6,
+) -> dict[str, dict]:
+    """Find shortest paths for multiple files in one query."""
+    if not file_paths:
+        return {}
+
+    results: dict[str, dict] = {
+        fp: {"path_str": "(no path traced)", "path_ids": []} for fp in file_paths
+    }
+
+    try:
+        with driver.session() as session:
+            # 1. Identify direct seeds
+            direct_res = session.run(
+                "MATCH (f:File) WHERE f.file_path IN $file_paths AND id(f) IN $seed_ids RETURN f.file_path AS fp",
+                file_paths=file_paths,
+                seed_ids=seed_ids,
+            )
+            direct_seeds = {r["fp"] for r in direct_res}
+            for fp in direct_seeds:
+                results[fp] = {"path_str": "direct seed", "path_ids": []}
+
+            targets_to_trace = [fp for fp in file_paths if fp not in direct_seeds]
+            if not targets_to_trace:
+                return results
+
+            # 2. Batch shortest path
+            query_res = session.run(
+                f"""
+                UNWIND $file_paths AS target_path
+                MATCH (seed) WHERE id(seed) IN $seed_ids
+                MATCH (target:File {{file_path: target_path}})
+                MATCH p = shortestPath((seed)-[*..{max_hops}]-(target))
+                WITH target_path, p
+                ORDER BY length(p) ASC
+                WITH target_path, head(collect(p)) AS p
+                RETURN target_path,
+                       [node IN nodes(p) | node.qualified_name] AS path_ids,
+                       [node IN nodes(p) | coalesce(node.name, node.file_path, '')] AS node_names,
+                       [rel IN relationships(p) | type(rel)] AS rel_types
+                """,
+                file_paths=targets_to_trace,
+                seed_ids=seed_ids,
+            )
+            for record in query_res:
+                fp = record["target_path"]
+                results[fp] = {
+                    "path_str": _format_path(record["node_names"], record["rel_types"]),
+                    "path_ids": record["path_ids"],
+                }
+    except Exception as exc:
+        logger.debug("batch_trace_paths failed: %s", exc)
+        for fp in file_paths:
+            if results[fp]["path_str"] == "(no path traced)":
+                results[fp]["path_str"] = "(trace error)"
+
+    return results
+
+
 def trace_path_to_seed(
     driver: Driver,
     seed_ids: list[int],
