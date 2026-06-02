@@ -9,7 +9,6 @@ Start via: codegraph visualize
 # annotations into strings, which breaks resolution for module-level classes.
 
 import logging
-import sys
 import asyncio
 import threading
 from pathlib import Path
@@ -100,39 +99,15 @@ class SubgraphResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _fetch_seed_names(driver: Driver, seed_ids: list[int]) -> dict[int, str]:
-    """Return {node_id: display_name} for a list of seed node IDs."""
-    names: dict[int, str] = {}
-    with driver.session() as session:
-        result = session.run(
-            "MATCH (n) WHERE id(n) IN $ids RETURN id(n) AS nid, "
-            "coalesce(n.name, n.file_path, '') AS name",
-            ids=seed_ids,
-        )
-        for r in result:
-            names[r["nid"]] = r["name"] or ""
-    return names
+def _bm25_file_results(driver: Driver, task: str, top_k: int) -> list[BM25FileResult]:
+    """Return file-level BM25 baseline ranks for PPR comparison."""
+    from evaluation.baselines import BM25Baseline
 
-
-def _fetch_seed_qualified_names(driver: Driver, seed_ids: list[int]) -> dict[int, str]:
-    """Return {node_id: qualified_name} for seed nodes."""
-    qnames: dict[int, str] = {}
-    with driver.session() as session:
-        result = session.run(
-            "MATCH (n) WHERE id(n) IN $ids RETURN id(n) AS nid, "
-            "coalesce(n.qualified_name, n.file_path, '') AS qname",
-            ids=seed_ids,
-        )
-        for r in result:
-            qnames[r["nid"]] = r["qname"] or ""
-    return qnames
-
-
-def _add_evaluation_to_path() -> None:
-    """Ensure the project root (containing evaluation/) is on sys.path."""
-    project_root = str(Path(__file__).parent.parent.parent.parent)
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
+    files = BM25Baseline().run(driver, task, k=top_k)
+    return [
+        BM25FileResult(rank=rank, file_path=fp)
+        for rank, fp in enumerate(files, start=1)
+    ]
 
 
 def _run_query(
@@ -198,7 +173,9 @@ def _run_query(
     top_results = deduped_results[:top_k]
 
     seed_ids = list(seeds.seeds.keys())
-    seed_names = _fetch_seed_names(driver, seed_ids)
+    from codegraph.utils.graph_helpers import fetch_seed_names
+
+    seed_names = fetch_seed_names(driver, seed_ids)
 
     # Format seed info for the UI using preserved metadata
     seeds_out = [
@@ -214,8 +191,9 @@ def _run_query(
     ]
 
     # Batch trace paths for efficiency and to collect all path IDs for the subgraph
-    file_paths = list(dict.fromkeys([r.file_path for r in top_results if r.file_path]))
-    traced_paths = batch_trace_paths(driver, seed_ids, file_paths)
+    # Trace to qualified_name for precision (explain exactly why THIS function was picked)
+    target_qnames = [r.qualified_name for r in top_results if r.qualified_name]
+    traced_paths = batch_trace_paths(driver, seed_ids, target_qnames)
 
     # Add reasoning paths and format as PPREntityResult
     ppr_out = [
@@ -226,8 +204,8 @@ def _run_query(
             label=r.label,
             file_path=r.file_path,
             score=round(r.score, 5),
-            path=traced_paths.get(r.file_path, {}).get("path_str", "(no path traced)"),
-            path_ids=traced_paths.get(r.file_path, {}).get("path_ids", []),
+            path=traced_paths.get(r.qualified_name, {}).get("path_str", "(no path traced)"),
+            path_ids=traced_paths.get(r.qualified_name, {}).get("path_ids", []),
             line_number=r.line_start,
             line_end=r.line_end,
         )
@@ -236,13 +214,10 @@ def _run_query(
 
     # Step 3: Build D3 subgraph
     all_qnames: list[str] = [m["qname"] for m in seeds.metadata.values()]
-    for r in ppr_results_raw:
-        if r.qualified_name:
-            all_qnames.append(r.qualified_name)
-    
-    # CRITICAL: Add all intermediate nodes from reasoning paths to ensure they are in subgraph
-    for p in ppr_out:
-        all_qnames.extend(p.path_ids)
+    for r in ppr_out:
+        all_qnames.append(r.qualified_name)
+        # CRITICAL: Add all intermediate nodes from reasoning paths to ensure they are in subgraph
+        all_qnames.extend(r.path_ids)
 
     all_qnames = list(dict.fromkeys(all_qnames))
 
@@ -251,6 +226,7 @@ def _run_query(
     ppr_score_by_qname = {
         r.qualified_name: r.score for r in ppr_results_raw if r.qualified_name
     }
+    path_ids_by_qname = {p.qualified_name: p.path_ids for p in ppr_out}
     seed_weight_by_qname = {
         seeds.metadata[nid]["qname"]: weight for nid, weight in seeds.seeds.items()
     }
@@ -261,6 +237,7 @@ def _run_query(
             "ppr_score": round(ppr_score_by_qname.get(node["id"], 0.0), 5),
             "is_seed": node["id"] in seed_weight_by_qname,
             "seed_weight": round(seed_weight_by_qname.get(node["id"], 0.0), 4),
+            "reasoning_path": path_ids_by_qname.get(node["id"], []),
             "line_number": node.get("line_number", 0),
             "line_end": node.get("line_end", 0),
         }
@@ -270,7 +247,7 @@ def _run_query(
     return QueryResponse(
         seeds=seeds_out,
         ppr_results=ppr_out,
-        bm25_results=[],  # Removed BM25 comparison as per user request
+        bm25_results=_bm25_file_results(driver, task, top_k),
         graph={"nodes": annotated_nodes, "edges": subgraph["edges"]},
         damping_factor=damping_factor,
         top_k=top_k,
@@ -321,13 +298,13 @@ def _update_project_history(raw_config: dict, target_path: str, url: str | None 
     
     # 1. Full deduplication: remove any existing entry pointing to the same physical folder
     # We use list comprehension with Path.resolve() for safety
-    def get_abs(p):
-        try:
-            return str(Path(p).resolve())
-        except Exception:
-            return p
+    from codegraph.utils.paths import resolve_absolute_path
 
-    history = [h for h in history if get_abs(h.get("path", "")) != abs_target]
+    history = [
+        h
+        for h in history
+        if resolve_absolute_path(h.get("path", "")) != abs_target
+    ]
     
     # 2. Add new entry to the top
     history.insert(0, {
@@ -361,14 +338,10 @@ def create_app(
         cleaned_history = []
         seen_abs = set()
         
-        def get_abs(p):
-            try:
-                return str(Path(p).resolve())
-            except Exception:
-                return p
+        from codegraph.utils.paths import resolve_absolute_path
 
         for item in history:
-            abs_p = get_abs(item.get("path", ""))
+            abs_p = resolve_absolute_path(item.get("path", ""))
             if abs_p not in seen_abs:
                 seen_abs.add(abs_p)
                 cleaned_history.append(item)
@@ -528,7 +501,8 @@ def create_app(
         import shutil
 
         try:
-            full_path = Path(project_root) / file_path
+            active_root = raw_config.get("project_root", project_root)
+            full_path = Path(active_root) / file_path
             if not full_path.exists():
                 raise HTTPException(status_code=404, detail="File not found")
 
