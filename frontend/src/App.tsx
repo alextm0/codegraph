@@ -11,6 +11,7 @@ export default function App() {
   const [baseGraph, setBaseGraph] = useState<GraphData | null>(null)
   const [projectHistory, setProjectHistory] = useState<ProjectHistoryItem[]>([])
   const [graphStats, setGraphStats] = useState<GraphStats | null>(null)
+  const [focusGraph, setFocusGraph] = useState<GraphData | null>(null)
 
   const refreshGraph = useCallback(() => {
     getBaseGraph().then(setBaseGraph).catch(err => console.error('Failed to fetch base graph', err))
@@ -27,6 +28,7 @@ export default function App() {
 
   const handleQueryResult = useCallback((result: QueryResponse) => {
     setQueryResult(result)
+    setFocusGraph(null)
     setSelectedNode(null)
     if (result.git_info) setGitInfo(result.git_info)
   }, [])
@@ -36,6 +38,8 @@ export default function App() {
       <Layout
         queryResult={queryResult}
         baseGraph={baseGraph}
+        focusGraph={focusGraph}
+        onFocusGraph={setFocusGraph}
         selectedNode={selectedNode}
         gitInfo={gitInfo}
         projectHistory={projectHistory}

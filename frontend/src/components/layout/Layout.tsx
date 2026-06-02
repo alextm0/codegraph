@@ -16,6 +16,8 @@ import ErrorBoundary from '../ErrorBoundary'
 interface LayoutProps {
   queryResult: QueryResponse | null
   baseGraph: GraphData | null
+  focusGraph: GraphData | null
+  onFocusGraph: (graph: GraphData | null) => void
   selectedNode: GraphNode | null
   gitInfo?: { repo: string; commit: string }
   projectHistory?: ProjectHistoryItem[]
@@ -28,6 +30,8 @@ interface LayoutProps {
 export default function Layout({
   queryResult,
   baseGraph,
+  focusGraph,
+  onFocusGraph,
   onQueryResult,
   onNodeSelect,
   selectedNode,
@@ -44,15 +48,21 @@ export default function Layout({
   const { width: rightPanelWidth, handleMouseDown: handleRightMouseDown } =
     useResizablePanel(380, 250, 600, 'left')
 
-  const { nodes, edges, loading: graphLoading, isDatabaseEmpty } = useGraphData(queryResult, baseGraph)
+  const { nodes, edges, loading: graphLoading, isDatabaseEmpty } = useGraphData(
+    queryResult, baseGraph, focusGraph,
+  )
   const wsState = useWebSocket()
   const { lastMessage } = wsState
+
+  const rebuildActive =
+    lastMessage?.type === 'rebuild_started' || lastMessage?.type === 'rebuild_progress'
 
   useEffect(() => {
     if (lastMessage?.type === 'rebuild_complete' && onGraphRefresh) {
       onGraphRefresh()
+      onFocusGraph(null)
     }
-  }, [lastMessage, onGraphRefresh])
+  }, [lastMessage, onGraphRefresh, onFocusGraph])
 
   const seeds       = queryResult?.seeds ?? []
   const pprResults  = queryResult?.ppr_results ?? []
@@ -107,6 +117,8 @@ export default function Layout({
             projectHistory={projectHistory}
             isDatabaseEmpty={isDatabaseEmpty}
             onIndexed={onGraphRefresh}
+            rebuildActive={rebuildActive}
+            rebuildMessage={lastMessage}
           />
 
           {/* Loading overlay */}
@@ -175,8 +187,9 @@ export default function Layout({
             <ErrorBoundary fallback={<RightPanelError onClose={() => onNodeSelect(null)} />}>
               <RightPanel
                 selectedNode={selectedNode}
-                onClose={() => onNodeSelect(null)}
+                onClose={() => { onNodeSelect(null); onFocusGraph(null) }}
                 onNodeSelect={onNodeSelect}
+                onDepsGraph={onFocusGraph}
                 width={rightPanelWidth}
                 seeds={seeds}
               />

@@ -5,6 +5,7 @@ import type { GraphNode } from '../../types/api'
 import { nodeColor, edgeColor } from './graphHelpers'
 
 import { initializeProject, ProjectHistoryItem } from '../../api/client'
+import type { WSStatus } from '../../hooks/useWebSocket'
 
 interface GraphCanvasProps {
   nodes: D3Node[]
@@ -16,6 +17,8 @@ interface GraphCanvasProps {
   projectHistory?: ProjectHistoryItem[]
   isDatabaseEmpty?: boolean
   onIndexed?: () => void
+  rebuildActive?: boolean
+  rebuildMessage?: WSStatus | null
 }
 
 const EDGE_TYPES = ['CALLS', 'IMPORTS', 'CONTAINS', 'INHERITS_FROM'] as const
@@ -66,14 +69,34 @@ function moveTooltip(tt: HTMLDivElement, e: MouseEvent) {
 function hideTooltip(tt: HTMLDivElement) { tt.style.display = 'none' }
 
 /* ── Main component ───────────────────────────────────────── */
+function rebuildStatusLabel(msg: WSStatus | null | undefined): string {
+  if (!msg || msg.type !== 'rebuild_progress') return 'Indexing…'
+  if (msg.stage === 'parsing') {
+    const n = msg.files_parsed ?? 0
+    const t = msg.files_total ?? '?'
+    const file = msg.current_file ? ` · ${msg.current_file}` : ''
+    return `Parsing ${n}/${t}${file}`
+  }
+  return `Building · ${msg.node_count ?? 0} nodes · ${msg.edge_count ?? 0} edges`
+}
+
 export default function GraphCanvas({
   nodes, edges, onNodeSelect, selectedNode,
   dampingFactor = 0.70, topK = 30, projectHistory = [],
   isDatabaseEmpty = false,
   onIndexed,
+  rebuildActive = false,
+  rebuildMessage = null,
 }: GraphCanvasProps) {
   const [initError, setInitError] = useState<string | null>(null)
   const [indexing, setIndexing] = useState(false)
+  const isIndexing = indexing || rebuildActive
+  const indexLabel = rebuildActive ? rebuildStatusLabel(rebuildMessage) : 'Index Repository'
+
+  useEffect(() => {
+    if (!rebuildActive) setIndexing(false)
+  }, [rebuildActive])
+
   const svgRef   = useRef<SVGSVGElement>(null)
   const simRef   = useRef<d3.Simulation<D3Node, D3Edge> | null>(null)
   const zoomRef  = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
@@ -515,11 +538,9 @@ export default function GraphCanvas({
                         setInitError(null)
                         setIndexing(true)
                         initializeProject(proj.url || proj.path)
-                          .then(() => onIndexed?.())
-                          .catch(err => setInitError(String(err)))
-                          .finally(() => setIndexing(false))
+                          .catch(err => { setInitError(String(err)); setIndexing(false) })
                       }}
-                      disabled={indexing}
+                      disabled={isIndexing}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -560,9 +581,8 @@ export default function GraphCanvas({
               setInitError(null)
               setIndexing(true)
               initializeProject(target)
-                .then(() => onIndexed?.())
-                .catch(err => setInitError(String(err)))
-                .finally(() => {
+                .catch(err => {
+                  setInitError(String(err))
                   setIndexing(false)
                   if (btn) {
                     btn.disabled = false
@@ -575,8 +595,8 @@ export default function GraphCanvas({
                 placeholder="e.g., . or https://github.com/user/repo"
                 style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', marginBottom: 16, fontFamily: 'var(--font-mono)', fontSize: 11 }}
               />
-              <button type="submit" disabled={indexing} style={{ width: '100%', padding: '10px', background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontWeight: 600, cursor: 'pointer', opacity: indexing ? 0.6 : 1 }}>
-                {indexing ? 'Indexing…' : 'Index Repository'}
+              <button type="submit" disabled={isIndexing} style={{ width: '100%', padding: '10px', background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontWeight: 600, cursor: 'pointer', opacity: isIndexing ? 0.6 : 1 }}>
+                {isIndexing ? indexLabel : 'Index Repository'}
               </button>
             </form>
             {initError && (

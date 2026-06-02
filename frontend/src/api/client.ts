@@ -92,3 +92,14 @@ export async function getDependencies(
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+export async function getDependenciesGraph(
+  entity: string,
+  direction: 'upstream' | 'downstream' | 'both',
+  depth: number = 1,
+): Promise<{ graph: import('../types/api').GraphData }> {
+  const params = new URLSearchParams({ entity, direction, depth: String(depth) })
+  const res = await fetch(`${BASE}/api/dependencies/graph?${params}`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}

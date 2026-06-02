@@ -17,6 +17,10 @@ export default function StatusBar({ wsState, nodeCount, edgeCount, graphStats }:
   const syncMsg = lastMessage
     ? lastMessage.type === 'file_changed'
       ? `incremental update: ${lastMessage.path?.split('/').pop()}`
+      : lastMessage.type === 'rebuild_progress'
+      ? lastMessage.stage === 'parsing'
+        ? `parsing ${lastMessage.files_parsed ?? 0}/${lastMessage.files_total ?? '?'} ${lastMessage.current_file ?? ''}`.trim()
+        : `building graph · ${lastMessage.node_count ?? 0} nodes · ${lastMessage.edge_count ?? 0} edges`
       : lastMessage.type === 'rebuild_complete'
       ? `graph synced: ${lastMessage.timestamp}`
       : lastMessage.type === 'rebuild_error'

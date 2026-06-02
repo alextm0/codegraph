@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 
 export interface WSStatus {
-  type: 'file_changed' | 'rebuild_started' | 'rebuild_complete' | 'rebuild_error'
+  type: 'file_changed' | 'rebuild_started' | 'rebuild_progress' | 'rebuild_complete' | 'rebuild_error'
   path?: string
   detail?: string
+  stage?: 'parsing' | 'building'
+  files_parsed?: number
+  files_total?: number
+  current_file?: string
+  node_count?: number
+  edge_count?: number
   timestamp: string
 }
 

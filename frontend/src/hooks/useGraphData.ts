@@ -9,11 +9,15 @@ interface GraphData {
   isDatabaseEmpty: boolean
 }
 
-export function useGraphData(response: QueryResponse | null, baseGraph: ApiGraphData | null): GraphData {
+export function useGraphData(
+  response: QueryResponse | null,
+  baseGraph: ApiGraphData | null,
+  focusGraph: ApiGraphData | null = null,
+): GraphData {
   const nodeCacheRef = useRef<Map<string, D3Node>>(new Map())
 
   return useMemo(() => {
-    const activeGraph = response?.graph || baseGraph
+    const activeGraph = focusGraph ?? response?.graph ?? baseGraph
     const isDatabaseEmpty = !baseGraph || (baseGraph.nodes.length === 0 && !response)
 
     if (!activeGraph) return { nodes: [], edges: [], loading: false, isDatabaseEmpty }
@@ -43,6 +47,6 @@ export function useGraphData(response: QueryResponse | null, baseGraph: ApiGraph
     }))
 
     return { nodes: nextNodes, edges: edges, loading: false, isDatabaseEmpty }
-    }, [response, baseGraph])
+    }, [response, baseGraph, focusGraph])
     }
 

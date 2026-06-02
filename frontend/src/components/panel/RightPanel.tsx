@@ -1,17 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
-import { getNodeDetail, openInIDE, getDependencies } from '../../api/client'
-import type { GraphNode, NodeDetailResponse, NodeRelation, SeedInfo } from '../../types/api'
+import { getNodeDetail, openInIDE, getDependencies, getDependenciesGraph } from '../../api/client'
+import type { GraphData, GraphNode, NodeDetailResponse, NodeRelation, SeedInfo } from '../../types/api'
 
 interface RightPanelProps {
   selectedNode: GraphNode | null
   onClose: () => void
   onNodeSelect: (node: GraphNode | null) => void
+  onDepsGraph?: (graph: GraphData) => void
   width?: number
   seeds?: SeedInfo[]
 }
 
 export default function RightPanel({
-  selectedNode, onClose, onNodeSelect, width = 380, seeds = [],
+  selectedNode, onClose, onNodeSelect, onDepsGraph, width = 380, seeds = [],
 }: RightPanelProps) {
   const [detail, setDetail] = useState<NodeDetailResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -206,8 +207,12 @@ export default function RightPanel({
               disabled={depsLoading}
               onClick={() => {
                 setDepsLoading(true)
-                getDependencies(selectedNode.name, dir, 1)
-                  .then(res => {
+                const entityId = selectedNode.id
+                Promise.all([
+                  getDependencies(entityId, dir, 1),
+                  getDependenciesGraph(entityId, dir, 1),
+                ])
+                  .then(([res, graphRes]) => {
                     setExtraRelations(
                       res.results.map(r => ({
                         qualified_name: r.qualified_name,
@@ -217,6 +222,7 @@ export default function RightPanel({
                         relationship: r.relationship_type,
                       })),
                     )
+                    onDepsGraph?.(graphRes.graph)
                   })
                   .catch(console.error)
                   .finally(() => setDepsLoading(false))
