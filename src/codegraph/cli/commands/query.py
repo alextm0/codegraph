@@ -14,6 +14,11 @@ from codegraph.utils.logging import setup_logging
 from codegraph.cli.commands._shared import console, logger
 
 
+def _emit_trace_error(task: str, message: str) -> None:
+    """Write structured trace error JSON to stdout (no Rich output)."""
+    sys.stdout.write(json.dumps({"task": task, "error": message}, indent=2) + "\n")
+
+
 def query_helper(
     config_path: Path,
     task: str,
@@ -39,6 +44,9 @@ def query_helper(
     driver = db_manager.get_driver()
     try:
         if not db_manager.is_connected():
+            if trace:
+                _emit_trace_error(task, "Cannot reach Neo4j.")
+                return
             console.print("[bold red]ERROR:[/bold red] Cannot reach Neo4j.")
             sys.exit(1)
 
@@ -63,73 +71,53 @@ def query_helper(
 
         gds = create_gds_client(driver)
 
-        console.print(f"Running retrieval for: [bold cyan]{task!r}[/bold cyan]")
-        if entities:
-            console.print(f"  Seed entities: [yellow]{entities}[/yellow]")
-        if current_file:
-            console.print(f"  Current file:  [blue]{current_file}[/blue]")
-        console.print()
+        if not trace:
+            console.print(f"Running retrieval for: [bold cyan]{task!r}[/bold cyan]")
+            if entities:
+                console.print(f"  Seed entities: [yellow]{entities}[/yellow]")
+            if current_file:
+                console.print(f"  Current file:  [blue]{current_file}[/blue]")
+            console.print()
+
+        def _run_trace() -> None:
+            core = run_core_retrieval(
+                driver=driver,
+                gds=gds,
+                task_description=task,
+                mentioned_entities=entities,
+                current_file=current_file,
+                ppr_config=ppr_config,
+                signal_weights=signal_weights or None,
+                exclude_seed_paths=exclude_seed_paths or None,
+            )
+            if not core:
+                _emit_trace_error(
+                    task,
+                    "No results found. Is the graph built? Run: codegraph rebuild",
+                )
+                return
+            trace_data = build_retrieval_trace(
+                driver, core, ppr_config, task, top_k=ppr_config.top_k
+            )
+            sys.stdout.write(json.dumps(trace_data, indent=2) + "\n")
+
+        if trace:
+            _run_trace()
+            return
 
         with console.status("[bold green]Executing retrieval pipeline..."):
-            if trace:
-                core = run_core_retrieval(
-                    driver=driver,
-                    gds=gds,
-                    task_description=task,
-                    mentioned_entities=entities,
-                    current_file=current_file,
-                    ppr_config=ppr_config,
-                    signal_weights=signal_weights or None,
-                    exclude_seed_paths=exclude_seed_paths or None,
-                )
-                if not core:
-                    console.print(
-                        "[yellow]No results found. Is the graph built? Run: codegraph rebuild[/yellow]"
-                    )
-                    return
-                trace_data = build_retrieval_trace(
-                    driver, core, ppr_config, task, top_k=ppr_config.top_k
-                )
-                console.print(json.dumps(trace_data, indent=2))
-                from codegraph.core.retrieval.post_processing import format_context
-
-                results = format_context(
-                    core.ppr_results, project_root_str, effective_budget
-                )
-                if not results and core.ppr_results:
-                    from codegraph.utils.graph_helpers import verify_graph_project_root
-
-                    aligned, sample = verify_graph_project_root(
-                        driver, project_root_str
-                    )
-                    if not aligned:
-                        console.print(
-                            "[yellow]PPR returned results but source files are unreadable.[/yellow]"
-                        )
-                        console.print(
-                            f"  project_root: [blue]{project_root_str}[/blue]"
-                        )
-                        console.print(
-                            f"  sample missing file: [dim]{sample}[/dim]"
-                        )
-                        console.print(
-                            "  [dim]Fix: set project_root to the indexed repo and run "
-                            "[bold]codegraph rebuild[/bold][/dim]"
-                        )
-                        return
-            else:
-                results = run_retrieval_pipeline(
-                    driver=driver,
-                    gds=gds,
-                    task_description=task,
-                    project_root=project_root_str,
-                    mentioned_entities=entities,
-                    current_file=current_file,
-                    ppr_config=ppr_config,
-                    signal_weights=signal_weights or None,
-                    token_budget=effective_budget,
-                    exclude_seed_paths=exclude_seed_paths or None,
-                )
+            results = run_retrieval_pipeline(
+                driver=driver,
+                gds=gds,
+                task_description=task,
+                project_root=project_root_str,
+                mentioned_entities=entities,
+                current_file=current_file,
+                ppr_config=ppr_config,
+                signal_weights=signal_weights or None,
+                token_budget=effective_budget,
+                exclude_seed_paths=exclude_seed_paths or None,
+            )
 
         if not results:
             if json_out:

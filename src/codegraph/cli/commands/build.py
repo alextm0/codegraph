@@ -151,20 +151,16 @@ def rebuild_helper(
                     }
                 )
 
-        counts = build_graph(
+        build_graph(
             driver,
             all_entities,
             progress_callback=graph_progress,
         )
 
-        total_nodes = sum(
-            v for k, v in counts.items() if k in ("File", "Function", "Class", "Method")
-        )
-        total_edges = sum(
-            v
-            for k, v in counts.items()
-            if k in ("CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM")
-        )
+        from codegraph.core.graph.queries import count_edges_by_type, count_nodes_by_label
+
+        total_nodes = sum(count_nodes_by_label(driver).values())
+        total_edges = sum(count_edges_by_type(driver).values())
         _write_build_timestamp(config_path)
         console.print(
             f"\n[bold green]Graph rebuild complete:[/bold green] {total_nodes} nodes, {total_edges} edges."
