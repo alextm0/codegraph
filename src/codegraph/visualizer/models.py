@@ -32,6 +32,9 @@ class PPREntityResult(BaseModel):
     path_ids: list[str] = []
     line_number: int = 0
     line_end: int = 0
+    seed_qualified_names: list[str] = []
+    seed_sources: list[str] = []
+    contribution: str = "graph"
 
 
 class BM25FileResult(BaseModel):

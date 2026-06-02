@@ -60,9 +60,9 @@ def run_query(
 ) -> QueryResponse:
     """Run PPR + BM25 + subgraph, return a QueryResponse."""
     from codegraph.core.graph.ppr import PPRConfig, create_gds_client
-    from codegraph.core.graph.queries import batch_trace_paths, get_subgraph_for_nodes
+    from codegraph.core.graph.queries import get_subgraph_for_nodes
+    from codegraph.core.retrieval.explanations import build_explained_results
     from codegraph.core.retrieval.pipeline import run_core_retrieval
-    from codegraph.core.retrieval.post_processing import _deduplicate_file_entities
     from codegraph.utils.config import parse_signal_weights
     from codegraph.utils.graph_helpers import fetch_seed_names
 
@@ -100,40 +100,44 @@ def run_query(
         )
 
     seeds = core_result.seeds
-    deduped_results = _deduplicate_file_entities(core_result.ppr_results)
-    top_results = deduped_results[:top_k]
     seed_ids = list(seeds.seeds.keys())
     seed_names = fetch_seed_names(driver, seed_ids)
+
+    def _signal_label(source: str) -> str:
+        if source == "entity_match":
+            return "entity"
+        if source == "current_file":
+            return "file"
+        return "bm25"
 
     seeds_out = [
         SeedInfo(
             id=seeds.metadata[nid]["qname"],
             name=seed_names.get(nid, str(nid)),
-            signal="entity"
-            if seeds.metadata[nid]["source"] == "entity_match"
-            else "bm25",
+            signal=_signal_label(seeds.metadata[nid]["source"]),
             weight=round(weight, 4),
         )
         for nid, weight in sorted(seeds.seeds.items(), key=lambda x: -x[1])
     ]
 
-    target_qnames = [r.qualified_name for r in top_results if r.qualified_name]
-    traced_paths = batch_trace_paths(driver, seed_ids, target_qnames)
-
+    explained = build_explained_results(driver, core_result, top_k=top_k)
     ppr_out = [
         PPREntityResult(
-            rank=rank,
-            qualified_name=r.qualified_name,
-            name=r.name,
-            label=r.label,
-            file_path=r.file_path,
-            score=round(r.score, 5),
-            path=traced_paths.get(r.qualified_name, {}).get("path_str", "(no path traced)"),
-            path_ids=traced_paths.get(r.qualified_name, {}).get("path_ids", []),
-            line_number=r.line_start,
-            line_end=r.line_end,
+            rank=item.rank,
+            qualified_name=item.qualified_name,
+            name=item.name,
+            label=item.label,
+            file_path=item.file_path,
+            score=round(item.ppr_score, 5),
+            path=item.reasoning_path,
+            path_ids=list(item.path_ids),
+            line_number=item.line_start,
+            line_end=item.line_end,
+            seed_qualified_names=list(item.seed_qualified_names),
+            seed_sources=list(item.seed_sources),
+            contribution=item.contribution,
         )
-        for rank, r in enumerate(top_results, start=1)
+        for item in explained
     ]
 
     all_qnames: list[str] = [m["qname"] for m in seeds.metadata.values()]
