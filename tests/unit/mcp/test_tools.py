@@ -245,7 +245,10 @@ class TestQueryDependenciesImpl:
             relationship_type="CALLS",
         )
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]),
+        ):
             output = query_dependencies_impl("login", "downstream", 1, state)
 
         payload = json.loads(output)
@@ -256,7 +259,13 @@ class TestQueryDependenciesImpl:
     def test_value_error_returns_error_json(self):
         state = _make_state()
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", side_effect=ValueError("Invalid direction")):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch(
+                "codegraph.mcp.tools.query_entity_dependencies",
+                side_effect=ValueError("Invalid direction"),
+            ),
+        ):
             output = query_dependencies_impl("login", "sideways", 1, state)
 
         payload = json.loads(output)
@@ -266,7 +275,13 @@ class TestQueryDependenciesImpl:
     def test_generic_exception_returns_error_with_detail(self):
         state = _make_state()
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", side_effect=RuntimeError("DB timeout")):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch(
+                "codegraph.mcp.tools.query_entity_dependencies",
+                side_effect=RuntimeError("DB timeout"),
+            ),
+        ):
             output = query_dependencies_impl("login", "both", 1, state)
 
         payload = json.loads(output)
@@ -277,7 +292,10 @@ class TestQueryDependenciesImpl:
     def test_empty_result_returns_hint(self):
         state = _make_state()
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[]),
+        ):
             output = query_dependencies_impl("ghost", "both", 1, state)
 
         payload = json.loads(output)
@@ -296,7 +314,10 @@ class TestQueryDependenciesImpl:
             relationship_type="CALLS",
         )
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]),
+        ):
             output = query_dependencies_impl("login", "downstream", 1, state)
 
         payload = json.loads(output)
