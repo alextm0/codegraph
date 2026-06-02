@@ -18,7 +18,9 @@ from codegraph.utils.logging import setup_logging
 from codegraph.cli.commands._shared import _initialize_db, console
 
 
-def explain_helper(config_path: Path, task: str, top_k: int = 10) -> None:
+def explain_helper(
+    config_path: Path, task: str, top_k: int = 10, trace: bool = False
+) -> None:
     """Show seeds, PPR scores, and graph paths explaining why each file was returned."""
     setup_logging(level=logging.WARNING)
 
@@ -61,6 +63,16 @@ def explain_helper(config_path: Path, task: str, top_k: int = 10) -> None:
     seed_ids = list(core_result.seeds.seeds.keys())
     seed_names = fetch_seed_names(driver, seed_ids)
     _print_seeds_table(core_result.seeds, seed_names)
+
+    if trace:
+        import json
+        from codegraph.core.retrieval.trace import build_retrieval_trace
+
+        trace_data = build_retrieval_trace(
+            driver, core_result, ppr_config, task, top_k=top_k
+        )
+        console.print(json.dumps(trace_data, indent=2))
+        return
 
     explained = build_explained_results(
         driver, core_result, top_k=top_k, dedupe_by="file"

@@ -201,6 +201,9 @@ def explain(
     ctx: typer.Context,
     task: str = typer.Argument(..., help="Task description to explain retrieval for"),
     top_k: int = typer.Option(10, "--top-k", "-k", help="Number of files to explain"),
+    trace: bool = typer.Option(
+        False, "--trace", help="Emit structured retrieval trace as JSON"
+    ),
 ) -> None:
     """
     Explain why PPR returned specific files for a task — shows seeds and reasoning paths.
@@ -214,7 +217,7 @@ def explain(
             "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
         )
         raise typer.Exit(1)
-    explain_helper(config_path, task, top_k)
+    explain_helper(config_path, task, top_k, trace=trace)
 
 
 @app.command()
