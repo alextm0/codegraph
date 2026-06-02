@@ -44,5 +44,19 @@ class TestPathTracing(unittest.TestCase):
         # Verify
         self.assertEqual(path_ids, [])
 
+    def test_trace_path_ids_to_seed_error(self):
+        # Setup mock driver and session to raise an exception
+        mock_driver = MagicMock()
+        mock_driver.session.side_effect = Exception("Database error")
+        
+        seed_ids = [1, 2]
+        file_path = "target_file.py"
+        
+        # Execute
+        path_ids = trace_path_ids_to_seed(mock_driver, seed_ids, file_path)
+        
+        # Verify
+        self.assertEqual(path_ids, [])
+
 if __name__ == "__main__":
     unittest.main()
