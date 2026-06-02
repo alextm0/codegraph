@@ -75,6 +75,7 @@ def register_routes(
             from codegraph.utils.config import save_raw_config
 
             ctx.raw_config["project_root"] = target_path
+            ctx.project_root = abs_target_path
             update_project_history(
                 ctx.raw_config,
                 target_path,
@@ -251,7 +252,9 @@ def register_routes(
             from codegraph.core.graph.queries import get_full_graph
 
             active_driver = _active_driver()
-            return get_full_graph(active_driver)
+            from codegraph.visualizer.graph_filter import filter_graph_for_visualizer
+
+            return filter_graph_for_visualizer(get_full_graph(active_driver))
         except Exception as exc:
             logger.exception("Base graph endpoint failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc

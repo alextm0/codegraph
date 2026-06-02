@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -35,10 +37,23 @@ def create_app(
     base_dir = config_path.parent if config_path else Path.cwd()
     _normalize_project_history(raw_config, config_path, project_root)
 
+    connected_clients: set = set()
+    watcher_cleanup: Callable[[], None] | None = None
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.event_loop = asyncio.get_running_loop()
+        try:
+            yield
+        finally:
+            if watcher_cleanup is not None:
+                watcher_cleanup()
+
     app = FastAPI(
         title="CodeGraph Visualizer",
         description="Interactive graph visualization for CodeGraph retrieval results.",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     app.add_middleware(
@@ -49,7 +64,6 @@ def create_app(
         allow_headers=["*"],
     )
 
-    connected_clients: set = set()
     ctx = VisualizerContext(
         driver=driver,
         raw_config=raw_config,
@@ -75,12 +89,10 @@ def create_app(
 
     ctx.schedule_broadcast = schedule_broadcast
 
-    @app.on_event("startup")
-    async def capture_event_loop() -> None:
-        app.state.event_loop = asyncio.get_running_loop()
-
     if watch_mode and project_root:
-        _start_file_watcher(app, driver, raw_config, project_root, schedule_broadcast)
+        watcher_cleanup = _start_file_watcher(
+            driver, raw_config, project_root, schedule_broadcast
+        )
 
     register_routes(app, ctx, connected_clients)
     _mount_static(app, dev_mode)
@@ -117,13 +129,15 @@ def _normalize_project_history(
 
 
 def _start_file_watcher(
-    app: FastAPI,
     driver: Driver,
     raw_config: dict[str, Any],
     project_root: str,
-    schedule_broadcast,
-) -> None:
-    """Watch project files and push incremental graph updates over WebSocket."""
+    schedule_broadcast: Callable[[dict[str, Any]], None],
+) -> Callable[[], None]:
+    """Watch project files and push incremental graph updates over WebSocket.
+
+    Returns a cleanup callable to stop the watcher (invoked on app shutdown).
+    """
     from codegraph.watcher.file_watcher import CodeGraphWatcher
     from codegraph.watcher.incremental import update_file_in_graph
 
@@ -147,10 +161,11 @@ def _start_file_watcher(
 
     threading.Thread(target=_poll_watcher, daemon=True).start()
 
-    @app.on_event("shutdown")
     def stop_watcher() -> None:
         stop_poll.set()
         watcher.stop()
+
+    return stop_watcher
 
 
 def _mount_static(app: FastAPI, dev_mode: bool) -> None:

@@ -43,6 +43,25 @@ def visualize_helper(
 
     from codegraph.visualizer.server import create_app
 
+    dist_index = (
+        Path(__file__).resolve().parents[2]
+        / "visualizer"
+        / "static"
+        / "dist"
+        / "index.html"
+    )
+    if not dev and not dist_index.exists():
+        console.print(
+            "[yellow]WARNING:[/yellow] Frontend not built — UI will not load."
+        )
+        console.print(
+            "  [dim]Run: [bold]cd frontend && npm run build[/bold][/dim]"
+        )
+        console.print(
+            "  [dim]Or use [bold]codegraph visualize --dev[/bold] with "
+            "[bold]cd frontend && npm run dev[/bold][/dim]\n"
+        )
+
     fastapi_app = create_app(
         driver,
         raw_config,

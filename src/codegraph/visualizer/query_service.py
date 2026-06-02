@@ -8,6 +8,10 @@ from typing import Any
 
 from neo4j import Driver
 
+from codegraph.visualizer.graph_filter import (
+    filter_graph_for_visualizer,
+    is_visualizer_excluded,
+)
 from codegraph.visualizer.models import (
     BM25FileResult,
     PPREntityResult,
@@ -118,6 +122,7 @@ def run_query(
             weight=round(weight, 4),
         )
         for nid, weight in sorted(seeds.seeds.items(), key=lambda x: -x[1])
+        if not is_visualizer_excluded(seeds.metadata[nid]["qname"])
     ]
 
     explained = build_explained_results(driver, core_result, top_k=top_k)
@@ -138,6 +143,7 @@ def run_query(
             contribution=item.contribution,
         )
         for item in explained
+        if not is_visualizer_excluded(item.file_path)
     ]
 
     all_qnames: list[str] = [m["qname"] for m in seeds.metadata.values()]
@@ -146,7 +152,9 @@ def run_query(
         all_qnames.extend(r.path_ids)
     all_qnames = list(dict.fromkeys(all_qnames))
 
-    subgraph = get_subgraph_for_nodes(driver, all_qnames)
+    subgraph = filter_graph_for_visualizer(
+        get_subgraph_for_nodes(driver, all_qnames)
+    )
     ppr_score_by_qname = {
         r.qualified_name: r.score
         for r in core_result.ppr_results
@@ -173,7 +181,11 @@ def run_query(
     return QueryResponse(
         seeds=seeds_out,
         ppr_results=ppr_out,
-        bm25_results=bm25_file_results(driver, task, top_k),
+        bm25_results=[
+            row
+            for row in bm25_file_results(driver, task, top_k)
+            if not is_visualizer_excluded(row.file_path)
+        ],
         graph={"nodes": annotated_nodes, "edges": subgraph["edges"]},
         damping_factor=damping_factor,
         top_k=top_k,
@@ -219,4 +231,4 @@ def run_dependencies_graph(
 
     deps = query_entity_dependencies(driver, entity, direction, depth)
     qnames = list({entity, *(d.qualified_name for d in deps if d.qualified_name)})
-    return get_subgraph_for_nodes(driver, qnames)
+    return filter_graph_for_visualizer(get_subgraph_for_nodes(driver, qnames))
