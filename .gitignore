@@ -45,6 +45,12 @@ skills-lock.json
 .gemini/
 .gemini.zip
 GEMINI_DEEP_RESEARCH_RESULTS.md
+plans/
+ANARA_SYSTEM_PROMPT.md
+
+# Thesis working exports (generated / draft markdown)
+thesis/thesis_combined.md
+thesis/chapters/chapter4_implementation.md
 .envrc
 .codegraph_last_built
 .DS_Store
