@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING
 
 from codegraph.core.graph.ppr import PPRConfig
 from codegraph.core.graph.queries import count_nodes_by_label, query_entity_dependencies
-from codegraph.core.retrieval.pipeline import run_retrieval_pipeline
+from codegraph.core.retrieval.pipeline import run_core_retrieval
+from codegraph.core.retrieval.post_processing import format_context
 from codegraph.utils.paths import make_relative_path, make_relative_qualified_name
 
 if TYPE_CHECKING:
@@ -132,55 +133,43 @@ def get_relevant_context_impl(
         return json.dumps(_empty_graph_payload())
 
     try:
-        if include_explanations:
-            from codegraph.core.retrieval.explanations import (
-                build_explained_results,
-                explained_result_to_dict,
-            )
-            from codegraph.core.retrieval.pipeline import run_core_retrieval
+        from codegraph.core.retrieval.explanations import (
+            build_explained_results,
+            explained_result_to_dict,
+        )
 
-            core_result = run_core_retrieval(
-                driver=state.driver,
-                gds=state.gds,
-                task_description=task_description,
-                mentioned_entities=mentioned_entities,
-                ppr_config=ppr_config,
-                signal_weights=state.signal_weights or None,
+        core_result = run_core_retrieval(
+            driver=state.driver,
+            gds=state.gds,
+            task_description=task_description,
+            mentioned_entities=mentioned_entities,
+            ppr_config=ppr_config,
+            signal_weights=state.signal_weights or None,
+            exclude_seed_paths=state.exclude_seed_paths or None,
+        )
+        if not core_result:
+            return json.dumps(
+                {
+                    "summary": {
+                        "result_count": 0,
+                        "total_tokens": 0,
+                        "token_budget": effective_budget,
+                    },
+                    "results": [],
+                    "hint": "No results found. Is the graph indexed? Run: codegraph rebuild",
+                }
             )
-            if not core_result:
-                return json.dumps(
-                    {
-                        "summary": {
-                            "result_count": 0,
-                            "total_tokens": 0,
-                            "token_budget": effective_budget,
-                        },
-                        "results": [],
-                        "hint": "No results found. Is the graph indexed? Run: codegraph rebuild",
-                    }
-                )
+
+        explanation_by_qname: dict = {}
+        if include_explanations:
             explained = build_explained_results(
                 state.driver, core_result, top_k=effective_top_k
             )
-            from codegraph.core.retrieval.post_processing import format_context
-
-            context_items = format_context(
-                core_result.ppr_results, state.project_root, effective_budget
-            )
             explanation_by_qname = {e.qualified_name: e for e in explained}
-        else:
-            core_result = None
-            explanation_by_qname = {}
-            context_items = run_retrieval_pipeline(
-                driver=state.driver,
-                gds=state.gds,
-                task_description=task_description,
-                project_root=state.project_root,
-                mentioned_entities=mentioned_entities,
-                ppr_config=ppr_config,
-                signal_weights=state.signal_weights or None,
-                token_budget=effective_budget,
-            )
+
+        context_items = format_context(
+            core_result.ppr_results, state.project_root, effective_budget
+        )
     except Exception as exc:
         logger.exception("get_relevant_context pipeline failed")
         return json.dumps(
@@ -231,17 +220,16 @@ def get_relevant_context_impl(
             "token_budget": effective_budget,
             "visualizer_url": "http://localhost:8474",
         },
-        "results": results,
-    }
-    if include_explanations and core_result is not None:
-        output["seeds"] = [
+        "seeds": [
             {
                 "qualified_name": meta["qname"],
                 "source": meta["source"],
                 "weight": round(core_result.seeds.seeds[nid], 4),
             }
             for nid, meta in core_result.seeds.metadata.items()
-        ]
+        ],
+        "results": results,
+    }
     return json.dumps(output, indent=2)
 
 

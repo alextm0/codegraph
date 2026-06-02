@@ -74,6 +74,7 @@ seed_selection:
         config_path=config_path,
         ppr_config=PPRConfig(top_k=5),
         signal_weights=parse_signal_weights(raw.get("seed_selection", {})),
+        exclude_seed_paths=raw.get("seed_selection", {}).get("exclude_seed_paths") or [],
         default_token_budget=2000,
         default_top_k=5,
     )

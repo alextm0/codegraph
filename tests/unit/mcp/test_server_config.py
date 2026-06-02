@@ -54,7 +54,8 @@ def test_load_mcp_runtime_settings_defaults(tmp_path: Path) -> None:
     assert settings.ppr_config.damping_factor == 0.70
     assert settings.ppr_config.top_k == 30
     assert settings.default_token_budget == 6000
-    assert settings.default_top_k == 15
+    assert settings.default_top_k == 30
+    assert settings.exclude_seed_paths == []
 
 
 def test_load_mcp_runtime_settings_custom_ppr_and_mcp(tmp_path: Path) -> None:
@@ -72,6 +73,7 @@ def test_load_mcp_runtime_settings_custom_ppr_and_mcp(tmp_path: Path) -> None:
             "seed_selection": {
                 "entity_match_weight": 2.0,
                 "bm25_weight": 1.5,
+                "exclude_seed_paths": ["tests/", "test_"],
             },
         }),
         encoding="utf-8",
@@ -83,6 +85,7 @@ def test_load_mcp_runtime_settings_custom_ppr_and_mcp(tmp_path: Path) -> None:
     assert settings.ppr_config.top_k == 50
     assert settings.default_token_budget == 8000
     assert settings.default_top_k == 20
+    assert settings.exclude_seed_paths == ["tests/", "test_"]
     assert settings.signal_weights["entity_match"] == 2.0
     assert settings.signal_weights["bm25"] == 1.5
 
@@ -106,8 +109,9 @@ def test_server_state_factory_create(
         project_root=str(tmp_path),
         ppr_config=PPRConfig(),
         signal_weights={"bm25": 1.0},
+        exclude_seed_paths=[],
         default_token_budget=6000,
-        default_top_k=15,
+        default_top_k=30,
     )
 
     db = MagicMock()
@@ -129,6 +133,7 @@ def test_server_state_factory_create(
     assert state.gds is mock_gds
     assert state.project_root == str(tmp_path)
     assert state.default_token_budget == 6000
+    assert state.exclude_seed_paths == []
 
 
 @patch("codegraph.mcp.server_config.get_database_manager")
@@ -145,8 +150,9 @@ def test_server_state_factory_exits_when_neo4j_unreachable(
         project_root=str(tmp_path),
         ppr_config=PPRConfig(),
         signal_weights={},
+        exclude_seed_paths=[],
         default_token_budget=6000,
-        default_top_k=15,
+        default_top_k=30,
     )
 
     db = MagicMock()
@@ -176,8 +182,9 @@ def test_server_state_factory_continues_on_warmup_failure(
         project_root=str(tmp_path),
         ppr_config=PPRConfig(),
         signal_weights={},
+        exclude_seed_paths=[],
         default_token_budget=6000,
-        default_top_k=15,
+        default_top_k=30,
     )
 
     db = MagicMock()
@@ -208,8 +215,9 @@ def test_server_state_indexing_lock_is_per_instance() -> None:
         config_path=Path("/c.yaml"),
         ppr_config=PPRConfig(),
         signal_weights={},
+        exclude_seed_paths=[],
         default_token_budget=6000,
-        default_top_k=15,
+        default_top_k=30,
     )
     b = ServerState(
         driver=MagicMock(),
@@ -218,7 +226,8 @@ def test_server_state_indexing_lock_is_per_instance() -> None:
         config_path=Path("/c.yaml"),
         ppr_config=PPRConfig(),
         signal_weights={},
+        exclude_seed_paths=[],
         default_token_budget=6000,
-        default_top_k=15,
+        default_top_k=30,
     )
     assert a.indexing_lock is not b.indexing_lock

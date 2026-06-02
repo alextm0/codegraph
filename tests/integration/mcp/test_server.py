@@ -116,22 +116,24 @@ class TestServerState:
             project_root="/some/root",
             ppr_config=PPRConfig(),
             signal_weights={},
+            exclude_seed_paths=["tests/", "test_"],
             default_token_budget=6000,
-            default_top_k=15,
+            default_top_k=30,
             config_path="/some/root/config.yaml",
             indexing_lock=threading.Lock(),
             indexing_in_progress=False,
         )
         assert state.project_root == "/some/root"
         assert state.default_token_budget == 6000
-        assert state.default_top_k == 15
+        assert state.default_top_k == 30
+        assert state.exclude_seed_paths == ["tests/", "test_"]
 
 
 # ---------------------------------------------------------------------------
 # MCP tool contract tests with mocked state (no Neo4j required)
 # ---------------------------------------------------------------------------
 
-def _make_mock_state(project_root="/project", default_top_k=15, default_token_budget=6000):
+def _make_mock_state(project_root="/project", default_top_k=30, default_token_budget=6000):
     """Build a minimal ServerState mock for tool testing."""
     from codegraph.core.graph.ppr import PPRConfig
     from codegraph.mcp.server import ServerState
@@ -142,11 +144,25 @@ def _make_mock_state(project_root="/project", default_top_k=15, default_token_bu
         project_root=project_root,
         ppr_config=PPRConfig(),
         signal_weights={},
+        exclude_seed_paths=["tests/", "test_"],
         default_token_budget=default_token_budget,
         default_top_k=default_top_k,
         config_path="/project/config.yaml",
         indexing_lock=threading.Lock(),
         indexing_in_progress=False,
+    )
+
+
+def _make_core_result():
+    from codegraph.core.retrieval.pipeline import RawRetrievalResult
+    from codegraph.core.retrieval.seed_selection import PersonalizationVector
+
+    return RawRetrievalResult(
+        seeds=PersonalizationVector(
+            seeds={42: 1.0},
+            metadata={42: {"qname": "auth.py::login", "source": "entity_match"}},
+        ),
+        ppr_results=[],
     )
 
 
@@ -176,7 +192,8 @@ class TestMCPToolsWithMockedState:
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]),
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()),
+            patch("codegraph.mcp.tools.format_context", return_value=[result]),
         ):
             output = get_relevant_context_impl("fix auth", None, None, 0, 0, state)
 
@@ -184,6 +201,7 @@ class TestMCPToolsWithMockedState:
         assert payload["summary"]["result_count"] == 1
         assert len(payload["results"]) == 1
         assert payload["results"][0]["entity_name"] == "login"
+        assert "seeds" in payload
 
     def test_get_relevant_context_empty_graph_returns_error(self):
         """get_relevant_context_impl on empty graph must return error JSON."""
@@ -208,7 +226,7 @@ class TestMCPToolsWithMockedState:
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[]),
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=None),
         ):
             output = get_relevant_context_impl("task", None, None, 0, 0, state)
 
@@ -236,7 +254,8 @@ class TestMCPToolsWithMockedState:
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]),
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()),
+            patch("codegraph.mcp.tools.format_context", return_value=[result]),
         ):
             output = get_relevant_context_impl("register user", None, None, 0, 0, state)
 

@@ -93,7 +93,7 @@ def get_relevant_context(
       task_description     — plain-English description of what you are trying to do
       mentioned_entities   — entity names mentioned (e.g. ["AuthService"]); null if none
       current_file         — deprecated compatibility field; ignored by retrieval
-      top_k                — max results; 0 = server default (~15)
+      top_k                — max results; 0 = server default (~30)
       token_budget         — max total tokens; 0 = server default (~6000)
       include_explanations — when true, attach seed provenance and reasoning paths per result
     """

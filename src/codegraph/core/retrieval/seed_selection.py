@@ -95,7 +95,11 @@ def extract_seeds(
 
     if mentioned_entities:
         entity_seeds = _match_entities(
-            driver, mentioned_entities, weights["entity_match"], project_scope
+            driver,
+            mentioned_entities,
+            weights["entity_match"],
+            project_scope,
+            exclude_paths,
         )
         all_seeds.extend(entity_seeds)
         logger.debug("Entity match seeds: %d", len(entity_seeds))
@@ -202,15 +206,13 @@ def _match_entities(
     mentioned_entities: list[str],
     base_weight: float,
     project_scope: str | None = None,
+    exclude_paths: list[str] | None = None,
 ) -> list[SeedNode]:
-    """Match entity names against graph nodes, weighted by inverse match frequency.
+    """Match entity names against graph nodes with per-entity mass capping.
 
-    Unique entity names (1 match) get full base_weight. Ambiguous names
-    (many matches, e.g. "fit" in sklearn) get reduced weight per match:
-    weight = base_weight / log2(n_matches + 1).
-
-    This prevents common method names from drowning the personalization
-    signal when multiple unrelated nodes match the same entity name.
+    Total mass per entity name is capped at base_weight and split evenly
+    across all matches. This prevents ambiguous names (e.g. "fit" with 30
+    matches) from receiving more aggregate seed mass than unique names.
     """
     # Collect all matches per entity name before assigning weights
     matches_by_entity: dict[str, list[tuple[int, str]]] = {}
@@ -223,10 +225,13 @@ def _match_entities(
                    OR n.qualified_name = $name
                    OR (n:Method AND (n.class_name + "." + n.name) = $name))
                   AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
+                  AND ($exclude_paths IS NULL OR
+                       NOT any(pattern IN $exclude_paths WHERE n.file_path CONTAINS pattern))
                 RETURN id(n) AS nid, n.qualified_name AS qname
                 """,
                 name=entity,
                 scope=project_scope,
+                exclude_paths=exclude_paths or [],
             )
             records = [(r["nid"], r["qname"] or entity) for r in result]
             if records:

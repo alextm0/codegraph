@@ -144,7 +144,7 @@ def init_helper(config_path: Path, target: str | None = None) -> None:
         "mcp": {
             "server_name": "codegraph",
             "default_token_budget": 6000,
-            "default_top_k": 15,
+            "default_top_k": 30,
         },
     }
 

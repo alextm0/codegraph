@@ -23,7 +23,7 @@ Source code
 ## MCP Tools (exactly 2)
 
 **`get_relevant_context`** — call this first for any code task.
-- Input: `task_description`, `mentioned_entities` (list or null), `top_k` (0 = default 15), `token_budget` (0 = default 6000). `current_file` may exist in legacy MCP clients but is ignored.
+- Input: `task_description`, `mentioned_entities` (list or null), `top_k` (0 = default 30), `token_budget` (0 = default 6000). `current_file` may exist in legacy MCP clients but is ignored.
 - Output: JSON with `summary.result_count`, `summary.visualizer_url`, and `results[]` (entity_name, entity_type, file_path, lines, relevance_score, source_code)
 - Empty graph returns `hint: "run codegraph rebuild"`
 - Pipeline errors return `error` + `hint: "run codegraph doctor"`

@@ -10,8 +10,8 @@ See also: [DECISIONS.md](../DECISIONS.md) for binding design choices.
 
 ```
 Source code → tree-sitter parse → entity/edge extraction → Neo4j graph
-→ seed selection (entity + BM25) → PPR (GDS) → IDF post-processing
-→ MCP / CLI / Visualizer
+→ seed selection (entity + BM25) → IDF edge reweighting → PPR (GDS)
+→ token-budget formatting → MCP / CLI / Visualizer
 ```
 
 ### Stage 1: Parsing (offline)

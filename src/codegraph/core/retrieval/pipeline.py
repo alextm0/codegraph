@@ -100,7 +100,7 @@ def run_core_retrieval(
         apply_idf=apply_idf,
     )
 
-    # Step 3: Run Personalized PageRank using weighted seed dict (preserves signal weights).
+    # Step 3: Run Personalized PageRank (uniform mode uses equal restart per seed).
     ppr_results = run_ppr_from_node_ids(gds, driver, seeds.seeds, ppr_config)
     if not ppr_results:
         logger.warning("Pipeline: PPR returned no results")

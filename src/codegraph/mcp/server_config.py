@@ -44,6 +44,7 @@ class McpRuntimeSettings:
     project_root: str
     ppr_config: PPRConfig
     signal_weights: dict[str, float]
+    exclude_seed_paths: list[str]
     default_token_budget: int
     default_top_k: int
 
@@ -70,8 +71,9 @@ def load_mcp_runtime_settings(config_path: Path) -> McpRuntimeSettings:
         project_root=project_root,
         ppr_config=ppr_config,
         signal_weights=parse_signal_weights(seed_section),
+        exclude_seed_paths=seed_section.get("exclude_seed_paths") or [],
         default_token_budget=mcp_section.get("default_token_budget", 6000),
-        default_top_k=mcp_section.get("default_top_k", 15),
+        default_top_k=mcp_section.get("default_top_k", 30),
     )
 
 
@@ -85,6 +87,7 @@ class ServerState:
     config_path: Path
     ppr_config: PPRConfig
     signal_weights: dict[str, float]
+    exclude_seed_paths: list[str]
     default_token_budget: int
     default_top_k: int
     indexing_lock: threading.Lock = field(default_factory=threading.Lock)
@@ -124,6 +127,7 @@ class ServerStateFactory:
             config_path=settings.config_path,
             ppr_config=settings.ppr_config,
             signal_weights=settings.signal_weights,
+            exclude_seed_paths=settings.exclude_seed_paths,
             default_token_budget=settings.default_token_budget,
             default_top_k=settings.default_top_k,
         )

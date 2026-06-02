@@ -25,7 +25,7 @@ seed_selection:
 mcp:
   server_name: codegraph
   default_token_budget: 6000
-  default_top_k: 15
+  default_top_k: 30
 project_history:
 - name: codegraph
   path: /Users/alexandrutoma/dev/codegraph

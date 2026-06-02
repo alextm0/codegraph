@@ -1,7 +1,12 @@
 """Unit tests for pure-function helpers in seed_selection.py."""
 
+from unittest.mock import MagicMock
 
-from codegraph.core.retrieval.seed_selection import extract_entity_names, tokenize
+from codegraph.core.retrieval.seed_selection import (
+    _match_entities,
+    extract_entity_names,
+    tokenize,
+)
 
 
 class TestExtractEntityNames:
@@ -120,3 +125,25 @@ class TestTokenize:
         assert "fix" in tokens
         assert "auth" in tokens
         assert "timeout" in tokens
+
+
+class TestMatchEntitiesExcludePaths:
+    """Verify entity match passes exclude_paths into Cypher."""
+
+    def test_exclude_paths_forwarded_to_cypher(self):
+        driver = MagicMock()
+        session = MagicMock()
+        driver.session.return_value.__enter__.return_value = session
+        session.run.return_value = []
+
+        _match_entities(
+            driver,
+            ["User"],
+            base_weight=0.6,
+            exclude_paths=["tests/", "test_"],
+        )
+
+        _, kwargs = session.run.call_args
+        assert kwargs["exclude_paths"] == ["tests/", "test_"]
+        query = session.run.call_args[0][0]
+        assert "exclude_paths" in query
