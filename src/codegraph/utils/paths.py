@@ -1,6 +1,7 @@
 """Shared path utilities for converting absolute paths to project-relative ones."""
 
 import os
+from pathlib import Path
 
 
 def make_relative_path(abs_path: str, project_root: str) -> str:
@@ -26,3 +27,11 @@ def make_relative_qualified_name(
         suffix = qualified_name[len(abs_file_path) :]
         return rel_file_path + suffix
     return qualified_name
+
+
+def resolve_absolute_path(path: str) -> str:
+    """Resolve a path string to an absolute path, falling back to the input on error."""
+    try:
+        return str(Path(path).resolve())
+    except Exception:
+        return path
