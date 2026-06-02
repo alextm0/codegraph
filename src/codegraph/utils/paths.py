@@ -8,6 +8,9 @@ def make_relative_path(abs_path: str, project_root: str) -> str:
     """Convert an absolute path to a relative path from project_root."""
     if not abs_path:
         return abs_path
+    # Graph stores paths relative to project root; relpath would mis-resolve them.
+    if not os.path.isabs(abs_path):
+        return abs_path.replace("\\", "/")
     try:
         return os.path.relpath(abs_path, project_root).replace("\\", "/")
     except ValueError:

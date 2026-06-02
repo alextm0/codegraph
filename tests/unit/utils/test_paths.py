@@ -26,14 +26,20 @@ class TestMakeRelativePath:
         result = make_relative_path(child, str(tmp_path))
         assert "\\" not in result
 
-    def test_cross_drive_returns_abs_unchanged(self, monkeypatch):
-        # Simulate Windows cross-drive ValueError from os.path.relpath
+    def test_already_relative_path_unchanged(self, tmp_path):
+        rel = "src/codegraph/mcp/tools.py"
+        result = make_relative_path(rel, str(tmp_path / "projects" / "codegraph"))
+        assert result == rel
+
+    def test_relpath_failure_returns_abs_unchanged(self, monkeypatch):
+        # When relpath cannot compute a relative path, return the input unchanged.
         def raising_relpath(path, start):
-            raise ValueError("path is on a different drive")
+            raise ValueError("cannot relpath")
 
         monkeypatch.setattr(os.path, "relpath", raising_relpath)
-        result = make_relative_path("D:\\foo\\bar.py", "C:\\project")
-        assert result == "D:\\foo\\bar.py"
+        abs_path = "/mnt/other/foo.py"
+        result = make_relative_path(abs_path, "/project")
+        assert result == abs_path
 
 
 class TestMakeRelativeQualifiedName:
