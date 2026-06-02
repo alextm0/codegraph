@@ -17,10 +17,41 @@ _NO_SEEDS = "no_seeds"          # seed selection returned nothing
 _NEAR_MISS = "near_miss"        # gold found in predictions but at rank > 10
 _WRONG_DIR = "wrong_directory"  # seeds are in a completely different directory
 _SETUP_ERROR = "setup_error"    # an exception occurred during processing
+_CONNECTIVITY_GAP = "connectivity_gap"  # gold unreachable from seeds in graph
+_SEMANTIC_GAP = "semantic_gap"  # gold reachable but not ranked in top-k
 _UNKNOWN = "unknown"            # seeds exist but gold not found anywhere
 
 
-def categorize_instance(result: dict) -> str:
+def gold_reachable_from_seeds(
+    driver,
+    seed_files: list[str],
+    gold_files: list[str],
+    max_hops: int = 6,
+) -> bool:
+    """Return True if any gold file is reachable from any seed file within max_hops."""
+    if not seed_files or not gold_files:
+        return False
+    from neo4j import Driver as _Driver
+
+    if not isinstance(driver, _Driver):
+        return False
+
+    with driver.session() as session:
+        record = session.run(
+            f"""
+            MATCH (seed:File) WHERE seed.file_path IN $seed_files
+            MATCH (gold:File) WHERE gold.file_path IN $gold_files
+            MATCH p = shortestPath((seed)-[*..{max_hops}]-(gold))
+            RETURN count(p) > 0 AS reachable
+            LIMIT 1
+            """,
+            seed_files=seed_files,
+            gold_files=gold_files,
+        ).single()
+    return bool(record and record["reachable"])
+
+
+def categorize_instance(result: dict, driver=None) -> str:
     """Assign a failure category to a zero-recall instance.
 
     Args:
@@ -50,6 +81,11 @@ def categorize_instance(result: dict) -> str:
         gold_dirs = {_top_dir(f) for f in gold_files if f}
         if not (seed_dirs & gold_dirs):
             return _WRONG_DIR
+
+    if driver is not None and seed_files and gold_files:
+        if not gold_reachable_from_seeds(driver, seed_files, gold_files):
+            return _CONNECTIVITY_GAP
+        return _SEMANTIC_GAP
 
     return _UNKNOWN
 
@@ -84,12 +120,27 @@ def analyze(jsonl_path: str) -> dict:
     zero_recall = [r for r in all_results if r.get("recall_at_10", 0) == 0.0]
     categories: Counter = Counter()
     examples: dict[str, list[dict]] = {
-        _NO_SEEDS: [], _NEAR_MISS: [], _WRONG_DIR: [],
-        _SETUP_ERROR: [], _UNKNOWN: [],
+        _NO_SEEDS: [],
+        _NEAR_MISS: [],
+        _WRONG_DIR: [],
+        _SETUP_ERROR: [],
+        _CONNECTIVITY_GAP: [],
+        _SEMANTIC_GAP: [],
+        _UNKNOWN: [],
     }
 
+    driver = None
+    try:
+        from codegraph.core.graph import get_database_manager
+
+        db = get_database_manager()
+        if db.is_connected():
+            driver = db.get_driver()
+    except Exception:
+        driver = None
+
     for result in zero_recall:
-        cat = categorize_instance(result)
+        cat = categorize_instance(result, driver=driver)
         categories[cat] += 1
         if len(examples[cat]) < 3:
             examples[cat].append(result)
