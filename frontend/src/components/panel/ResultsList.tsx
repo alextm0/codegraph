@@ -86,6 +86,7 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
                   seed_weight: 0,
                   line_number: res.line_number,
                   line_end: res.line_end,
+                  reasoning_path: res.path_ids,
                 })
               }
             }

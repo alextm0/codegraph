@@ -55,6 +55,7 @@ class PPREntityResult(BaseModel):
     file_path: str
     score: float
     path: str
+    path_ids: list[str] = []
     line_number: int = 0
     line_end: int = 0
 
@@ -146,7 +147,11 @@ def _run_query(
         create_gds_client,
     )
     from codegraph.core.retrieval.pipeline import run_core_retrieval
-    from codegraph.core.graph.queries import trace_path_to_seed, get_subgraph_for_nodes
+    from codegraph.core.graph.queries import (
+        trace_path_to_seed,
+        trace_path_ids_to_seed,
+        get_subgraph_for_nodes,
+    )
     from codegraph.utils.config import parse_signal_weights
 
     # Step 1: Configure PPR
@@ -219,6 +224,7 @@ def _run_query(
             file_path=r.file_path,
             score=round(r.score, 5),
             path=trace_path_to_seed(driver, seed_ids, r.file_path),
+            path_ids=trace_path_ids_to_seed(driver, seed_ids, r.file_path),
             line_number=r.line_start,
             line_end=r.line_end,
         )

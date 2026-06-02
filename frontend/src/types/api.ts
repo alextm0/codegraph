@@ -28,6 +28,7 @@ export interface PPREntityResult {
   score: number
   /** Human-readable path from the file to a seed node */
   path: string
+  path_ids: string[]
   line_number: number
   line_end: number
 }
@@ -52,6 +53,7 @@ export interface GraphNode {
   seed_weight: number
   line_number?: number
   line_end?: number
+  reasoning_path?: string[]
 }
 
 export interface GraphEdge {
