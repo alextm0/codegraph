@@ -5,6 +5,7 @@ exclude_patterns:
 - .git
 - '*.pyc'
 - .pytest_cache
+- tests/fixtures/
 neo4j:
   uri: neo4j://localhost:7687
   username: neo4j
@@ -29,7 +30,7 @@ mcp:
 project_history:
 - name: codegraph
   path: /Users/alexandrutoma/dev/codegraph/projects/codegraph
-  url: https://github.com/alextm0/codegraph
+  url: null
 - name: codegraph
   path: /Users/alexandrutoma/dev/codegraph
   url: null
