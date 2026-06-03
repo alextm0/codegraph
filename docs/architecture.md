@@ -1,12 +1,14 @@
-# CodeGraph Architecture
+# Architecture (summary)
 
-Graph-based context selection for AI coding agents. Code is modeled as a **structural dependency graph**; relevance is ranked with **Personalized PageRank (PPR)**, not embedding similarity.
+Graph-based context selection: Python → tree-sitter → Neo4j → seeds + PPR → MCP/CLI/visualizer.
 
-See also: [DECISIONS.md](../DECISIONS.md) for binding design choices.
+**Full detail:** [concepts/architecture.md](concepts/architecture.md)  
+**Doc hub:** [README.md](README.md)  
+**Decisions:** [DECISIONS.md](../DECISIONS.md)
 
 ---
 
-## Pipeline overview
+## Pipeline
 
 ```
 Source code → tree-sitter parse → entity/edge extraction → Neo4j graph
@@ -14,91 +16,21 @@ Source code → tree-sitter parse → entity/edge extraction → Neo4j graph
 → token-budget formatting → MCP / CLI / Visualizer
 ```
 
-### Stage 1: Parsing (offline)
+## Defaults (DEC-001)
 
-- **Engine:** tree-sitter-python
-- **Entities:** File, Class, Function, Method (four types only)
-- **Identity:** `qualified_name = file_path + '::' + name`
+- `damping_factor`: 0.70
+- `top_k`: 30
+- `retrieval_mode`: uniform
+- Seeds: entity 0.6, BM25 0.3
 
-### Stage 2: Graph construction (offline)
+## MCP
 
-- **Storage:** Neo4j + GDS plugin
-- **Edges:** `CONTAINS`, `CALLS`, `IMPORTS`, `INHERITS_FROM`
-- **Call resolution:** imported → same-file → unique global; **ambiguous names → no edge**
+Exactly two tools: `get_relevant_context`, `query_dependencies`.
 
-### Stage 3: Seed selection (online)
+## Evaluation
 
-| Signal | Default weight | Source tag |
-|--------|----------------|------------|
-| Entity match | 0.6 | `entity_match` |
-| BM25 | 0.3 | `bm25` |
-
-Compound tokenization splits `CamelCase` / `snake_case` for BM25 recall. Provenance is stored in `PersonalizationVector.metadata`.
-
-### Stage 4: PPR (online)
-
-- **Defaults (iter-2):** `damping_factor=0.70`, `top_k=30`, **uniform** restart
-- **IDF reweight:** edge weight `1 / log2(in_degree + 2)` before projection
-- **Projection:** `"codegraph"`, UNDIRECTED
-
-### Stage 5: Delivery (online)
-
-- File-level deduplication, source line ranges, token budget
-- **MCP:** `get_relevant_context`, `query_dependencies` only
-
----
-
-## Evaluation (SWE-bench Lite)
-
-| Metric | Approx. value |
-|--------|-------------|
-| Mean Recall@10 | ~73.3% |
-| Mean Recall@5 | ~63.0% |
-| Median MRR | 0.33 |
-
-Iterations: baseline (~60% R@10) → uniform restart + d=0.70 (~72%) → IDF + seed refinements (current).
-
----
-
-## Limitations
-
-- Python-only, static analysis (no type inference)
-- Ambiguous calls dropped intentionally
-- Batch rebuild model (incremental watch exists but not full incremental graph)
-- Dynamic imports / `eval` / monkey-patching invisible
-
----
+SWE-bench Lite — see [thesis/evaluation.md](thesis/evaluation.md) for current Recall@10 (thesis chapter 5 is authoritative).
 
 ## Module map
 
-| Area | Path |
-|------|------|
-| Parser | `src/codegraph/core/parser/` |
-| Graph build | `src/codegraph/core/graph/graph_builder.py` |
-| Queries | `src/codegraph/core/graph/queries/` |
-| PPR | `src/codegraph/core/graph/ppr.py` |
-| Retrieval | `src/codegraph/core/retrieval/` |
-| MCP | `src/codegraph/mcp/` |
-| CLI | `src/codegraph/cli/commands/` |
-| Visualizer API | `src/codegraph/visualizer/` |
-| Frontend | `frontend/` |
-
----
-
-## Deep-dive topics
-
-### Why four entity types?
-
-File-only indexing misses function-level relevance; full AST adds noise and slows PPR. Four types are the tuned middle ground.
-
-### Why uniform restart?
-
-Weighted restart over-trusts a single wrong seed. Uniform mass lets the graph structure reallocate probability to structurally connected seeds.
-
-### Why drop ambiguous CALLS edges?
-
-False edges create spurious shortest paths and dominate PPR neighborhoods. Missing edges are safer than hallucinated dependencies.
-
----
-
-*Last updated: stabilization pass, June 2026*
+[reference/module-map.md](reference/module-map.md)
