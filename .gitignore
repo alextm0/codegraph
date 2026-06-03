@@ -56,6 +56,8 @@ thesis/chapters/chapter4_implementation.md
 .DS_Store
 *.pdf
 docs/superpowers/
+# Vendored CGC docs snapshot (inspiration only; not part of this repo)
+docs/CodeGraphContext-Docs-From-Github/
 TODO.md
 thesis/review_ch1_to_ch5.tex
 thesis/scripts/compile_chapter3.py
