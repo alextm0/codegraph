@@ -13,7 +13,7 @@ Source code → tree-sitter parsing → entity extraction → import/call resolu
 → Neo4j graph → Personalized PageRank → post-processing → MCP server → AI agent
 ```
 
-Detailed documentation for each component is in `docs/`.
+Detailed documentation for each component is in `docs/` — start at `docs/README.md` (agent source of truth).
 All technical decisions are recorded in `DECISIONS.md`.
 
 ## Tech Stack
@@ -31,7 +31,7 @@ All technical decisions are recorded in `DECISIONS.md`.
 
 ```
 codegraph/
-├── docs/             ← architecture.md (tracked)
+├── docs/             ← README.md, concepts/, guides/, reference/, thesis/
 ├── DECISIONS.md      ← binding technical decisions
 ├── src/codegraph/
 │   ├── cli/commands/ ← CLI command implementations

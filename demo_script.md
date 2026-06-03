@@ -2,7 +2,7 @@
 
 ## Preparation (Pre-Demo)
 1. Ensure Neo4j Desktop 2 is running with the correct active database.
-2. Clear the Neo4j database: `codegraph doctor --reset` (or similar cleanup).
+2. Clear/rebuild the graph: `codegraph rebuild` (clears Neo4j then re-indexes).
 3. Have Claude Desktop running with the MCP server configured.
 
 ## Act 1: The Visualizer (Human Exploration)

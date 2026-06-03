@@ -2,6 +2,8 @@
 
 This file helps AI agents understand the CodeGraph system's mental model and current state.
 
+**Full documentation:** [`docs/README.md`](docs/README.md) — concepts, CLI/MCP reference, guides, thesis alignment. Prefer that tree as source of truth over this short summary.
+
 ## System Philosophy
 
 Code is treated as a **structural graph**, not a text blob. Relevance is determined by graph connectivity (Personalized PageRank) rather than embedding similarity.
@@ -40,16 +42,18 @@ There are **no other MCP tools**. `get_graph_stats`, `find_dead_code`, `execute_
 |------|---------|
 | `src/codegraph/core/parser/python_parser.py` | tree-sitter entity extraction |
 | `src/codegraph/core/graph/graph_builder.py` | UNWIND+MERGE Neo4j writes |
+| `src/codegraph/core/graph/resolution.py` | CALLS/IMPORTS resolution (ambiguous → no edge) |
 | `src/codegraph/core/graph/ppr.py` | PPRConfig, run_ppr_from_node_ids |
-| `src/codegraph/core/retrieval/seed_selection.py` | 3-signal seed scoring |
+| `src/codegraph/core/retrieval/seed_selection.py` | entity + BM25 seed scoring |
 | `src/codegraph/core/retrieval/post_processing.py` | IDF weighting, token budget |
-| `src/codegraph/core/retrieval/pipeline.py` | run_retrieval_pipeline |
+| `src/codegraph/core/retrieval/pipeline.py` | run_core_retrieval |
 | `src/codegraph/mcp/server.py` | FastMCP lifespan, ServerState |
 | `src/codegraph/mcp/tools.py` | get_relevant_context_impl, query_dependencies_impl |
-| `src/codegraph/cli/main.py` | Typer CLI commands |
-| `src/codegraph/cli/commands/` | CLI command implementations (re-exported via `cli_helpers.py`) |
+| `src/codegraph/visualizer/routes.py` | Visualizer REST/WS API |
+| `src/codegraph/watcher/incremental.py` | Per-file graph updates |
+| `evaluation/swe_bench_runner.py` | SWE-bench Lite harness |
 | `DECISIONS.md` | Binding design decisions |
-| `docs/architecture.md` | System architecture reference |
+| `docs/README.md` | Full documentation index |
 
 ## PPR Defaults (iter-2 tuned — do not change without benchmarking)
 
