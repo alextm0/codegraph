@@ -1,0 +1,12 @@
+---
+description: Git commit policy — no Cursor co-author trailers
+alwaysApply: true
+---
+
+# Git commits
+
+When creating commits in this repository:
+
+- **Never** add `Co-authored-by: Cursor <cursoragent@cursor.com>` or any Cursor co-author line to commit messages.
+- Use plain HEREDOC messages only; do not append co-author trailers.
+- Run `scripts/install-git-hooks.sh` once per clone so `.githooks/commit-msg` strips accidental trailers.
