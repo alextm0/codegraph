@@ -259,6 +259,80 @@ def serve(
     serve_main()
 
 
+@app.command("find")
+def find_symbol(
+    ctx: typer.Context,
+    pattern: str = typer.Argument(..., help="Symbol or path substring to search"),
+    limit: int = typer.Option(50, "--limit", "-l", help="Maximum results"),
+    label: str | None = typer.Option(
+        None, "--type", "-t", help="Filter by node label (Function, Class, Method, File)"
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Search indexed symbols and files by name or path (fast graph lookup)."""
+    config_path = get_config_path(ctx)
+    try:
+        db_manager = _initialize_db(config_path)
+    except ValueError as e:
+        console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        console.print(
+            "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
+        )
+        raise typer.Exit(1)
+
+    from codegraph.core.graph.queries import search_symbols
+    from codegraph.utils.config import load_raw_config, resolve_project_root
+    from codegraph.utils.paths import graph_file_path_scope, make_relative_path
+    import json as json_mod
+    import rich.box as box
+    from rich.table import Table
+
+    raw = load_raw_config(config_path)
+    project_root = str(resolve_project_root(raw, config_path))
+    scope = graph_file_path_scope(project_root)
+
+    try:
+        results = search_symbols(
+            db_manager.get_driver(),
+            pattern=pattern,
+            limit=limit,
+            label=label,
+            project_scope=scope,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Search failed:[/bold red] {e}")
+        raise typer.Exit(1)
+
+    if json_out:
+        payload = [
+            {
+                "qualified_name": r.qualified_name,
+                "name": r.name,
+                "label": r.label,
+                "file_path": make_relative_path(r.file_path, project_root),
+            }
+            for r in results
+        ]
+        console.print(json_mod.dumps({"result_count": len(payload), "results": payload}, indent=2))
+        return
+
+    if not results:
+        console.print(f"[yellow]No symbols matching '{pattern}'[/yellow]")
+        return
+
+    table = Table(title=f"Symbols matching '{pattern}'", box=box.ROUNDED)
+    table.add_column("Qualified Name", style="cyan")
+    table.add_column("Type", style="magenta")
+    table.add_column("File Path", style="blue")
+    for res in results:
+        table.add_row(
+            res.qualified_name,
+            res.label,
+            make_relative_path(res.file_path, project_root),
+        )
+    console.print(table)
+
+
 # Analyze command group
 analyze_app = typer.Typer(help="Analyze relationships and dependencies.")
 app.add_typer(analyze_app, name="analyze")
