@@ -32,6 +32,17 @@ def make_relative_qualified_name(
     return qualified_name
 
 
+def graph_file_path_scope(project_root: str) -> str | None:
+    """Return a ``file_path`` prefix for Neo4j ``STARTS WITH`` filters, if any.
+
+    Indexed nodes store paths relative to ``project_root``. Passing the absolute
+    project root as scope matches nothing; use ``None`` for whole-graph search or
+    a relative prefix (e.g. ``src/``) to narrow results.
+    """
+    _ = project_root
+    return None
+
+
 def resolve_absolute_path(path: str) -> str:
     """Resolve a path string to an absolute path, falling back to the input on error."""
     try:

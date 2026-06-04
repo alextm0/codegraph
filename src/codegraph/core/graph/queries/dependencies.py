@@ -94,32 +94,64 @@ def find_node_by_name(driver: Driver | None = None, name: str = "") -> list[Node
 
 
 def find_node_by_pattern(
-    driver: Driver | None = None, pattern: str = ""
+    driver: Driver | None = None,
+    pattern: str = "",
+    limit: int = 100,
+    label: str | None = None,
+    project_scope: str | None = None,
 ) -> list[NodeInfo]:
-    """Return all nodes whose name property contains the given pattern (case-insensitive)."""
+    """Return nodes whose name or qualified_name contains pattern (case-insensitive)."""
     if driver is None:
         driver = get_database_manager().get_driver()
+    if project_scope is not None:
+        project_scope = project_scope.replace("\\", "/")
+    limit = max(1, min(limit, 500))
+    label_clause = ""
+    if label:
+        label_clause = f"AND '{label}' IN labels(n)"
     with driver.session() as session:
         result = session.run(
-            """
+            f"""
             MATCH (n)
-            WHERE n.name CONTAINS $pattern OR n.qualified_name CONTAINS $pattern
+            WHERE (n:Function OR n:Method OR n:Class OR n:File)
+              AND (
+                toLower(coalesce(n.name, '')) CONTAINS toLower($pattern)
+                OR toLower(coalesce(n.qualified_name, '')) CONTAINS toLower($pattern)
+                OR toLower(coalesce(n.file_path, '')) CONTAINS toLower($pattern)
+              )
+              AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
+              {label_clause}
             RETURN n.qualified_name AS qualified_name,
                    n.name AS name,
                    labels(n)[0] AS label,
                    n.file_path AS file_path
             ORDER BY qualified_name
-            LIMIT 100
+            LIMIT $limit
             """,
             pattern=pattern,
+            scope=project_scope,
+            limit=limit,
         )
         return [_row_to_node_info(r) for r in result]
+
+
+def search_symbols(
+    driver: Driver | None = None,
+    pattern: str = "",
+    limit: int = 100,
+    label: str | None = None,
+    project_scope: str | None = None,
+) -> list[NodeInfo]:
+    """Search indexed symbols and files by substring (alias for find_node_by_pattern)."""
+    return find_node_by_pattern(
+        driver, pattern, limit=limit, label=label, project_scope=project_scope
+    )
 
 
 def get_inheritance_chain(
     driver: Driver | None = None, class_qname: str = ""
 ) -> list[NodeInfo]:
-    """Return the full inheritance chain (ancestors) of a class, ordered from immediate parent upward."""
+    """Return ancestors of a class by qualified_name, immediate parent first."""
     if driver is None:
         driver = get_database_manager().get_driver()
     with driver.session() as session:
@@ -135,6 +167,106 @@ def get_inheritance_chain(
             qname=class_qname,
         )
         return [_row_to_node_info(r) for r in result]
+
+
+def _resolve_class_nodes(
+    driver: Driver, class_name: str, project_scope: str | None = None
+) -> list[NodeInfo]:
+    """Resolve Class nodes by short name or qualified_name."""
+    if project_scope is not None:
+        project_scope = project_scope.replace("\\", "/")
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (cls:Class)
+            WHERE cls.name = $name OR cls.qualified_name = $name
+              AND ($scope IS NULL OR cls.file_path STARTS WITH $scope)
+            RETURN cls.qualified_name AS qualified_name,
+                   cls.name AS name,
+                   labels(cls)[0] AS label,
+                   cls.file_path AS file_path
+            ORDER BY qualified_name
+            """,
+            name=class_name,
+            scope=project_scope,
+        )
+        return [_row_to_node_info(r) for r in result]
+
+
+def query_class_hierarchy(
+    driver: Driver | None = None,
+    class_name: str = "",
+    direction: str = "both",
+    project_scope: str | None = None,
+) -> list[NodeInfoWithRel]:
+    """Return inheritance-related classes for a class name or qualified_name.
+
+    Args:
+        class_name: Short class name or qualified_name.
+        direction: ``upstream`` (ancestors), ``downstream`` (subclasses), or ``both``.
+    """
+    if driver is None:
+        driver = get_database_manager().get_driver()
+    _validate_direction(direction)
+    if project_scope is not None:
+        project_scope = project_scope.replace("\\", "/")
+
+    roots = _resolve_class_nodes(driver, class_name, project_scope)
+    if not roots:
+        return []
+
+    results: list[NodeInfoWithRel] = []
+    seen: set[str] = set()
+
+    def _add(node: NodeInfo, rel: str) -> None:
+        if node.qualified_name in seen:
+            return
+        seen.add(node.qualified_name)
+        results.append(
+            NodeInfoWithRel(
+                qualified_name=node.qualified_name,
+                name=node.name,
+                label=node.label,
+                file_path=node.file_path,
+                relationship_type=rel,
+            )
+        )
+
+    with driver.session() as session:
+        for root in roots:
+            if direction in ("upstream", "both"):
+                records = session.run(
+                    """
+                    MATCH p = (cls:Class {qualified_name: $qname})
+                              -[:INHERITS_FROM*1..]->(ancestor:Class)
+                    RETURN ancestor.qualified_name AS qualified_name,
+                           ancestor.name AS name,
+                           labels(ancestor)[0] AS label,
+                           ancestor.file_path AS file_path
+                    ORDER BY length(p) ASC
+                    """,
+                    qname=root.qualified_name,
+                )
+                for record in records:
+                    _add(_row_to_node_info(record), "INHERITS_FROM")
+
+            if direction in ("downstream", "both"):
+                records = session.run(
+                    """
+                    MATCH p = (descendant:Class)-[:INHERITS_FROM*1..]->
+                              (cls:Class {qualified_name: $qname})
+                    RETURN descendant.qualified_name AS qualified_name,
+                           descendant.name AS name,
+                           labels(descendant)[0] AS label,
+                           descendant.file_path AS file_path
+                    ORDER BY length(p) ASC
+                    """,
+                    qname=root.qualified_name,
+                )
+                for record in records:
+                    _add(_row_to_node_info(record), "INHERITS_FROM")
+
+    return results
 
 
 def query_entity_dependencies(

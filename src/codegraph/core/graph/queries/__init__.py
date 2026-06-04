@@ -21,7 +21,9 @@ from codegraph.core.graph.queries.dependencies import (
     find_node_by_pattern,
     get_inheritance_chain,
     get_neighbors,
+    query_class_hierarchy,
     query_entity_dependencies,
+    search_symbols,
 )
 from codegraph.core.graph.queries.models import DeadCodeNode, NodeInfo, NodeInfoWithRel
 from codegraph.core.graph.queries.path_tracing import (
@@ -62,9 +64,11 @@ __all__ = [
     "find_dead_code",
     "find_node_by_name",
     "find_node_by_pattern",
+    "search_symbols",
     "get_file_contents",
     "get_full_graph",
     "get_inheritance_chain",
+    "query_class_hierarchy",
     "get_most_connected_files",
     "get_neighbors",
     "get_node_detail",
