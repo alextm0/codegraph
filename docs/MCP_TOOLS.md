@@ -13,30 +13,35 @@ CodeGraph exposes **exactly two** MCP tools. There is no graph stats, dead-code,
 | `current_file` | string \| null | Legacy; **ignored** |
 | `top_k` | int | `0` = default 30 |
 | `token_budget` | int | `0` = default 6000 |
-| `include_explanations` | bool | Seed paths per result |
+| `include_explanations` | bool | Default **true**; per-result reasoning paths |
 
-**Returns:** JSON with `summary`, `results[]` (entity, file, lines, score, `source_code`), optional `seeds[]`.
+**Returns:** JSON with `summary`, `seeds[]`, `results[]` (entity, file, lines, score, `source_code`, optional `explanation`).
 
 **Empty graph:** Auto-starts background index; retry after ~15–30s or run `codegraph rebuild`.
 
 ## `query_dependencies`
 
-**When:** After confirming entity names via `get_relevant_context`. Impact analysis before refactors.
+**When:** Known symbol lookup, inheritance, or impact analysis.
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `entity_name` | string | Name or qualified name; partial match OK |
+| `entity_name` | string | Name, qualified name, or pattern (`symbol_search`) |
 | `direction` | string | `upstream` \| `downstream` \| `both` |
-| `depth` | int | `1` or `2` |
+| `depth` | int | `1` or `2` (dependencies mode) |
+| `mode` | string | `dependencies` \| `symbol_search` \| `class_hierarchy` |
 
-**Returns:** JSON with `results[]` (`qualified_name`, `name`, `label`, `file_path`, `relationship_type`).
+**Returns:** JSON with `mode`, `result_count`, `results[]`.
 
 ## Agent workflow
 
 ```
+# Known symbol:
+query_dependencies(entity, mode="symbol_search", ...)
+
+# Vague task:
 get_relevant_context(task, entities?)
   → implement / answer
-  → query_dependencies(entity, direction)   # if refactor or impact needed
+  → query_dependencies(entity, mode="dependencies", direction=...)  # if impact needed
 ```
 
 ## Registration

@@ -9,7 +9,7 @@ Online path from natural-language task → ranked source snippets. Orchestrator:
 ```
 task_description + mentioned_entities
   → prepare_bm25_index()
-  → extract_seeds()           # entity_match + BM25
+  → extract_seeds()           # entity_match + issue_hint + BM25
   → apply_idf_weights()       # optional, default on
   → project_graph("codegraph")
   → run_ppr_from_node_ids()   # uniform restart
@@ -32,6 +32,7 @@ task_description + mentioned_entities
 |------------|---------|------|
 | `seed_selection.entity_match_weight` | 0.6 | Graph nodes whose names match mentioned/auto entities |
 | `seed_selection.bm25_weight` | 0.3 | Top BM25 nodes from task text |
+| `seed_selection.issue_hint_weight` | 0.2 | Nodes under file paths mentioned in issue text |
 | `seed_selection.bm25_top_n` | 10 | BM25 candidate cap |
 
 Provenance stored in `PersonalizationVector.metadata[nid]["source"]`.

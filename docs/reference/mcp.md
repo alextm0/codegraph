@@ -20,7 +20,7 @@ Register: `codegraph install` → `codegraph serve`.
 | `current_file` | string \| null | no | **Deprecated — ignored** |
 | `top_k` | int | yes | `0` → server default (30) |
 | `token_budget` | int | yes | `0` → default (6000) |
-| `include_explanations` | bool | yes | Adds seeds + path explanations |
+| `include_explanations` | bool | no (default **true**) | Adds per-result `explanation`; `seeds[]` always returned |
 
 ### Success response (JSON string)
 
@@ -66,20 +66,30 @@ Implementation: `get_relevant_context_impl` in `src/codegraph/mcp/tools.py`.
 
 ## `query_dependencies`
 
-**Purpose:** Structural neighbors (call/import graph). Use **after** confirming entity names.
+**Purpose:** Structural lookups — dependencies, symbol search, or class hierarchy.
 
 ### Parameters
 
 | Name | Type | Notes |
 |------|------|-------|
-| `entity_name` | string | Short or qualified name; partial match |
+| `entity_name` | string | Name, qualified name, or search pattern (`symbol_search`) |
 | `direction` | string | `upstream` \| `downstream` \| `both` |
-| `depth` | int | `1` or `2` |
+| `depth` | int | `1` or `2` (`dependencies` mode only) |
+| `mode` | string | `dependencies` (default), `symbol_search`, `class_hierarchy` |
+
+### Modes
+
+| mode | Behavior |
+|------|----------|
+| `dependencies` | CALLS/IMPORTS neighbors; uses `direction` and `depth` |
+| `symbol_search` | Case-insensitive substring on name/path; `depth` ignored |
+| `class_hierarchy` | INHERITS_FROM; upstream=parents, downstream=subclasses |
 
 ### Success response
 
 ```json
 {
+  "mode": "dependencies",
   "result_count": 5,
   "results": [
     {

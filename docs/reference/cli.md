@@ -46,6 +46,22 @@ Start MCP stdio server. Sets `CODEGRAPH_CONFIG`.
 
 ---
 
+## Discovery
+
+### `find PATTERN [options]`
+
+Fast symbol and file path search (graph substring match, no PPR).
+
+| Option | Description |
+|--------|-------------|
+| `--limit` / `-l` | Max results (default 50) |
+| `--type` / `-t` | Filter by label: Function, Class, Method, File |
+| `--json` | Machine-readable JSON |
+
+Example: `codegraph find AuthService`
+
+---
+
 ## Retrieval
 
 ### `query TASK [options]`
@@ -109,6 +125,7 @@ Lists unreachable functions (CLI only, not MCP).
 
 ```bash
 codegraph rebuild
+codegraph find AuthService
 codegraph query "fix JWT expiry" -e TokenService -e validate_jwt
 codegraph explain "fix JWT expiry" --top-k 5
 codegraph analyze deps validate_jwt --direction upstream --depth 2

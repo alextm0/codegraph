@@ -98,7 +98,7 @@ Plain Markdown for humans and **AI agents**. Read this tree before changing arch
 
 ## System in one paragraph
 
-CodeGraph parses **Python** into a **Neo4j** graph (calls, imports, containment, inheritance), selects **seeds** from task text (entity names + BM25), runs **Personalized PageRank** (GDS, uniform restart, d=0.70, IDF-weighted edges), and returns ranked **source code** within a **token budget** via **two MCP tools** or the CLI/visualizer. Quality is measured on **SWE-bench Lite** file-level Recall@10 (~73–74% at best config).
+CodeGraph parses **Python** into a **Neo4j** graph (calls, imports, containment, inheritance), selects **seeds** from task text (entity names + BM25), runs **Personalized PageRank** (GDS, uniform restart, d=0.70, IDF-weighted edges), and returns ranked **source code** within a **token budget** via **two MCP tools** or the CLI/visualizer. Quality is measured on **SWE-bench Lite** file-level Recall@10: **74.0%** at the thesis benchmark (`evaluation/results/iteration_2_top_30/summary.json`).
 
 ---
 

@@ -35,12 +35,12 @@ Repo root companions: `AGENTS.md`, `CLAUDE.md`, `DECISIONS.md`.
 
 | Change | Update |
 |--------|--------|
-| CLI command / flag | `reference/cli.md`, `QUICK_REFERENCE.md` |
+| CLI command / flag (e.g. `find`) | `reference/cli.md`, `QUICK_REFERENCE.md`, `guides/cookbook.md` |
 | MCP parameters / JSON | `reference/mcp.md`, `MCP_TOOLS.md`, `AGENTS.md` |
 | config.yaml keys | `reference/config.md` |
 | Algorithm / defaults | `DECISIONS.md`, `concepts/retrieval-pipeline.md`, `reference/decisions.md` |
 | New module | `reference/module-map.md` |
-| Evaluation metrics | `thesis/evaluation.md`, `thesis/chapters/chapter5_*.tex` |
+| Evaluation metrics | `thesis/evaluation.md`, `thesis/chapters/chapter5_*.tex`; benchmark claims require `evaluation/results/iteration_2_top_30/summary.json` or a new full-run `summary.json` |
 | New binding choice | `DECISIONS.md` + row in `reference/decisions.md` |
 
 ---

@@ -1,7 +1,7 @@
 # Evaluation (SWE-bench Lite)
 
 **Authoritative prose:** `thesis/chapters/chapter5_evaluation_results.tex`  
-**Authoritative numbers (machine):** `evaluation/results/*/summary.json`  
+**Authoritative numbers (machine):** [`evaluation/results/iteration_2_top_30/summary.json`](../../evaluation/results/iteration_2_top_30/summary.json)  
 This page bridges both for agents.
 
 ---
@@ -32,25 +32,39 @@ This page bridges both for agents.
 
 ## Reported performance (verify before citing)
 
-### Harness artifact: `iteration_3_full` (baseline, n=300)
+### Thesis benchmark: `iteration_2_top_30` (n=300)
 
-From `evaluation/results/iteration_3_full/summary.json`:
+From [`evaluation/results/iteration_2_top_30/summary.json`](../../evaluation/results/iteration_2_top_30/summary.json):
 
 | Metric | Value |
 |--------|-------|
-| mean Recall@10 | **73.33%** (0.7333) |
+| mean Recall@10 | **74.0%** (0.74) |
+| mean Recall@5 | 60.7% |
+| mean MRR | 0.442 |
+| median MRR | 0.333 |
+| zero-recall @10 | **78** instances |
+| ablation | `uniform_top_k_30` |
+
+### Engineering reference: `iteration_3_full` (baseline, n=300)
+
+From [`evaluation/results/iteration_3_full/summary.json`](../../evaluation/results/iteration_3_full/summary.json) — **do not use for thesis headline**:
+
+| Metric | Value |
+|--------|-------|
+| mean Recall@10 | 73.33% |
 | mean Recall@5 | 63.0% |
 | mean MRR | 0.443 |
-| median MRR | 0.333 |
 | zero-recall @10 | 80 instances |
+
+Re-running with the current harness (`run_core_retrieval`, same `config.yaml` seeds) may not exactly reproduce iter2; cite the **artifact** you executed or the LaTeX chapter.
 
 ### Thesis narrative (chapter 5)
 
-The thesis states **~74.0% Recall@10** for the optimal configuration — may reflect rounding, slightly different run id, or final wording pass. **For the thesis PDF, use LaTeX.** For engineering, use `summary.json` from the run you actually executed.
+The thesis states **~74.0% Recall@10** for the optimal configuration — aligned with `iteration_2_top_30`. For the thesis PDF, use LaTeX. For engineering, use `summary.json` from the run you actually executed.
 
 ### Improvement trajectory (qualitative)
 
-Documented in thesis § eval trajectory:
+Documented in thesis evaluation chapter:
 
 1. Early baseline ~60% R@10 (BM25 / weak graph)
 2. Uniform restart + damping 0.70 → ~72% band
@@ -67,12 +81,14 @@ Full instructions: [../guides/evaluation-harness.md](../guides/evaluation-harnes
 ```bash
 pip install -e ".[bench]"
 python -m evaluation.swe_bench_runner \
-  --cache-dir .codegraph_cache \
+  --cache-dir .codegraph_cache/repos \
   --output evaluation/results/my_run \
   --ablation baseline
 ```
 
-Pilot: add `--limit 5`.
+Pilot: add `--limit 5` (first N dataset rows — django-heavy; not representative of full Lite).
+
+Optional subset: `--instance-ids-file path/to/ids.json` (JSON list of `instance_id` strings).
 
 ---
 
@@ -87,13 +103,13 @@ See `evaluation/ablations.py`:
 - Damping sweeps (`alpha_*`, `uniform_alpha_070`)
 - top-k sweeps
 
-Production config = **baseline** + `config.yaml` PPR defaults (DEC-001).
+Production config = **baseline** + `config.yaml` PPR defaults (DEC-001: α=0.70, top_k=30, uniform).
 
 ---
 
 ## Known failure mode: reachability
 
-**Zero-recall** instances (~80/300 at iter-3) often mean the gold file is **not reachable** from any seed in the static graph within 10 hops — not merely low rank. Thesis discusses this as the main structural ceiling.
+**Zero-recall** instances (~78/300 at iter2) often mean the gold file is **not reachable** from any seed in the static graph within 10 hops — not merely low rank. Thesis discusses this as the main structural ceiling.
 
 Agents writing discussion sections should read chapter 6 limitations too.
 
@@ -104,3 +120,4 @@ Agents writing discussion sections should read chapter 6 limitations too.
 1. Never cite README marketing numbers without checking this file + LaTeX
 2. New benchmark claim → attach `summary.json` path in PR
 3. Config change to seeds/PPR → re-run at least `--limit 50` before thesis updates
+4. Headline metrics → **iteration_2_top_30** unless a new full run beats it on both R@10 and zero-recall

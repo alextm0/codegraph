@@ -86,7 +86,7 @@ Every retrieval calls `ensure_graph_ready()` — safe to repeat.
 
 ## Evaluation snapshot
 
-SWE-bench Lite (300 issues, file-level Recall@k). Best configuration **~74% R@10** (see [../thesis/evaluation.md](../thesis/evaluation.md)). Do not cite stale numbers from old README snippets without checking thesis chapter 5.
+SWE-bench Lite (300 issues, file-level Recall@k). Thesis headline: **74.0% R@10**, 78 zero-recall — artifact [`evaluation/results/iteration_2_top_30/summary.json`](../../evaluation/results/iteration_2_top_30/summary.json) (see [../thesis/evaluation.md](../thesis/evaluation.md)).
 
 ---
 

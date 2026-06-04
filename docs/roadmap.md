@@ -37,6 +37,6 @@ Planned work derived from `TODO.md` and architectural gaps vs CodeGraphContext. 
 ## Documentation
 
 - [x] Agent-oriented `docs/` tree (this folder)
-- [ ] Link docs from Cursor rules / `AGENTS.md` in user projects
+- [x] Link docs from Cursor rules (`.cursor/rules/codegraph-docs.mdc`) + `AGENTS.md`
 
 When completing an item, update this file and `TODO.md` at repo root.

@@ -18,6 +18,7 @@ codegraph doctor
 | Health check | `codegraph doctor` |
 | Graph size | `codegraph stats` |
 | Project + MCP status | `codegraph status` |
+| Find symbol / path | `codegraph find AuthService` |
 | Retrieve context (CLI) | `codegraph query "task" --entity AuthService` |
 | Debug ranking | `codegraph explain "task"` |
 | Callers / callees | `codegraph analyze deps EntityName --direction upstream` |
@@ -27,15 +28,15 @@ codegraph doctor
 
 ## MCP tools (exactly 2)
 
-1. **`get_relevant_context`** — PPR-ranked source for a task (call first).
-2. **`query_dependencies`** — upstream/downstream/both, depth 1 or 2.
+1. **`get_relevant_context`** — PPR-ranked source for a task.
+2. **`query_dependencies`** — deps / `symbol_search` / `class_hierarchy` via `mode`.
 
 ## PPR defaults (do not change without benchmarking)
 
 - `damping_factor`: **0.70**
 - `top_k`: **30**
 - `retrieval_mode`: **uniform**
-- Seed weights: entity **0.6**, BM25 **0.3**
+- Seed weights: entity **0.6**, BM25 **0.3**, issue path hint **0.2**
 
 ## Config essentials
 
@@ -50,4 +51,4 @@ codegraph doctor
 codegraph rebuild
 ```
 
-Full docs: run `mkdocs serve` from `docs/` or read `docs/docs/index.md`.
+Full docs: [docs/README.md](README.md)

@@ -24,15 +24,17 @@ Source code
 
 ## MCP Tools (exactly 2)
 
-**`get_relevant_context`** — call this first for any code task.
-- Input: `task_description`, `mentioned_entities` (list or null), `top_k` (0 = default 30), `token_budget` (0 = default 6000). `current_file` may exist in legacy MCP clients but is ignored.
-- Output: JSON with `summary.result_count`, `summary.visualizer_url`, and `results[]` (entity_name, entity_type, file_path, lines, relevance_score, source_code)
+**`get_relevant_context`** — PPR-ranked code for tasks and bug reports.
+- Input: `task_description`, `mentioned_entities` (list or null), `top_k` (0 = default 30), `token_budget` (0 = default 6000), `include_explanations` (default **true**). `current_file` is ignored.
+- Output: JSON with `summary`, `seeds[]`, `results[]` (entity, file, lines, score, source_code; optional `explanation` per result)
 - Empty graph returns `hint: "run codegraph rebuild"`
 - Pipeline errors return `error` + `hint: "run codegraph doctor"`
 
-**`query_dependencies`** — use after `get_relevant_context` to trace relationships.
-- Input: `entity_name`, `direction` (upstream/downstream/both), `depth` (1 or 2)
-- Output: JSON with `results[]` (qualified_name, name, label, file_path, relationship_type)
+**`query_dependencies`** — fast structural lookups (also symbol search and class hierarchy).
+- Input: `entity_name`, `direction` (upstream/downstream/both), `depth` (1 or 2), `mode` (`dependencies` | `symbol_search` | `class_hierarchy`)
+- `symbol_search`: `entity_name` is a substring pattern; ignores depth
+- `class_hierarchy`: inheritance ancestors (upstream) or subclasses (downstream)
+- Output: JSON with `mode`, `result_count`, `results[]`
 
 There are **no other MCP tools**. `get_graph_stats`, `find_dead_code`, `execute_cypher_query` exist only as CLI commands.
 
@@ -44,7 +46,7 @@ There are **no other MCP tools**. `get_graph_stats`, `find_dead_code`, `execute_
 | `src/codegraph/core/graph/graph_builder.py` | UNWIND+MERGE Neo4j writes |
 | `src/codegraph/core/graph/resolution.py` | CALLS/IMPORTS resolution (ambiguous → no edge) |
 | `src/codegraph/core/graph/ppr.py` | PPRConfig, run_ppr_from_node_ids |
-| `src/codegraph/core/retrieval/seed_selection.py` | entity + BM25 seed scoring |
+| `src/codegraph/core/retrieval/seed_selection.py` | entity + BM25 + issue path hint seeds |
 | `src/codegraph/core/retrieval/post_processing.py` | IDF weighting, token budget |
 | `src/codegraph/core/retrieval/pipeline.py` | run_core_retrieval |
 | `src/codegraph/mcp/server.py` | FastMCP lifespan, ServerState |
@@ -81,6 +83,7 @@ codegraph stats                             # Node/edge counts table
 codegraph doctor                            # Health checks with fix hints
 codegraph query "task" --entity EntityName  # Run retrieval pipeline
 codegraph explain "task"                    # Show seeds + PPR reasoning paths
+codegraph find <pattern>                    # Fast symbol/path search
 codegraph visualize                         # D3 force graph in browser (port 8474)
 codegraph analyze deps <Name>               # Dependency traversal
 codegraph analyze dead-code                 # Unreachable entities

@@ -33,6 +33,7 @@ ppr:
 seed_selection:
   entity_match_weight: 0.6
   bm25_weight: 0.3
+  issue_hint_weight: 0.2
   bm25_top_n: 10
   exclude_seed_paths:
     - tests/
@@ -42,6 +43,7 @@ mcp:
   server_name: codegraph
   default_token_budget: 6000
   default_top_k: 30
+  default_include_explanations: true
 
 project_history:
   - name: my-app
@@ -84,12 +86,17 @@ Glob/path segments skipped during **indexing**.
 |-----|---------|-------------|
 | `entity_match_weight` | 0.6 | Seed mass from name match |
 | `bm25_weight` | 0.3 | Seed mass from BM25 |
+| `issue_hint_weight` | 0.2 | Seed mass from file/path hints in issue text |
 | `bm25_top_n` | 10 | BM25 candidates |
 | `exclude_seed_paths` | [] | Path prefixes excluded from seeds only |
 
 ### `mcp`
 
-Defaults when tool passes `top_k=0` or `token_budget=0`.
+| Key | Default | Description |
+|-----|---------|-------------|
+| `default_token_budget` | 6000 | When MCP passes `token_budget=0` |
+| `default_top_k` | 30 | When MCP passes `top_k=0` |
+| `default_include_explanations` | true | MCP retrieval explanations default |
 
 ### `project_history`
 
