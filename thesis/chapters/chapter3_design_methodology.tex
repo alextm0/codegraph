@@ -242,74 +242,72 @@ The node vocabulary matches \cref{tab:entity-types}; endpoint patterns and seman
 
 \begin{figure}[H]
     \centering
-    \begin{adjustbox}{width=\textwidth,center}
+    \begin{adjustbox}{max width=0.88\linewidth,center}
     \begin{tikzpicture}[
-        % --- Standards & Styles ---
-        node distance=1.6cm and 4.2cm,
-        file/.style={cgnodefile, rounded corners=8pt, minimum width=2.2cm},
-        class/.style={cgnodeclass, rounded corners=8pt, minimum width=2.4cm},
-        method/.style={draw=latticered, fill=white, rounded corners=8pt, font=\small\ttfamily, align=center, inner sep=6pt, minimum width=2.2cm, line width=0.8pt},
-        func/.style={cgnodefunc, rounded corners=8pt, minimum width=2.4cm},
-        % Standardized Arrows
-        main_arr/.style={-{Stealth[length=2.5mm, width=2mm]}, line width=1.5pt, draw=latticeblue},
-        sec_arr/.style={-{Stealth[length=2.2mm, width=1.8mm]}, line width=1.1pt},
-        % Relation specific styles
+        node distance=1.5cm and 3.75cm,
+        file/.style={cgnodefile, rounded corners=6pt, minimum width=2.1cm},
+        class/.style={cgnodeclass, rounded corners=6pt, minimum width=2.2cm},
+        method/.style={
+            draw=latticered,
+            fill=white,
+            rounded corners=6pt,
+            font=\small\ttfamily,
+            align=center,
+            inner sep=6pt,
+            minimum width=2.1cm,
+            line width=0.8pt,
+        },
+        func/.style={cgnodefunc, rounded corners=6pt, minimum width=2.2cm},
+        main_arr/.style={
+            -{Stealth[length=2.4mm, width=1.9mm]},
+            line width=1.2pt,
+            draw=latticeblue,
+        },
+        sec_arr/.style={
+            -{Stealth[length=2.1mm, width=1.7mm]},
+            line width=1pt,
+        },
         rel_imports/.style={sec_arr, draw=latticeblue!75!black, dotted},
         rel_calls/.style={sec_arr, draw=latticered!85!black, dashed},
-        rel_inherits/.style={sec_arr, draw=latticegreen!75!black, dash pattern=on 5pt off 2pt on 1pt off 2pt},
-        % Label formatting
-        lbl/.style={font=\tiny\ttfamily, fill=white, inner sep=1.2pt, text=black!75},
-        sidehdr/.style={
-            font=\small\bfseries,
-            text=black!75,
-            anchor=west,
-            align=left,
+        rel_inherits/.style={
+            sec_arr,
+            draw=latticegreen!75!black,
+            dash pattern=on 5pt off 2pt on 1pt off 2pt,
         },
-        sidesub/.style={
-            font=\scriptsize,
-            text=black!55,
-            anchor=west,
-            align=left,
+        lbl/.style={
+            font=\tiny\ttfamily,
+            fill=white,
+            inner sep=1.5pt,
+            text=black!78,
         },
     ]
+        \node[file] (api) {api.py};
+        \node[class, below=of api] (svc) {Service};
+        \node[method, below=of svc] (hdl) {handle()};
 
-        % --- Grid Background & Bands ---
-        % Shaded Sidebar
-        \fill[black!3] (-0.5, 3.8) rectangle (4.2, -2.8);
-        \draw[latticegray!25, line width=0.6pt] (4.2, 3.8) -- (4.2, -2.8);
+        \node[file, right=of api] (utl) {utils.py};
+        \node[class, below=of utl] (base) {BaseService};
+        \node[func, below=of base] (prs) {parse\_input()};
 
-        % Main Outer Frame
-        \draw[latticegray!20, rounded corners=12pt, line width=0.6pt] (-0.5, 3.8) rectangle (12.5, -2.8);
+        \begin{scope}[on background layer]
+            \node[cgpanel, fill=black!2, draw=latticegray!18,
+                fit=(api)(utl)(hdl)(prs), inner sep=18pt] {};
+        \end{scope}
 
-        % Left Sidebar Labels
-        \node[sidehdr] at (0.2, 2.95) {REPOSITORY FILES};
-        \node[sidesub] at (0.2, 2.45) {Source module layer};
-        \node[sidehdr] at (0.2, -0.35) {CODE ENTITIES};
-        \node[sidesub] at (0.2, -0.85) {Definitions \& logic};
-
-        % --- Nodes ---
-        \node[file] (api) at (6.2, 2.8) {api.py};
-        \node[class] (svc) [below=of api] {Service};
-        \node[method] (hdl) [below=of svc] {handle()};
-
-        \node[file] (utl) at (10.5, 2.8) {utils.py};
-        \node[class] (base) [below=of utl] {BaseService};
-        \node[func] (prs) [below=of base] {parse\_input()};
-
-        % --- Relationships ---
         \draw[main_arr] (api) -- node[lbl, right=3pt] {CONTAINS} (svc);
         \draw[main_arr] (svc) -- node[lbl, right=3pt] {CONTAINS} (hdl);
         \draw[main_arr] (utl) -- node[lbl, right=3pt] {CONTAINS} (base);
         \draw[main_arr] (base) -- node[lbl, right=3pt] {CONTAINS} (prs);
 
         \draw[rel_imports] (api) -- node[lbl, above=4pt] {IMPORTS} (utl);
-        \draw[rel_inherits] (svc) -- node[lbl, above=5pt] {INHERITS\_FROM} (base);
-        \draw[rel_calls] (hdl.east) .. controls +(0.8, -0.2) and +(-0.8, -0.2) .. 
-            node[lbl, below=3pt] {CALLS} (prs.west);
+        \draw[rel_inherits] (svc) -- node[lbl, above=4pt] {INHERITS\_FROM} (base);
+        \draw[rel_calls] (hdl) -- node[lbl, below=3pt] {CALLS} (prs);
 
     \end{tikzpicture}
     \end{adjustbox}
-    \caption{CodeGraph schema showing extracted entities and structural relations.}
+    \caption[CodeGraph node and edge schema]{%
+        CodeGraph property-graph schema (illustrative two-module excerpt).
+        Nodes represent files, classes, methods, and functions; \texttt{CONTAINS} nests entities within a module, \texttt{IMPORTS} links modules, \texttt{INHERITS\_FROM} records class extension, and \texttt{CALLS} connects invocations across the repository.}
     \label{fig:graph-schema}
 \end{figure}
 
@@ -323,92 +321,118 @@ Uniform base weights assume that every structural connection contributes equally
 
 \begin{figure}[H]
     \centering
-    \begin{adjustbox}{max width=\textwidth,center}
-    \begin{tikzpicture}[
+    \tikzset{
         idfsource/.style={
             cgnodefunc,
+            font=\footnotesize\ttfamily,
             fill=latticeorange!10,
-            minimum width=2.35cm,
-            minimum height=0.8cm,
+            minimum width=1.9cm,
+            minimum height=0.66cm,
         },
         idftarget/.style={
             cgnodefunc,
+            font=\footnotesize\ttfamily,
             fill=latticegreen!8,
             draw=latticegreen,
-            minimum width=2.35cm,
-            minimum height=0.8cm,
+            minimum width=1.9cm,
+            minimum height=0.66cm,
         },
         idfhub/.style={
             cgnodefunc,
+            font=\footnotesize\ttfamily,
             fill=latticegray!8,
             draw=latticegray,
-            minimum width=2.35cm,
-            minimum height=0.8cm,
+            minimum width=1.9cm,
+            minimum height=0.66cm,
         },
         idfarr/.style={
-            -{Stealth[length=2.2mm, width=1.7mm]},
+            -{Stealth[length=2.1mm, width=1.6mm]},
             draw=latticeblue,
             line cap=round,
-            line width=1.6pt,
+            line width=1.25pt,
         },
         idfarrthin/.style={
-            -{Stealth[length=1.8mm, width=1.3mm]},
-            draw=latticegray!75,
+            -{Stealth[length=1.7mm, width=1.3mm]},
+            draw=latticegray!70,
             line cap=round,
-            line width=0.7pt,
+            line width=0.75pt,
             dashed,
-            dash pattern=on 3.5pt off 2.5pt,
+            dash pattern=on 3pt off 2pt,
         },
         idftitle/.style={
-            font=\footnotesize\bfseries\sffamily,
-            text=black!75,
-            anchor=south west,
+            font=\footnotesize\bfseries,
+            text=black!78,
+            anchor=south,
+        },
+        idfwt/.style={
+            font=\tiny,
+            fill=white,
+            inner sep=1pt,
+            text=black!72,
         },
         idfleg/.style={
-            font=\scriptsize,
-            text=latticegray,
-            align=left,
+            font=\tiny,
+            text=black!68,
+            anchor=west,
         },
-    ]
-        % --- Panel (a): uniform edge weights ---
-        \begin{scope}
-            \draw[cgpanel, rounded corners=10pt]
-                (-0.55, 2.05) rectangle (5.55, -2.05);
-            \node[idftitle] at (-0.35, 1.85) {(a) Uniform weights};
-
-            \node[idfsource] (s1) at (0, 0) {\texttt{handle\_req()}};
-            \node[idftarget] (t1) at (4.75, 1.15) {\texttt{process()}};
-            \node[idfhub] (h1) at (4.75, -1.15) {\texttt{Logger.info}};
-
-            \draw[idfarr] (s1.east) to[out=22, in=180] (t1.west);
-            \draw[idfarr] (s1.east) to[out=-22, in=180] (h1.west);
-
-            \node[idfleg, anchor=north west] at (-0.35, -1.75) {%
-                \cglegendline{draw=latticeblue, line width=1.6pt}{Same weight to both targets}%
-            };
-        \end{scope}
-
-        % --- Panel (b): IDF edge weights ---
-        \begin{scope}[shift={(6.85, 0)}]
-            \draw[cgpanel, rounded corners=10pt]
-                (-0.55, 2.05) rectangle (5.55, -2.05);
-            \node[idftitle] at (-0.35, 1.85) {(b) IDF weights};
-
-            \node[idfsource] (s2) at (0, 0) {\texttt{handle\_req()}};
-            \node[idftarget] (t2) at (4.75, 1.15) {\texttt{process()}};
-            \node[idfhub] (h2) at (4.75, -1.15) {\texttt{Logger.info}};
-
-            \draw[idfarr] (s2.east) to[out=22, in=180] (t2.west);
-            \draw[idfarrthin] (s2.east) to[out=-22, in=180] (h2.west);
-
-            \node[idfleg, anchor=north west] at (-0.35, -1.75) {%
-                \cglegendline{draw=latticeblue, line width=1.6pt}{Domain target ($w{=}0.63$)}\\[2pt]
-                \cglegendline{draw=latticegray!75, line width=0.7pt, dashed}{Hub target ($w{=}0.27$)}%
-            };
-        \end{scope}
-    \end{tikzpicture}
-    \end{adjustbox}
-    \caption{IDF edge reweighting intuition. Panel~(a) treats all outgoing edges equally; panel~(b) attenuates edges into high in-degree hubs so relevance flow favors domain-specific targets.}
+    }
+    \begin{minipage}[c]{0.485\linewidth}
+        \centering
+        \adjustbox{width=\linewidth,center}{%
+        \begin{tikzpicture}
+            \begin{scope}[local bounding box=diag]
+                \node[idfsource] (s1) at (0, 0) {\texttt{handle\_req()}};
+                \node[idftarget] (t1) at (3.35, 0.92) {\texttt{process()}};
+                \node[idfhub] (h1) at (3.35, -0.92) {\texttt{Logger.info}};
+                \draw[idfarr] (s1.east) to[out=28, in=175]
+                    node[idfwt, pos=0.52, above=1pt] {$w{=}1.0$} (t1.west);
+                \draw[idfarr] (s1.east) to[out=-28, in=175]
+                    node[idfwt, pos=0.52, below=1pt] {$w{=}1.0$} (h1.west);
+            \end{scope}
+            \coordinate (legA) at (0.08, -2.12);
+            \coordinate (panelBotA) at (0, -2.34);
+            \draw[idfarr] ([xshift=-0.75cm]legA) -- ([xshift=-0.34cm]legA);
+            \node[idfleg] at (legA) {Same weight to both targets};
+            \begin{scope}[on background layer]
+                \node[cgpanel, fill=black!2, draw=latticegray!18,
+                    fit=(diag)(legA)(panelBotA), inner sep=10pt, inner ysep=14pt] (pA) {};
+            \end{scope}
+            \node[idftitle] at ($(pA.north)+(0,-5pt)$) {(a) Uniform weights};
+        \end{tikzpicture}%
+        }%
+    \end{minipage}%
+    \hfill
+    \begin{minipage}[c]{0.485\linewidth}
+        \centering
+        \adjustbox{width=\linewidth,center}{%
+        \begin{tikzpicture}
+            \begin{scope}[local bounding box=diag]
+                \node[idfsource] (s2) at (0, 0) {\texttt{handle\_req()}};
+                \node[idftarget] (t2) at (3.35, 0.92) {\texttt{process()}};
+                \node[idfhub] (h2) at (3.35, -0.92) {\texttt{Logger.info}};
+                \draw[idfarr] (s2.east) to[out=28, in=175]
+                    node[idfwt, pos=0.52, above=1pt] {$w{=}0.63$} (t2.west);
+                \draw[idfarrthin] (s2.east) to[out=-28, in=175]
+                    node[idfwt, pos=0.52, below=1pt] {$w{=}0.27$} (h2.west);
+            \end{scope}
+            \coordinate (legB1) at (0.08, -2.02);
+            \coordinate (legB2) at (0.08, -2.22);
+            \coordinate (panelBotB) at (0, -2.34);
+            \draw[idfarr] ([xshift=-0.75cm]legB1) -- ([xshift=-0.34cm]legB1);
+            \node[idfleg] at (legB1) {Domain target ($w{=}0.63$)};
+            \draw[idfarrthin] ([xshift=-0.75cm]legB2) -- ([xshift=-0.34cm]legB2);
+            \node[idfleg] at (legB2) {Hub target ($w{=}0.27$)};
+            \begin{scope}[on background layer]
+                \node[cgpanel, fill=black!2, draw=latticegray!18,
+                    fit=(diag)(legB1)(legB2)(panelBotB), inner sep=10pt, inner ysep=14pt] (pB) {};
+            \end{scope}
+            \node[idftitle] at ($(pB.north)+(0,-5pt)$) {(b) IDF weights};
+        \end{tikzpicture}%
+        }%
+    \end{minipage}
+    \caption[IDF edge reweighting]{%
+        IDF edge reweighting (same seed, two outgoing edges).
+        Panel~(a) keeps uniform weights on both targets; panel~(b) lowers the weight toward the high in-degree hub so more relevance mass stays on the domain-specific callee.}
     \label{fig:idf-reweighting}
 \end{figure}
 
@@ -417,7 +441,7 @@ To account for this effect, CodeGraph assigns each edge a weight based on the in
     w(e) = \frac{1}{\log_2\!\bigl(\operatorname{in\_degree}(v) + 2\bigr)}
     \label{eq:idf-weight}
 \end{equation}
-Nodes with many incoming edges receive lower weights, while rare or specialized targets retain stronger weights. The logarithmic form reduces hub influence gradually rather than aggressively, and the $+2$ offset keeps the function finite for low-degree nodes. Empirical comparison against gentler and stronger alternatives supported the $\log_2$ formulation as the best balance for preserving informative shared functions while still demoting ubiquitous utilities.\footnote{Replacing the denominator with $\log_{10}(\mathrm{in\_degree}+1)$ dropped Recall@10 by 2.3\,pp; the inverse-linear form $1/(\mathrm{in\_degree}+1)$ dropped it by 8.1\,pp.}
+Nodes with many incoming edges receive lower weights, while rare or specialized targets retain stronger weights. The logarithmic form reduces hub influence gradually rather than aggressively, and the $+2$ offset keeps the function finite for low-degree nodes. Empirical comparison against gentler and stronger alternatives supported the $\log_2$ formulation as the best balance for preserving informative shared functions while still demoting ubiquitous utilities.
 
 \Cref{tab:idf-examples} provides representative examples of how this rule behaves across different kinds of repository entities, from private helpers to global utilities. In the implementation, these weights are applied at retrieval time so they always reflect the current state of the graph.
 
