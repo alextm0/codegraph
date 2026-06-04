@@ -5,13 +5,7 @@
 \chapter{System Design and Methodology}
 \label{ch:design}
 
-Code retrieval for AI agents faces a fundamental tension. The context a language model needs to resolve a bug is determined by structural relationships among files, not by lexical similarity to the bug description. A bug report mentions identifiers and keywords, but the files that matter are those connected to those identifiers through import chains, call graphs, and inheritance hierarchies. Text search alone cannot recover these relationships; graph traversal alone has no way to locate a task-relevant starting point.
-
-CodeGraph addresses this tension by combining the two. Lexical methods identify where to begin, a small set of \emph{seed} entities drawn from the task description, and Personalized PageRank (PPR) propagates relevance from those seeds through the code graph, producing a globally ranked result set. Chapter~2 surveyed the underlying algorithms; this chapter shows how CodeGraph configures, combines, and tunes them, with empirical justification for each decision.
-
-The chapter follows the data through the pipeline. \Cref{sec:architecture} introduces the five-stage architecture and its central design principle. CodeGraph is designed to bridge the four research gaps identified in \cref{sec:gaps} through its hybrid, deterministic, and ranked retrieval engine. By using PPR for propagation, it provides globally ranked structural relevance (Gap 1); by combining lexical and entity signals into a unified personalization vector, it treats disparate signals within a single mathematical framework (Gap 2); by avoiding LLMs in the retrieval loop and optimizing the GDS projection, it remains deterministic and computationally cheap (Gap 3); and by evaluating exclusively on the SWE-bench Lite repository-level benchmark, it grounds its design decisions in end-to-end task success (Gap 4).
-
-\Cref{sec:parsing} describes how source code becomes a set of typed entities. \Cref{sec:graph-construction} details how those entities assemble into a weighted property graph. \Cref{sec:seed-selection} translates a natural language task into PPR seed nodes. \Cref{sec:ppr-config} presents the PPR configuration and the rationale for each parameter choice. \Cref{sec:post-processing} covers the post-processing that produces the final output. \Cref{sec:mcp-integration} describes how the pipeline is exposed to AI agents through the Model Context Protocol. \Cref{sec:design-limitations} closes the chapter with the design-level trade-offs and their practical consequences.
+This chapter presents the system design of CodeGraph as a structural retrieval architecture for AI coding agents. It explains how source code is represented as a graph, how natural language tasks are translated into retrieval signals, and how these signals are propagated and ranked to produce relevant context. By combining lexical cues with structural relationships in a unified pipeline, CodeGraph is designed to retrieve context that is both relevant to the task and meaningful within the structure of the codebase. The chapter therefore focuses on the design decisions that shape this pipeline and on their role in making the system practical and effective for AI-assisted software engineering.
 
 
 % =============================================================================
@@ -20,182 +14,124 @@ The chapter follows the data through the pipeline. \Cref{sec:architecture} intro
 \section{Architecture Overview}
 \label{sec:architecture}
 
-We organize CodeGraph as a five-stage pipeline. Each stage consumes the output of the previous stage and produces a well-defined intermediate representation. The five stages are: \emph{source code parsing}, \emph{graph construction}, \emph{seed selection}, \emph{PPR-based ranking}, and \emph{context delivery}. \Cref{fig:pipeline-architecture} illustrates the full pipeline with its intermediate data types and the division between offline indexing and online retrieval.
+CodeGraph formulates repository retrieval as a staged transformation from raw source code to ranked context for an AI agent. The pipeline comprises five stages: source code parsing, graph construction, seed selection, PPR-based ranking, and context delivery. Each stage produces an intermediate representation that serves as the input to the next, allowing structural information extracted from the repository to be preserved and refined throughout the retrieval process. \Cref{fig:pipeline-architecture} illustrates the full pipeline and the division between repository preparation and per-query retrieval.
 
 \begin{figure}[H]
     \centering
-    \resizebox{\textwidth}{!}{%
+    \begin{adjustbox}{max width=\textwidth,center}
     \begin{tikzpicture}[
-            % Stage boxes: 140x80pt equivalent, rounded corners 8pt
-            stage/.style={draw, rounded corners=8pt,
-                    minimum width=3.2cm, minimum height=1.8cm,
-                    text width=2.9cm, align=center,
-                    line width=0.8pt, inner sep=8pt},
-            % Stage number badge (24pt circle, top-left)
-            badge/.style={circle, minimum size=22pt, inner sep=0pt,
-                    font=\footnotesize\bfseries, text=white, line width=0pt},
-            % Data type italic label between stages
-            datalabel/.style={font=\scriptsize\itshape, color={rgb,255:red,107;green,114;blue,128},
-                    align=center, inner sep=2pt},
-            % Timing badge (top-right, red)
-            timing/.style={font=\scriptsize\bfseries,
-                    color={rgb,255:red,220;green,38;blue,38}, inner sep=2pt},
-            % Example annotation below stage
-            example/.style={font=\tiny, color={rgb,255:red,75;green,85;blue,99},
-                    align=center, inner sep=1pt},
-            % Main flow arrow: 3pt solid blue
-            arr/.style={-{Stealth[length=7pt, width=5pt]}, line width=1.5pt,
-                    color={rgb,255:red,37;green,99;blue,235}},
-            node distance=0.7cm
-        ]
+        node distance=0.7cm and 0.58cm,
+        stg/.style={
+            cgstage,
+            minimum width=2.35cm,
+            minimum height=1.28cm,
+            font=\small\bfseries,
+            fill=white,
+            line width=0.8pt,
+        },
+        phaselbl/.style={
+            font=\small\bfseries,
+            text=black!82,
+            fill=black!2,
+            inner sep=4pt,
+            rounded corners=2pt,
+            anchor=south,
+        },
+        phaselbl/orange/.style={
+            phaselbl,
+            text=latticeorange!90!black,
+            fill=latticeorange!2,
+        },
+    ]
+        \node[cgactor] (src) {Source\\repository};
+        \node[stg, draw=latticeblue, right=0.65cm of src] (s1) {Parsing};
+        \node[stg, draw=latticegreen, right=of s1] (s2) {Graph\\build};
+        \node[stg, draw=latticeorange, right=of s2] (s3) {Seed\\selection};
+        \node[stg, draw=latticeorange, right=of s3] (s4) {PPR\\ranking};
+        \node[stg, draw=latticeblue!70!black, right=of s4] (s5) {Context\\delivery};
+        \node[cgactor, right=0.65cm of s5] (agent) {AI\\agent};
 
-        %, ,, ,, ,, ,, ,, ,, ,, ,, ,, ,, 
-        % STAGE NODES (horizontal left-to-right)
-        %, ,, ,, ,, ,, ,, ,, ,, ,, ,, ,, 
-        \node[stage, fill={rgb,255:red,219;green,234;blue,254},
-              draw={rgb,255:red,37;green,99;blue,235}] (s1) at (0,0)
-            {\vspace{10pt}\\\textbf{Tree-sitter}\\[-1pt]\textbf{Parsing}\\[4pt]
-             {\tiny\color{gray!60}14,203 entities}};
+        \node[cgactor, draw=latticeorange, minimum width=2.15cm]
+            at ($(s3.north)+(0,1.38)$) (task) {Task\\description};
 
-        \node[stage, fill={rgb,255:red,209;green,250;blue,229},
-              draw={rgb,255:red,5;green,150;blue,105}, right=1.2cm of s1] (s2)
-            {\vspace{10pt}\\\textbf{Neo4j}\\[-1pt]\textbf{Construction}\\[4pt]
-             {\tiny\color{gray!60}89,471 edges}};
+        \coordinate (split) at ($(s2.east)!0.5!(s3.west)$);
+        \coordinate (prepEdge) at ($(split)+(-0.55,0)$);
+        \coordinate (queryEdge) at ($(split)+(0.55,0)$);
+        \coordinate (prepEdgeN) at ($(prepEdge)+(0,1.2)$);
+        \coordinate (prepEdgeS) at ($(prepEdge)+(0,-1.0)$);
+        \coordinate (queryEdgeN) at ($(queryEdge)+(0,1.2)$);
+        \coordinate (queryEdgeS) at ($(queryEdge)+(0,-1.0)$);
 
-        \node[stage, fill={rgb,255:red,254;green,243;blue,199},
-              draw={rgb,255:red,245;green,158;blue,11}, right=1.2cm of s2] (s3)
-            {\vspace{10pt}\\\textbf{Seed}\\[-1pt]\textbf{Selection}\\[4pt]
-             {\tiny\color{gray!60}5 seeds}};
-
-        \node[stage, fill={rgb,255:red,254;green,243;blue,199},
-              draw={rgb,255:red,245;green,158;blue,11}, right=1.2cm of s3] (s4)
-            {\vspace{10pt}\\\textbf{Personalized}\\[-1pt]\textbf{PageRank}\\[4pt]
-             {\tiny\color{gray!60}Top-30 ranked}};
-
-        \node[stage, fill={rgb,255:red,237;green,233;blue,254},
-              draw={rgb,255:red,124;green,58;blue,237}, right=1.2cm of s4] (s5)
-            {\vspace{10pt}\\\textbf{Post-}\\[-1pt]\textbf{Processing}\\[4pt]
-             {\tiny\color{gray!60}8 files + source}};
-
-        % Stage number badges (top-left corner of each box)
-        \node[badge, fill={rgb,255:red,37;green,99;blue,235}]
-            at ([xshift=2pt,yshift=-2pt]s1.north west) {\footnotesize 1};
-        \node[badge, fill={rgb,255:red,5;green,150;blue,105}]
-            at ([xshift=2pt,yshift=-2pt]s2.north west) {\footnotesize 2};
-        \node[badge, fill={rgb,255:red,245;green,158;blue,11}]
-            at ([xshift=2pt,yshift=-2pt]s3.north west) {\footnotesize 3};
-        \node[badge, fill={rgb,255:red,245;green,158;blue,11}]
-            at ([xshift=2pt,yshift=-2pt]s4.north west) {\footnotesize 4};
-        \node[badge, fill={rgb,255:red,124;green,58;blue,237}]
-            at ([xshift=2pt,yshift=-2pt]s5.north west) {\footnotesize 5};
-
-        % Timing labels (top-right, red)
-        \node[timing] at ([xshift=-4pt,yshift=-6pt]s1.north east) {5--15\,s};
-        \node[timing] at ([xshift=-4pt,yshift=-6pt]s2.north east) {2--8\,s};
-        \node[timing] at ([xshift=-4pt,yshift=-6pt]s3.north east) {20\,ms};
-        \node[timing] at ([xshift=-4pt,yshift=-6pt]s4.north east) {150\,ms};
-        \node[timing] at ([xshift=-4pt,yshift=-6pt]s5.north east) {10\,ms};
-
-        %, ,, ,, ,, ,, ,, ,, ,, ,, ,, ,, 
-        % FLOW ARROWS with data-type labels
-        %, ,, ,, ,, ,, ,, ,, ,, ,, ,, ,, 
-        \draw[arr] (s1.east) -- node[datalabel, above=4pt] {Entity\\[-2pt]Model} (s2.west);
-        \draw[arr] (s2.east) -- node[datalabel, above=4pt] {Property\\[-2pt]Graph} (s3.west);
-        \draw[arr] (s3.east) -- node[datalabel, above=4pt] {Vector\\[-2pt]$\vec{s}$} (s4.west);
-        \draw[arr] (s4.east) -- node[datalabel, above=4pt] {Ranked\\[-2pt]Nodes} (s5.west);
-
-        %, ,, ,, ,, ,, ,, ,, ,, ,, ,, ,, 
-        % TASK DESCRIPTION INPUT (enters at Stage 3)
-        %, ,, ,, ,, ,, ,, ,, ,, ,, ,, ,, 
-        \node[draw, rounded corners=8pt, fill=white,
-              draw={rgb,255:red,31;green,41;blue,55}, line width=0.7pt,
-              font=\scriptsize, align=center, text width=2.4cm,
-              inner sep=6pt, above=1.2cm of s3] (task)
-            {Task Description\\[-2pt]{\tiny\itshape ``Fix auth timeout''}};
-        \draw[-{Stealth[length=6pt,width=4pt]}, line width=1.2pt,
-              color={rgb,255:red,245;green,158;blue,11}]
-            (task.south) -- (s3.north);
-
-        % AI Agent output
-        \node[draw, rounded corners=8pt,
-              fill={rgb,255:red,243;green,244;blue,246},
-              draw={rgb,255:red,31;green,41;blue,55}, line width=0.7pt,
-              font=\small\bfseries, align=center, minimum width=2.6cm,
-              minimum height=0.9cm, right=1.2cm of s5] (agent) {AI Agent};
-        \draw[arr] (s5.east) -- (agent.west);
-
-        % Source repository input
-        \node[draw, rounded corners=8pt,
-              fill={rgb,255:red,243;green,244;blue,246},
-              draw={rgb,255:red,31;green,41;blue,55}, line width=0.7pt,
-              font=\small, align=center, minimum width=2.6cm,
-              minimum height=0.9cm, left=1.2cm of s1] (src)
-            {Source Repo\\[-2pt]{\tiny 847 files}};
-        \draw[arr] (src.east) -- (s1.west);
-
-        %, ,, ,, ,, ,, ,, ,, ,, ,, ,, ,, 
-        % PHASE BACKGROUND BANDS
-        %, ,, ,, ,, ,, ,, ,, ,, ,, ,, ,, 
         \begin{scope}[on background layer]
-            % Offline band (stages 1–2)
-            \node[draw={rgb,255:red,37;green,99;blue,235}, dashed,
-                  rounded corners=10pt,
-                  fill={rgb,255:red,239;green,246;blue,255},
-                  fit=(s1)(s2), inner xsep=10pt, inner ysep=38pt] (offlineband) {};
-            % Online band (stages 3–5)
-            \node[draw={rgb,255:red,5;green,150;blue,105}, dashed,
-                  rounded corners=10pt,
-                  fill={rgb,255:red,240;green,253;blue,244},
-                  fit=(s3)(s4)(s5)(task), inner xsep=10pt, inner ysep=10pt] (onlineband) {};
+            \node[cgpanel, fill=black!2, draw=latticegray!22,
+                fit=(s1)(s2)(prepEdgeN)(prepEdgeS),
+                inner xsep=16pt, inner ysep=24pt] (prep) {};
+            \node[cgpanel, fill=latticeorange!2, draw=latticeorange!28,
+                fit=(queryEdgeN)(queryEdgeS)(s3)(s4)(s5),
+                inner xsep=16pt, inner ysep=24pt] (query) {};
         \end{scope}
-        % Phase labels above bands (centered, placed after scope)
-        \node[font=\footnotesize\bfseries, color={rgb,255:red,37;green,99;blue,235},
-              above=6pt of offlineband] {Offline Indexing \quad 7--23\,s};
-        \node[font=\footnotesize\bfseries, color={rgb,255:red,5;green,150;blue,105},
-              above=6pt of onlineband] {Online Retrieval \quad $<$\,250\,ms};
 
-    \end{tikzpicture}%
-    }% end resizebox
-    \caption[CodeGraph pipeline architecture]{The five-stage CodeGraph pipeline. Stages~1--2 (offline) run once per repository; stages~3--5 (online) run per query in under 250\,ms. Per-stage latencies are shown in the top-right of each stage box.}
+        \node[cgbadge, draw=latticeblue, text=latticeblue, fill=black!2]
+            at ($(s1.north)+(0,0.36)$) {1};
+        \node[cgbadge, draw=latticegreen, text=latticegreen, fill=black!2]
+            at ($(s2.north)+(0,0.36)$) {2};
+        \node[cgbadge, draw=latticeorange, text=latticeorange, fill=latticeorange!2]
+            at ([xshift=0.5cm, yshift=0.36cm]s3.north) {3};
+        \node[cgbadge, draw=latticeorange, text=latticeorange, fill=latticeorange!2]
+            at ($(s4.north)+(0,0.36)$) {4};
+        \node[cgbadge, draw=latticeblue!70!black, text=latticeblue!70!black, fill=latticeorange!2]
+            at ($(s5.north)+(0,0.36)$) {5};
+
+        \node[phaselbl] at ($(prep.north)+(0,-9pt)$) {Repository preparation};
+        \node[phaselbl/orange, anchor=south east]
+            at ($(query.north east)+(-10pt,-9pt)$) {Per-query retrieval};
+
+        \draw[cgarr] (src) -- (s1);
+        \draw[cgarr] (s1) -- (s2);
+        \draw[cgarr] (s2) -- (s3);
+        \draw[cgarr] (s3) -- (s4);
+        \draw[cgarr] (s4) -- (s5);
+        \draw[cgarr] (s5) -- (agent);
+
+        \draw[cgarrthin, latticeorange] (task.south) -- (s3.north);
+    \end{tikzpicture}
+    \end{adjustbox}
+    \caption[Five-stage CodeGraph retrieval pipeline]{%
+        Five-stage CodeGraph retrieval pipeline.
+        Stages~1--2 run at repository preparation time; stages~3--5 run per query.}
     \label{fig:pipeline-architecture}
 \end{figure}
 
-The pipeline divides into two phases. The \emph{offline indexing} phase (Stages~1--2) runs once per repository state, parsing source code and building the dependency graph in 5--30 seconds. The \emph{online retrieval} phase (Stages~3--5) runs per query, translating a task description into seeds, propagating relevance through the graph, and delivering ranked results in under 250\,ms.
+The central design assumption is that lexical and structural evidence play complementary roles in retrieval. The task description provides the initial relevance signal through identifiers and keyword matches, while Personalized PageRank propagates that signal over the dependency graph to identify structurally supported regions of the codebase. As a result, regions reinforced by multiple structural connections gain prominence, whereas weakly connected or isolated matches lose influence in the final ranking.
 
-A concrete example shows how lexical and structural signals interact. Consider the task ``Fix the SQL compilation error when using \texttt{QuerySet.annotate()}'' on a Django repository of several hundred files. Entity extraction picks up \texttt{QuerySet}, \texttt{annotate}, and \texttt{SQLCompiler} and produces seed nodes. BM25 keyword search adds further seeds from files that mention SQL compilation. Some of these seeds fall in the relevant region of the graph and others do not. When PPR runs, the correct seeds, linked by \texttt{CONTAINS} and \texttt{CALLS} edges to the relevant code, reinforce each other and accumulate probability at their structural intersection. The incorrect seeds, isolated from that region, dissipate probability locally and are overtaken. The final ranking surfaces the structurally coherent neighborhood.
+This decomposition also supports practical retrieval performance. Parsing and graph construction are carried out before query execution, while per-query retrieval operates over an already constructed graph and is dominated primarily by the ranking computation. \Cref{tab:stage-complexity} summarizes the computational complexity associated with each stage.
 
-The design principle this example illustrates is \emph{signal amplification}. Seed selection gives PPR a noisy starting signal; PPR amplifies the parts of that signal that agree structurally and attenuates the rest. When multiple seeds point toward the same region, their contributions compound there; when a seed has no structural support, its contribution dilutes. One consequence is that seed quality sets a hard ceiling on retrieval quality, a finding confirmed empirically in \cref{ch:evaluation}.
-
-\Cref{tab:stage-complexity} summarizes the per-stage complexity. Offline indexing is dominated by Neo4j write throughput; online retrieval is dominated by the PPR matrix-vector computation.
+The pipeline is further designed to behave conservatively when information is incomplete. Files with syntax errors yield no extracted entities, unresolved imports and ambiguous calls are omitted rather than inferred, and failure to construct a personalization vector results in an explicit empty output. This design favors precision and interpretability over speculative retrieval. The following sections examine each stage in detail, beginning with source code parsing and entity extraction.
 
 \begin{table}[H]
     \centering
-    \caption[Per-stage computational complexity]{Computational complexity for each pipeline stage. Symbols: $n$ = number of files; $m$ = average file size in tokens; $|V|,|E|$ = graph nodes and edges; $q$ = query length; $t$ = PPR iterations (empirically 6--10); $k$ = result count.}
+    \caption{Per-stage computational complexity.}
     \label{tab:stage-complexity}
-    \renewcommand{\arraystretch}{1.2}
-    \begin{adjustbox}{max width=\textwidth}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.0cm}
-                                  >{\centering\arraybackslash}p{1.8cm}
-                                  >{\raggedright\arraybackslash}X
-                                  >{\centering\arraybackslash}p{2.4cm}}
+    \cgtablerows
+    \small
+    \begin{tabularx}{\textwidth}{@{} 
+        >{\RaggedRight\arraybackslash}p{3.1cm} 
+        >{\centering\arraybackslash}p{1.4cm} 
+        >{\RaggedRight\arraybackslash}X 
+        >{\RaggedLeft\arraybackslash}p{2.2cm} @{}}
         \toprule
-        \rowcolor{black!6}
-        \textbf{Stage} & \textbf{Phase} & \textbf{Dominant Operation} & \textbf{Complexity} \\
+        \textbf{Stage} & \textbf{Phase} & \textbf{Operation} & \textbf{Complexity} \\
         \midrule
-        Stage 1: Parsing & Offline & Tree-sitter CST traversal and entity extraction & $O(n \cdot m)$ \\
-        Stage 2: Graph Construction & Offline & Batched \texttt{UNWIND+MERGE} node/edge writes & $O(|V| + |E|)$ \\
-        IDF Reweighting & Online & Edge weight update across all edges & $O(|E|)$ \\
-        Stage 3: Seed Selection & Online & BM25 index query and entity lookup & $O(q \cdot |V|)$ \\
-        Stage 4: PPR Ranking & Online & Sparse matrix-vector multiply (GDS) & $O(t \cdot |E|)$ \\
-        Stage 5: Context Delivery & Online & Sort and token budget scan & $O(k \log k)$ \\
+        Parsing & Prep & Tree-sitter extraction & $O(nm)$ \\
+        Graph build & Prep & Batched Neo4j writes & $O(|V|{+}|E|)$ \\
+        IDF reweight & Query & Edge weight update & $O(|E|)$ \\
+        Seed selection & Query & BM25 + entity lookup & $O(q|V|)$ \\
+        PPR ranking & Query & GDS matrix multiply & $O(t|E|)$ \\
+        Context delivery & Query & Sort + token scan & $O(k\log k)$ \\
         \bottomrule
     \end{tabularx}
-    \end{adjustbox}
 \end{table}
-
-The pipeline degrades gracefully under failure rather than failing hard. A file with a syntax error produces no entities and is consequently absent from the graph. Unresolved imports and ambiguous calls are dropped rather than guessed, trading a small amount of recall for graph precision. If seed selection yields an empty personalization vector (for example, when the task description contains no recognizable identifiers and BM25 matches nothing), the pipeline returns an empty result and reports the failure explicitly. The guiding policy is to prefer returning nothing over returning a misleading result.
-
-The following sections examine each stage in detail, beginning with how raw source code is transformed into structured entities.
+\cgtablenote{Symbols: $n$ files, $m$ tokens per file, $|V|$ nodes, $|E|$ edges, $q$ query length, $t$ PPR iterations (6--10), $k$ results.}
 
 
 % =============================================================================
@@ -204,243 +140,88 @@ The following sections examine each stage in detail, beginning with how raw sour
 \section{Source Code Parsing}
 \label{sec:parsing}
 
-Graph-based retrieval requires an explicit representation of which code units exist and how they relate to each other. A Python source file is just text until a parser identifies meaningful units, classes, functions, methods, and the relationships between them. This section describes how CodeGraph uses Tree-sitter to convert source files into a typed entity model that feeds directly into graph construction (\cref{sec:graph-construction}).
+Graph-based retrieval requires an explicit structural representation of the repository. A source file, in its raw textual form, does not yet expose the code units and relationships needed for graph construction. This section therefore explains how CodeGraph parses Python source files into a typed entity model that serves as the basis for the graph representation used in later stages.
 
-The granularity at which entities are extracted shapes both graph size and retrieval quality, so it warrants explicit justification. A file-level model is too coarse: if \texttt{auth.py} contains both \texttt{LoginView.authenticate()} and the unrelated helper \texttt{parse\_user\_agent()}, both collapse into a single node and retrieval cannot separate them. Tracking every AST node is the opposite extreme, local variables and expressions inflate the graph into hundreds of thousands of nodes, PPR convergence slows past ten seconds, and local-scope noise overwhelms the structural signal.
+A central design question is the level of granularity at which entities should be extracted. If the representation is too coarse, important code elements are grouped together and retrieval cannot distinguish between them. If it is too detailed, the graph becomes larger and noisier, which makes retrieval less efficient and less focused.
 
-The four-entity model (files, classes, functions, methods) occupies the productive middle ground. It captures the cross-file relationships developers typically reason about, such as the \texttt{authenticate} method calling \texttt{hash\_password}, while keeping the graph small enough for sub-second retrieval. These four units also match how Python code is organized: classes, functions, and methods are the importable and callable components, which is the granularity at which dependency-driven retrieval is most effective. \Cref{tab:entity-granularity} compares the three options across graph size, retrieval speed, and recall.
+CodeGraph adopts a four-entity model consisting of files, classes, functions, and methods. This choice provides a practical middle ground: it captures the units through which Python code is typically organized and referenced, while preserving a graph size that remains suitable for efficient retrieval.
+
+Table~\ref{tab:entity-granularity} compares the three granularity options considered for structural code representation.
 
 \begin{table}[H]
     \centering
-    \caption[Entity granularity options]{Comparison of three entity granularity options. The four-type model achieves the best recall while preserving sub-second query latency. \checkmark\,indicates the selected design.}
+    \caption{Entity granularity options.}
     \label{tab:entity-granularity}
-    \renewcommand{\arraystretch}{1.3}
-    \begin{adjustbox}{max width=\textwidth}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X
-                                  >{\centering\arraybackslash}p{2.2cm}
-                                  >{\centering\arraybackslash}p{2.2cm}
-                                  >{\centering\arraybackslash}p{2.2cm}}
+    \cgtablerows
+    \small
+    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\arraybackslash}p{3.1cm}
+        >{\RaggedRight\arraybackslash}X
+        >{\RaggedRight\arraybackslash}p{4.5cm} @{}}
         \toprule
-        \rowcolor{black!6}
-        \textbf{Property} & \textbf{File-Only} & \textbf{Four Types \checkmark} & \textbf{Full AST} \\
+        \textbf{Model} & \textbf{Captures} & \textbf{Limitation} \\
         \midrule
-        Node types & 1 & 4 & 100+ \\
-        Graph size & 847 nodes & 15,200 nodes & 500K+ nodes \\
-        PPR speed & 5\,ms & 150\,ms & 12\,s \\
-        Recall@10 & 31\% & \cellcolor[HTML]{ECFDF5}\textbf{48\%} & 44\% \\
-        \midrule
-        \rowcolor[HTML]{FEF2F2}
-        Limitation & Cannot distinguish methods within a file &
-           ---  &
-            Too slow; local variable noise overwhelms signal \\
+        File-level & Files only & No intra-file units \\
+        Four-entity model &
+        Files, classes, functions, and methods &
+        Balanced detail \\
+        Full AST & All syntax nodes & Too noisy at scale \\
         \bottomrule
     \end{tabularx}
-    \end{adjustbox}
 \end{table}
 
 \subsection{Parsing with Tree-sitter}
 \label{sec:parsing-treesitter}
 
-CodeGraph employs Tree-sitter for source code parsing, as introduced in \cref{ch:background}. From each Python file, the parser extracts four types of code entities: files, classes, functions, and methods. Each entity receives a \emph{qualified name}, a string that uniquely identifies it within the repository.
+The parsing stage uses Tree-sitter to convert each Python file into a set of typed code entities. In CodeGraph, these entities are files, classes, functions, and methods. Each one receives a qualified name, which acts as a repository-wide identifier and distinguishes entities that may share the same local name but appear in different files or scopes.
 
-\Cref{tab:entity-types} summarizes the four entity types, their key properties, and the qualified name format for each.
+This naming scheme is important because later stages rely on it to create graph nodes consistently and to resolve references across the repository. \Cref{tab:entity-types} presents the four entity types together with their key properties and naming format.
 
 \begin{table}[H]
     \centering
-    \caption[Entity types extracted by the parser]{The four entity types extracted from Python source files. The \texttt{qualified\_name} (double-colon separator) uniquely identifies each entity within the repository.}
+    \caption{Parser entity types and naming patterns.}
     \label{tab:entity-types}
-    \renewcommand{\arraystretch}{1.3}
-    \begin{adjustbox}{max width=\textwidth}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.8cm}
-                                  >{\raggedright\arraybackslash}p{4.2cm}
-                                  >{\raggedright\arraybackslash}X
-                                  >{\raggedright\arraybackslash}p{2.8cm}}
+    \cgtablerows
+    \small
+    \begin{tabularx}{\textwidth}{@{} 
+        >{\RaggedRight\arraybackslash}p{2.0cm} 
+        >{\RaggedRight\arraybackslash}p{4.0cm} 
+        >{\RaggedRight\arraybackslash}X @{}}
         \toprule
-        \rowcolor{black!6}
-        \textbf{Type} & \textbf{Key Properties} & \textbf{Description} & \textbf{Qualified Name} \\
+        \textbf{Type} & \textbf{Role} & \textbf{Qualified name} \\
         \midrule
-        File &
-            \texttt{file\_path,} \texttt{line\_count} &
-            A \texttt{.py} source file &
-            \texttt{path/to/file.py} \\[2pt]
-        Class &
-            \texttt{name,} \texttt{file\_path,} \texttt{line\_number} &
-            A class definition &
-            \texttt{file::ClassName} \\[2pt]
-        Function &
-            \texttt{name,} \texttt{file\_path,} \texttt{signature} &
-            A module-level function &
-            \texttt{file::func\_name} \\[2pt]
-        Method &
-            \texttt{name,} \texttt{class\_name,} \texttt{signature} &
-            A function defined inside a class &
-            \texttt{file::Class.method} \\
+        File & Source module & \texttt{path/to/file.py} \\
+        Class & Class definition & \texttt{file.py::ClassName} \\
+        Function & Module function & \texttt{file.py::func\_name} \\
+        Method & Class method & \texttt{file.py::Class.method} \\
         \bottomrule
     \end{tabularx}
-    \end{adjustbox}
 \end{table}
-
-The qualified name scheme ensures global uniqueness across the repository. Two files may each define a function named \texttt{process}, but \texttt{models/user.py::process} and \texttt{utils/http.py::process} are distinct nodes in the graph. This identity scheme serves as the primary node key throughout the system for deduplication, lookup, and cross-referencing.
+\cgtablenote{Qualified names use \texttt{::} as the repository-wide node key. Two symbols with the same short name in different files remain distinct, e.g.\ \texttt{models/user.py::process} vs.\ \texttt{utils/http.py::process}.}
 
 \subsection{Import Resolution}
 \label{sec:import-resolution}
 
-Import statements declare cross-file dependencies, but Tree-sitter returns only the raw import string; it does not identify which file on disk that string refers to. Import resolution closes this gap, turning each import into an \texttt{IMPORTS} edge between the importing file and its target.
+Import statements express cross-file dependencies, but parsing alone yields only the raw import string rather than its target within the repository. Import resolution addresses this by mapping each resolvable import to a file on disk and converting it into an \texttt{IMPORTS} edge between the importing file and the imported module.
 
-The resolver handles three categories of imports:
-\begin{itemize}[leftmargin=*, itemsep=2pt]
-    \item \emph{Absolute imports} (\texttt{from src.utils.helpers import validate\_email}): the dotted path is mapped to a file system path relative to the project root, then matched against a \texttt{.py} file or a package \texttt{\_\_init\_\_.py}.
-    \item \emph{Relative imports} (\texttt{from ..models import User}): the leading dots determine how many parent directories to walk before applying the same lookup.
-    \item \emph{Standard library and third-party imports}: identified via \texttt{sys.stdlib\_module\_names} (Python~3.10+) and \texttt{frozenset(dir(builtins))}, and silently dropped rather than creating dangling nodes.
-\end{itemize}
-
-Imports that resolve to none of the above (dynamic paths, generated module names, or third-party packages absent from the repository tree) are logged and skipped. This is deliberate: a guess would introduce false edges, which harm PPR more than missing ones (\cref{sec:call-resolution}). On well-structured Python repositories such as those in SWE-bench, the resolver handles the large majority of imports; the remainder is dominated by absent third-party packages and dynamic patterns.
+The resolver supports both absolute and relative imports by matching module paths against the repository structure. Standard-library and third-party imports are recognized separately and left out of the graph, since they do not correspond to source files inside the repository. When no reliable match can be found, the import is omitted rather than inferred, which keeps the dependency graph more precise and avoids introducing misleading edges.
 
 \subsection{Call Resolution}
 \label{sec:call-resolution}
 
-Call resolution converts function call expressions into \texttt{CALLS} edges by deciding, for each call site, which definition the call refers to. It is harder than import resolution because Python is dynamically typed: \texttt{user.save()} cannot be resolved statically without knowing the type of \texttt{user}. CodeGraph therefore uses a three-level priority scheme that matches the callee name against progressively weaker evidence:
+Call resolution converts function call expressions into \texttt{CALLS} edges by determining which definition each call site refers to. This step is more difficult than import resolution because Python is dynamically typed: in many cases, the target of a call cannot be identified from syntax alone.
 
-\begin{enumerate}[leftmargin=*, itemsep=4pt]
-    \item \textbf{Imported names.} If the callee was imported via a successfully resolved import statement, the call is linked to the imported definition. This is the highest-confidence match.
-    \item \textbf{Same-file definitions.} If the callee name matches a function or class defined in the same file, the call is linked to that local definition.
-    \item \textbf{Unique global match.} If the callee name matches exactly one definition across the entire repository, the call is linked to that definition. When multiple definitions share the same name, the call is considered ambiguous.
-\end{enumerate}
+To address this, CodeGraph applies a three-level resolution strategy in descending order of confidence. A call is linked first to an imported definition when the callee name matches a successfully resolved import; if no such match exists, the resolver checks for a definition in the same file; failing that, it links the call only when there is a unique matching definition across the repository.
 
-\Cref{fig:call-resolution} shows this scheme as a decision tree: a successful match at any level creates the edge and terminates; otherwise the algorithm falls through to the next level.
-
-\begin{figure}[H]
-    \centering
-    \begin{tikzpicture}[
-            level/.style={draw, rounded corners=6pt,
-                minimum width=4.8cm, minimum height=0.85cm,
-                text width=4.5cm, align=center,
-                font=\small, inner sep=6pt},
-            outcome/.style={draw, rounded corners=6pt,
-                minimum width=3.0cm, minimum height=0.85cm,
-                text width=2.7cm, align=center,
-                font=\small\bfseries, inner sep=6pt},
-            arr/.style={-{Stealth[length=5pt,width=3.5pt]}, line width=1.0pt},
-            lbl/.style={font=\footnotesize\bfseries, fill=white, inner sep=1.5pt},
-            node distance=0.7cm
-        ]
-
-        % Header
-        \node[font=\small\bfseries, color={rgb,255:red,31;green,41;blue,55}]
-            (hdr) at (0,0) {Call site: \texttt{callee\_name(...)}};
-
-        % Level 1
-        \node[level, fill={rgb,255:red,219;green,234;blue,254},
-              draw={rgb,255:red,37;green,99;blue,235}, below=0.5cm of hdr] (l1)
-            {\textbf{Level 1:} Name was imported?};
-        \node[outcome, fill={rgb,255:red,209;green,250;blue,229},
-              draw={rgb,255:red,5;green,150;blue,105}, right=1.8cm of l1] (o1)
-            {\textcolor[HTML]{059669}{CALLS} edge\\to imported def};
-        \draw[arr, color={rgb,255:red,5;green,150;blue,105}]
-            (l1.east) -- node[lbl, above=2pt, color={rgb,255:red,5;green,150;blue,105}] {yes} (o1.west);
-
-        % Level 2
-        \node[level, fill={rgb,255:red,254;green,243;blue,199},
-              draw={rgb,255:red,245;green,158;blue,11}, below=0.5cm of l1] (l2)
-            {\textbf{Level 2:} Defined in same file?};
-        \draw[arr, color={rgb,255:red,220;green,38;blue,38}]
-            (l1.south) -- node[lbl, left=2pt, color={rgb,255:red,220;green,38;blue,38}] {no} (l2.north);
-        \node[outcome, fill={rgb,255:red,209;green,250;blue,229},
-              draw={rgb,255:red,5;green,150;blue,105}, right=1.8cm of l2] (o2)
-            {\textcolor[HTML]{059669}{CALLS} edge\\to local def};
-        \draw[arr, color={rgb,255:red,5;green,150;blue,105}]
-            (l2.east) -- node[lbl, above=2pt, color={rgb,255:red,5;green,150;blue,105}] {yes} (o2.west);
-
-        % Level 3
-        \node[level, fill={rgb,255:red,243;green,244;blue,246},
-              draw={rgb,255:red,156;green,163;blue,175}, below=0.5cm of l2] (l3)
-            {\textbf{Level 3:} Unique global match?};
-        \draw[arr, color={rgb,255:red,220;green,38;blue,38}]
-            (l2.south) -- node[lbl, left=2pt, color={rgb,255:red,220;green,38;blue,38}] {no} (l3.north);
-        \node[outcome, fill={rgb,255:red,209;green,250;blue,229},
-              draw={rgb,255:red,5;green,150;blue,105}, right=1.8cm of l3] (o3)
-            {\textcolor[HTML]{059669}{CALLS} edge\\to unique def};
-        \draw[arr, color={rgb,255:red,5;green,150;blue,105}]
-            (l3.east) -- node[lbl, above=2pt, color={rgb,255:red,5;green,150;blue,105}] {yes} (o3.west);
-
-        % Drop
-        \node[outcome, fill={rgb,255:red,254;green,226;blue,226},
-              draw={rgb,255:red,220;green,38;blue,38},
-              minimum width=4.8cm, text width=4.5cm,
-              below=0.5cm of l3] (drop)
-            {\textcolor[HTML]{DC2626}{DROP},  ambiguous or unresolved};
-        \draw[arr, color={rgb,255:red,220;green,38;blue,38}]
-            (l3.south) -- node[lbl, left=2pt, color={rgb,255:red,220;green,38;blue,38}] {no} (drop.north);
-
-    \end{tikzpicture}
-    \caption[Call resolution priority scheme]{Three-level call resolution. A successful match at any level creates a \texttt{CALLS} edge and terminates. Unmatched or ambiguous calls are dropped: a false edge harms PPR more than a missing one.}
-    \label{fig:call-resolution}
-\end{figure}
-
-Ambiguous calls, those whose callee name matches multiple definitions, are dropped. The reasoning is asymmetric: PPR propagates probability along every edge it sees, so a false \texttt{CALLS} edge diverts mass into an unrelated region of the graph, while a missing edge only reduces the mass reaching a relevant one. Preserving precision at the cost of recall is the safer trade.
+Calls that remain ambiguous or unresolved are omitted rather than guessed. This design favors graph precision over graph completeness, because a false \texttt{CALLS} edge can redirect PPR into an unrelated region of the graph, whereas a missing edge only limits the propagation path that would otherwise be available.
 
 \subsection{Parser Limitations and Edge Cases}
 \label{sec:parser-limitations}
 
-Three edge cases are worth calling out because they occur in real-world repositories.
+The main limitations of the parsing stage come from the boundaries of static analysis, not from basic syntax handling. Circular imports are handled by separating parsing from dependency resolution: each file is indexed independently, import statements are recorded first, and \texttt{IMPORTS} edges are created only after the full set of files is known, which allows cyclic dependencies to be represented without recursive import chasing.
 
-\paragraph{Circular imports.} Python permits circular imports at module level as long as symbols are not accessed at import time. CodeGraph handles them correctly because each file is parsed independently: import statements are recorded without immediate resolution, not followed. The two-pass construction in \cref{sec:two-pass} then creates all \texttt{IMPORTS} edges once every file has been indexed, capturing both directions of a cycle without recursion.
+Dynamic imports are more difficult. When module names are constructed at runtime, for example through \texttt{importlib.import\_module()} or \texttt{\_\_import\_\_()}, the target cannot be determined reliably by static analysis, so these dependencies are omitted from the graph. This follows the same precision-first rule used elsewhere in the system: a false edge can misdirect propagation, while a missing edge mainly reduces how far relevance can spread.
 
-\paragraph{Dynamic imports.} \texttt{importlib.import\_module()}, \texttt{\_\_import\_\_()}, and plugin-loading frameworks pass module names as runtime strings, which static analysis cannot resolve. These patterns are silently dropped. In heavily plugin-based codebases, the missing edges noticeably shrink the reachable set for queries that traverse them.
-
-\paragraph{Large files.} Tree-sitter parses in linear time, so a 5{,}000-line file costs only marginally more than five 1{,}000-line files. The bottleneck on large repositories is graph construction (Neo4j writes), not parsing. Files above roughly 10{,}000 lines are rare in well-maintained projects and did not appear in the SWE-bench evaluation set.
-
-\Cref{fig:parsing-extraction} shows the full parsing pipeline, from source code through entity extraction to resolved edges. The next stage assembles these entities into a weighted property graph.
-
-\begin{figure}[H]
-\centering
-\small
-\renewcommand{\arraystretch}{1.15}
-\begin{tabular}{p{5.2cm} p{0.3cm} p{4.5cm} p{0.3cm} p{4.5cm}}
-    \multicolumn{1}{c}{\textbf{Source Code}} & &
-    \multicolumn{1}{c}{\textbf{Extracted Entities}} & &
-    \multicolumn{1}{c}{\textbf{Graph Edges}} \\[4pt]
-    \hline \\[-6pt]
-    % Source code block
-    \begin{minipage}[t]{5.0cm}
-    \ttfamily\scriptsize
-    \textcolor[HTML]{9CA3AF}{1\;}\textcolor[HTML]{7C3AED}{\textbf{from}} utils.crypto
-      \textcolor[HTML]{7C3AED}{\textbf{import}} hash\_pw\\[2pt]
-    \textcolor[HTML]{9CA3AF}{2\;}\textcolor[HTML]{6B7280}{\# auth module}\\[2pt]
-    \textcolor[HTML]{9CA3AF}{3\;}\textcolor[HTML]{7C3AED}{\textbf{class}}
-      \textcolor[HTML]{059669}{AuthService}:\\[2pt]
-    \textcolor[HTML]{9CA3AF}{4\;}\quad\textcolor[HTML]{7C3AED}{\textbf{def}}
-      \textcolor[HTML]{2563EB}{authenticate}(self, pw):\\[2pt]
-    \textcolor[HTML]{9CA3AF}{5\;}\quad\quad h = \textcolor[HTML]{DC2626}{hash\_pw}(pw)\\[2pt]
-    \textcolor[HTML]{9CA3AF}{6\;}\quad\quad\textcolor[HTML]{7C3AED}{\textbf{return}} self.\textcolor[HTML]{DC2626}{verify}(h)
-    \end{minipage}
-    & $\Rightarrow$ &
-    % Entities column
-    \begin{minipage}[t]{4.2cm}
-    \scriptsize
-    \textcolor[HTML]{2563EB}{\rule[2pt]{8pt}{1.5pt}}~\textbf{File}~~\texttt{auth.py}\\[4pt]
-    \textcolor[HTML]{059669}{\rule[2pt]{8pt}{1.5pt}}~\textbf{Class}~~\texttt{AuthService} \textcolor[HTML]{9CA3AF}{(L3)}\\[4pt]
-    \textcolor[HTML]{EA580C}{\rule[2pt]{8pt}{1.5pt}}~\textbf{Method}~~\texttt{authenticate} \textcolor[HTML]{9CA3AF}{(L4)}\\[4pt]
-    \textcolor[HTML]{6366F1}{\rule[2pt]{8pt}{1.5pt}}~\textbf{Import}~~\texttt{hash\_pw} \textcolor[HTML]{9CA3AF}{(L1)}\\[4pt]
-    \textcolor[HTML]{DC2626}{\rule[2pt]{8pt}{1.5pt}}~\textbf{Call}~~\texttt{hash\_pw()} \textcolor[HTML]{9CA3AF}{(L5)}
-    \end{minipage}
-    & $\Rightarrow$ &
-    % Edges column
-    \begin{minipage}[t]{4.2cm}
-    \scriptsize
-    \textcolor[HTML]{2563EB}{\rule[2pt]{8pt}{1.5pt}}~\texttt{auth.py} $\to$~\texttt{AuthService}\\
-    \hspace*{18pt}{\scriptsize\textcolor[HTML]{9CA3AF}{CONTAINS}}\\[4pt]
-    \textcolor[HTML]{2563EB}{\rule[2pt]{8pt}{1.5pt}}~\texttt{AuthService} $\to$~\texttt{authenticate}\\
-    \hspace*{18pt}{\scriptsize\textcolor[HTML]{9CA3AF}{CONTAINS}}\\[4pt]
-    \textcolor[HTML]{DC2626}{- - -}~\texttt{authenticate} $\to$~\texttt{hash\_pw}\\
-    \hspace*{18pt}{\scriptsize\textcolor[HTML]{9CA3AF}{CALLS}}\\[4pt]
-    \textcolor[HTML]{059669}{$\cdots\cdots$}~\texttt{auth.py} $\to$~\texttt{crypto.py}\\
-    \hspace*{18pt}{\scriptsize\textcolor[HTML]{9CA3AF}{IMPORTS}}
-    \end{minipage}
-\end{tabular}
-    \caption[Parsing pipeline: source to graph]{Code-to-graph transformation. Tree-sitter parses \texttt{auth.py} into five typed entities (center); resolution then produces four graph edges (right) encoding containment, calls, and imports.}
-    \label{fig:parsing-extraction}
-\end{figure}
+Scalability is also manageable at the parsing level. Tree-sitter parses large files in linear time, so parsing itself remains efficient, while the more significant cost in larger repositories comes from graph construction, especially database writes, rather than from entity extraction. Very large files were not common in the evaluation set, so this issue did not materially affect the reported experiments.
 
 
 % =============================================================================
@@ -449,296 +230,232 @@ Three edge cases are worth calling out because they occur in real-world reposito
 \section{Graph Construction}
 \label{sec:graph-construction}
 
-With entities extracted and references resolved, the second stage assembles them into a weighted property graph stored in Neo4j. This graph is the backbone of the system: it encodes every structural relationship in the repository, including which file defines which class and which functions call each other, and provides the substrate on which PPR propagates relevance.
-
-Two choices at this stage directly shape retrieval quality: the \emph{schema} (which node and edge types to include) and the \emph{edge weight function} (how to quantify the informativeness of each relationship). The rest of this section addresses them in turn.
+With entities extracted and references resolved, the next stage constructs the repository representation used for retrieval. CodeGraph stores this representation as a weighted property graph in Neo4j, where nodes correspond to parsed code entities and edges encode structural relationships between them. This graph is the central data structure of the system: it preserves repository structure in a form that supports Personalized PageRank and allows relevance to propagate beyond direct lexical matches. At this stage, two design choices are especially important, the graph schema and the edge-weighting strategy, because they determine what structural information is represented and how strongly it influences retrieval.
 
 \subsection{Node and Edge Schema}
 \label{sec:graph-schema}
 
-The graph uses four node labels (\texttt{File}, \texttt{Class}, \texttt{Function}, \texttt{Method}) corresponding directly to the entity types from \cref{sec:parsing}. Each node carries properties including \texttt{qualified\_name} (primary key), \texttt{name}, \texttt{file\_path}, and optional metadata such as \texttt{docstring}, \texttt{line\_number}, and \texttt{signature}.
+The graph schema mirrors the four-entity representation introduced in \cref{sec:parsing}. Nodes are created for files, classes, functions, and methods, and each node stores a qualified name together with core metadata such as name, file path, and, where available, signature, line number, and docstring. Structural relationships between these entities are represented through four edge types: \texttt{CONTAINS}, \texttt{CALLS}, \texttt{IMPORTS}, and \texttt{INHERITS\_FROM}. Together, these node and edge types capture the main structural patterns of a Python codebase, namely containment, invocation, module dependency, and class inheritance, while keeping the graph compact enough to remain interpretable and useful for retrieval. All edges are created with a uniform base weight of~1.0 before query-time IDF reweighting (\cref{sec:idf-reweighting}).
 
-Four edge types capture the structural relationships between code entities. \Cref{tab:edge-types} lists each edge type with its semantic meaning and endpoint types.
-
-\begin{table}[H]
-    \centering
-    \caption[Edge types in the CodeGraph schema]{The four edge types in the code graph. All edges are created with a uniform base weight of 1.0, then overwritten by IDF-based reweighting (\cref{sec:idf-reweighting}) before each PPR computation.}
-    \label{tab:edge-types}
-    \renewcommand{\arraystretch}{1.3}
-    \begin{adjustbox}{max width=\textwidth}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.0cm}
-                                  >{\raggedright\arraybackslash}p{3.8cm}
-                                  >{\raggedright\arraybackslash}X
-                                  >{\centering\arraybackslash}p{1.2cm}}
-        \toprule
-        \rowcolor{black!6}
-        \textbf{Edge Type} & \textbf{Source $\to$ Target} & \textbf{Semantic Meaning} & \textbf{Wt.} \\
-        \midrule
-        \texttt{CONTAINS} &
-            File $\to$ Class/Func;\newline Class $\to$ Method &
-            Structural containment & 1.0 \\[2pt]
-        \texttt{CALLS} &
-            Func/Method $\to$ Func/Method &
-            A function or method invokes another & 1.0 \\[2pt]
-        \texttt{IMPORTS} &
-            File $\to$ File &
-            One module imports from another & 1.0 \\[2pt]
-        \texttt{INHERITS\_FROM} &
-            Class $\to$ Class &
-            A class extends a parent class & 1.0 \\
-        \bottomrule
-    \end{tabularx}
-    \end{adjustbox}
-\end{table}
-
-\Cref{fig:graph-schema} shows the schema as an entity-relationship diagram. Together the four node types and four edge types capture the primary structural relationships in a Python codebase: containment, invocation, module dependency, and class inheritance.
+The node vocabulary matches \cref{tab:entity-types}; endpoint patterns and semantic meanings for each edge type are illustrated in \cref{fig:graph-schema}.
+\Cref{fig:graph-schema} shows how repository files, extracted entities, and the four structural edge types fit together.
 
 \begin{figure}[H]
     \centering
+    \begin{adjustbox}{width=\textwidth,center}
     \begin{tikzpicture}[
-            % Nodes: 100x50pt rounded rects, colored by type
-            filenode/.style={draw, rounded corners=8pt,
-                    minimum width=3.0cm, minimum height=1.1cm,
-                    text width=2.7cm, font=\small\bfseries, align=center,
-                    fill={rgb,255:red,219;green,234;blue,254},
-                    draw={rgb,255:red,30;green,64;blue,175}, line width=1.2pt},
-            classnode/.style={draw, rounded corners=8pt,
-                    minimum width=3.0cm, minimum height=1.1cm,
-                    text width=2.7cm, font=\small\bfseries, align=center,
-                    fill={rgb,255:red,209;green,250;blue,229},
-                    draw={rgb,255:red,6;green,95;blue,70}, line width=1.2pt},
-            funcnode/.style={draw, rounded corners=8pt,
-                    minimum width=3.0cm, minimum height=1.1cm,
-                    text width=2.7cm, font=\small\bfseries, align=center,
-                    fill={rgb,255:red,254;green,215;blue,170},
-                    draw={rgb,255:red,194;green,65;blue,12}, line width=1.2pt},
-            methodnode/.style={draw, rounded corners=8pt,
-                    minimum width=3.0cm, minimum height=1.1cm,
-                    text width=2.7cm, font=\small\bfseries, align=center,
-                    fill={rgb,255:red,254;green,202;blue,202},
-                    draw={rgb,255:red,153;green,27;blue,27}, line width=1.2pt},
-            % Edge styles (spec: 3pt, distinct dash patterns)
-            containsedge/.style={-{Stealth[length=6pt,width=4.5pt]},
-                    line width=1.5pt, color={rgb,255:red,37;green,99;blue,235}},
-            callsedge/.style={-{Stealth[length=6pt,width=4.5pt]},
-                    line width=1.5pt, dashed, color={rgb,255:red,220;green,38;blue,38}},
-            importsedge/.style={-{Stealth[length=6pt,width=4.5pt]},
-                    line width=1.5pt, dotted, color={rgb,255:red,5;green,150;blue,105}},
-            inheritsedge/.style={-{Stealth[length=6pt,width=4.5pt]},
-                    line width=1.5pt, dash dot, color={rgb,255:red,124;green,58;blue,237}},
-            % Edge labels
-            elabel/.style={font=\sffamily\tiny\bfseries, fill=white,
-                    inner sep=1.5pt, rounded corners=1.5pt},
-        ]
+        % --- Standards & Styles ---
+        node distance=1.6cm and 4.2cm,
+        file/.style={cgnodefile, rounded corners=8pt, minimum width=2.2cm},
+        class/.style={cgnodeclass, rounded corners=8pt, minimum width=2.4cm},
+        method/.style={draw=latticered, fill=white, rounded corners=8pt, font=\small\ttfamily, align=center, inner sep=6pt, minimum width=2.2cm, line width=0.8pt},
+        func/.style={cgnodefunc, rounded corners=8pt, minimum width=2.4cm},
+        % Standardized Arrows
+        main_arr/.style={-{Stealth[length=2.5mm, width=2mm]}, line width=1.5pt, draw=latticeblue},
+        sec_arr/.style={-{Stealth[length=2.2mm, width=1.8mm]}, line width=1.1pt},
+        % Relation specific styles
+        rel_imports/.style={sec_arr, draw=latticeblue!75!black, dotted},
+        rel_calls/.style={sec_arr, draw=latticered!85!black, dashed},
+        rel_inherits/.style={sec_arr, draw=latticegreen!75!black, dash pattern=on 5pt off 2pt on 1pt off 2pt},
+        % Label formatting
+        lbl/.style={font=\tiny\ttfamily, fill=white, inner sep=1.2pt, text=black!75},
+        sidehdr/.style={
+            font=\small\bfseries,
+            text=black!75,
+            anchor=west,
+            align=left,
+        },
+        sidesub/.style={
+            font=\scriptsize,
+            text=black!55,
+            anchor=west,
+            align=left,
+        },
+    ]
 
-        % ============================================================
-        % NODE INSTANCES (six-node fragment)
-        % ============================================================
-        \node[filenode]   at (0,    0)    (auth)
-            {{\small\texttt{auth.py}}\\[-2pt]\tiny\textcolor{gray!60}{\itshape File}};
+        % --- Grid Background & Bands ---
+        % Shaded Sidebar
+        \fill[black!3] (-0.5, 3.8) rectangle (4.2, -2.8);
+        \draw[latticegray!25, line width=0.6pt] (4.2, 3.8) -- (4.2, -2.8);
 
-        \node[classnode]  at (5.0,  0)    (authsvc)
-            {{\small\texttt{AuthService}}\\[-2pt]\tiny\textcolor{gray!60}{\itshape Class}};
+        % Main Outer Frame
+        \draw[latticegray!20, rounded corners=12pt, line width=0.6pt] (-0.5, 3.8) rectangle (12.5, -2.8);
 
-        \node[classnode]  at (5.0,  2.8)  (baseauth)
-            {{\small\texttt{BaseAuth}}\\[-2pt]\tiny\textcolor{gray!60}{\itshape Class}};
+        % Left Sidebar Labels
+        \node[sidehdr] at (0.2, 2.95) {REPOSITORY FILES};
+        \node[sidesub] at (0.2, 2.45) {Source module layer};
+        \node[sidehdr] at (0.2, -0.35) {CODE ENTITIES};
+        \node[sidesub] at (0.2, -0.85) {Definitions \& logic};
 
-        \node[methodnode] at (10.0, 0)    (authmeth)
-            {{\small\texttt{authenticate}}\\[-2pt]\tiny\textcolor{gray!60}{\itshape Method}};
+        % --- Nodes ---
+        \node[file] (api) at (6.2, 2.8) {api.py};
+        \node[class] (svc) [below=of api] {Service};
+        \node[method] (hdl) [below=of svc] {handle()};
 
-        \node[filenode]   at (5.0, -2.8)  (crypto)
-            {{\small\texttt{crypto.py}}\\[-2pt]\tiny\textcolor{gray!60}{\itshape File}};
+        \node[file] (utl) at (10.5, 2.8) {utils.py};
+        \node[class] (base) [below=of utl] {BaseService};
+        \node[func] (prs) [below=of base] {parse\_input()};
 
-        \node[funcnode]   at (10.0, -2.8) (hashpw)
-            {{\small\texttt{hash\_pw}}\\[-2pt]\tiny\textcolor{gray!60}{\itshape Function}};
+        % --- Relationships ---
+        \draw[main_arr] (api) -- node[lbl, right=3pt] {CONTAINS} (svc);
+        \draw[main_arr] (svc) -- node[lbl, right=3pt] {CONTAINS} (hdl);
+        \draw[main_arr] (utl) -- node[lbl, right=3pt] {CONTAINS} (base);
+        \draw[main_arr] (base) -- node[lbl, right=3pt] {CONTAINS} (prs);
 
-        % ============================================================
-        % EDGES
-        % ============================================================
-        \draw[containsedge] (auth.east)
-            -- node[elabel, above=2pt] {\textcolor[HTML]{2563EB}{CONTAINS}}
-            (authsvc.west);
-
-        \draw[inheritsedge] (authsvc.north)
-            -- node[elabel, right=2pt] {\textcolor[HTML]{7C3AED}{INHERITS\_FROM}}
-            (baseauth.south);
-
-        \draw[containsedge] (authsvc.east)
-            -- node[elabel, above=2pt] {\textcolor[HTML]{2563EB}{CONTAINS}}
-            (authmeth.west);
-
-        \draw[importsedge] (auth.south) to[out=-60, in=175]
-            node[elabel, sloped, above=2pt, pos=0.5] {\textcolor[HTML]{059669}{IMPORTS}}
-            (crypto.west);
-
-        \draw[containsedge] (crypto.east)
-            -- node[elabel, above=2pt] {\textcolor[HTML]{2563EB}{CONTAINS}}
-            (hashpw.west);
-
-        \draw[callsedge] (authmeth.south)
-            -- node[elabel, right=2pt] {\textcolor[HTML]{DC2626}{CALLS}}
-            (hashpw.north);
-
-        % ============================================================
-        % LEGEND BOX (bottom, 150x120pt spec)
-        % ============================================================
-        \node[draw={rgb,255:red,229;green,231;blue,235},
-              fill={rgb,255:red,249;green,250;blue,251},
-              rounded corners=6pt, line width=0.8pt,
-              inner sep=10pt, font=\small, align=left,
-              below=1.4cm of $(auth.south)!0.5!(hashpw.south)$,
-              anchor=north] (legend) {%
-            \textbf{Node Types (4):}\enspace
-            \textcolor[HTML]{2563EB}{\textbullet}\,\texttt{File}\enspace
-            \textcolor[HTML]{059669}{\textbullet}\,\texttt{Class}\enspace
-            \textcolor[HTML]{DC2626}{\textbullet}\,\texttt{Method}\enspace
-            \textcolor[HTML]{EA580C}{\textbullet}\,\texttt{Function}\\[5pt]
-            \textbf{Edge Types (4):}\enspace
-            {\color[HTML]{2563EB}\rule[2.5pt]{0.6cm}{1.5pt}}\;\texttt{CONTAINS}\enspace
-            {\color[HTML]{DC2626}\makebox[0.6cm][l]{\leaders\hbox to3pt{\hss-\hss}\hfill}}\;\texttt{CALLS}\enspace
-            {\color[HTML]{059669}\makebox[0.6cm][l]{\leaders\hbox to2pt{\hss.\hss}\hfill}}\;\texttt{IMPORTS}\enspace
-            {\color[HTML]{7C3AED}\makebox[0.6cm][l]{\leaders\hbox to4pt{\hss-.\hss}\hfill}}\;\texttt{INHERITS\_FROM}%
-        };
+        \draw[rel_imports] (api) -- node[lbl, above=4pt] {IMPORTS} (utl);
+        \draw[rel_inherits] (svc) -- node[lbl, above=5pt] {INHERITS\_FROM} (base);
+        \draw[rel_calls] (hdl.east) .. controls +(0.8, -0.2) and +(-0.8, -0.2) .. 
+            node[lbl, below=3pt] {CALLS} (prs.west);
 
     \end{tikzpicture}
-    \caption[Graph schema: six-node example]{The CodeGraph schema on a six-node fragment. Node colors: File (blue), Class (green), Method (red), Function (orange). Edge styles: CONTAINS (solid), CALLS (dashed), IMPORTS (dotted), INHERITS\_FROM (dash-dot).}
+    \end{adjustbox}
+    \caption{CodeGraph schema showing extracted entities and structural relations.}
     \label{fig:graph-schema}
 \end{figure}
-
-
-\subsection{Two-Pass Construction}
-\label{sec:two-pass}
-
-Graph construction runs in two passes. Pass~1 creates all nodes and intra-file \texttt{CONTAINS} edges. Pass~2 creates the cross-file edges (\texttt{CALLS}, \texttt{IMPORTS}, \texttt{INHERITS\_FROM}) once every definition in the repository is in place.
-
-The second pass resolves forward references: a call in file~A may target a function defined in file~B, and if B has not yet been parsed, the callee does not exist in the graph. Deferring cross-file edges until every file has been indexed makes resolution independent of processing order. We considered but rejected a single-pass variant using topological file ordering, because import cycles, common in real Python repositories, leave topological ordering undefined. The two-pass approach handles cycles naturally without extra machinery.
-
-\noindent\textbf{Pass 1,  intra-file construction:}
-\begin{enumerate}[leftmargin=*, itemsep=3pt]
-    \item Parse each Python file with Tree-sitter to produce a concrete syntax tree.
-    \item Extract all entities: \texttt{File}, \texttt{Class}, \texttt{Function}, and \texttt{Method} nodes.
-    \item Write entity nodes to Neo4j using batched \texttt{UNWIND+MERGE} operations (idempotent).
-    \item Create \texttt{CONTAINS} edges: File $\to$ Class/Function, and Class $\to$ Method.
-    \item Record all import statements and call expressions for resolution in Pass~2.
-\end{enumerate}
-
-\noindent\textbf{Pass 2,  cross-file linking:}
-\begin{enumerate}[leftmargin=*, itemsep=3pt]
-    \item For each recorded import, resolve the path to a target file and create an \texttt{IMPORTS} edge on success; log and skip failures.
-    \item For each recorded function call, match the callee using the three-level scheme from \cref{sec:call-resolution} and create a \texttt{CALLS} edge for unambiguous matches only.
-    \item For each class with declared base classes, resolve the base class names to \texttt{Class} nodes and create \texttt{INHERITS\_FROM} edges.
-\end{enumerate}
-
-All writes use \texttt{UNWIND+MERGE}, which is idempotent: re-parsing a file after an edit produces no duplicate nodes or edges. A uniqueness constraint on \texttt{qualified\_name} at the database level provides a second line of defence.
 
 
 \subsection{IDF-Based Edge Reweighting}
 \label{sec:idf-reweighting}
 
-Uniform base weights treat every connection as equally informative, but in practice they are not. Consider two \texttt{CALLS} edges leaving \texttt{LoginView.authenticate()}: one targets \texttt{verify\_token()} (called from three places in the codebase), the other targets \texttt{isinstance()} (invoked across hundreds of functions). Under uniform weights a random walk is equally likely to follow either edge, but the edge to \texttt{isinstance()} leads into an undifferentiated neighborhood of utility code shared across the entire codebase, a structural dead end for relevance propagation.
+Uniform base weights assume that every structural connection contributes equally to retrieval, but this is not true in practice. Some targets are highly specific to the task, while others are generic utility nodes reused across large parts of the repository. If both receive the same edge weight, Personalized PageRank sends too much probability into broadly shared utility neighborhoods, which weakens the ranking of domain-specific code.
 
-This is the \emph{utility function problem}: without reweighting, PPR spreads probability along edges to ubiquitous targets, diluting the scores of the specific entities that are actually relevant. CodeGraph addresses it by applying inverse document frequency (IDF) reweighting to edge weights before each PPR computation. \Cref{fig:idf-reweighting} contrasts the two regimes: under uniform weights PPR drifts into the utility neighborhood; under IDF weights it favours the specific domain functions.
+\Cref{fig:idf-reweighting} illustrates this intuition. Under uniform weighting, probability splits evenly between a task-relevant target and a utility hub. Under IDF reweighting, the edge toward the highly connected utility node is attenuated, so more relevance mass remains near the structurally specific part of the graph.
 
 \begin{figure}[H]
     \centering
+    \begin{adjustbox}{max width=\textwidth,center}
     \begin{tikzpicture}[
-            seednode/.style={circle, fill={rgb,255:red,254;green,226;blue,226},
-                draw={rgb,255:red,220;green,38;blue,38}, minimum size=22pt,
-                font=\scriptsize\bfseries, line width=0.8pt},
-            domnode/.style={circle, fill={rgb,255:red,209;green,250;blue,229},
-                draw={rgb,255:red,5;green,150;blue,105}, minimum size=20pt,
-                font=\scriptsize, line width=0.7pt},
-            utilnode/.style={circle, fill={rgb,255:red,254;green,243;blue,199},
-                draw={rgb,255:red,245;green,158;blue,11}, minimum size=20pt,
-                font=\scriptsize, line width=0.7pt},
-            lbl/.style={font=\tiny, fill=white, inner sep=1pt},
-            section/.style={font=\small\bfseries, color={rgb,255:red,31;green,41;blue,55}},
-        ]
-        % BEFORE
-        \node[section] at (1.5, 2.5) {Before: uniform weights};
-        \node[seednode] (s1) at (1.5, 1.5) {seed};
-        \node[domnode]  (d1) at (0,    0) {auth};
-        \node[domnode]  (d2) at (1.5,  0) {verify};
-        \node[utilnode] (u1) at (3.0,  0) {\tiny isinstance};
-        \draw[line width=1.0pt, gray] (s1)--(d1) node[lbl,midway,left] {1.0};
-        \draw[line width=1.0pt, gray] (s1)--(d2) node[lbl,midway,right] {1.0};
-        \draw[line width=1.0pt, gray] (s1)--(u1) node[lbl,midway,right] {1.0};
+        idfsource/.style={
+            cgnodefunc,
+            fill=latticeorange!10,
+            minimum width=2.35cm,
+            minimum height=0.8cm,
+        },
+        idftarget/.style={
+            cgnodefunc,
+            fill=latticegreen!8,
+            draw=latticegreen,
+            minimum width=2.35cm,
+            minimum height=0.8cm,
+        },
+        idfhub/.style={
+            cgnodefunc,
+            fill=latticegray!8,
+            draw=latticegray,
+            minimum width=2.35cm,
+            minimum height=0.8cm,
+        },
+        idfarr/.style={
+            -{Stealth[length=2.2mm, width=1.7mm]},
+            draw=latticeblue,
+            line cap=round,
+            line width=1.6pt,
+        },
+        idfarrthin/.style={
+            -{Stealth[length=1.8mm, width=1.3mm]},
+            draw=latticegray!75,
+            line cap=round,
+            line width=0.7pt,
+            dashed,
+            dash pattern=on 3.5pt off 2.5pt,
+        },
+        idftitle/.style={
+            font=\footnotesize\bfseries\sffamily,
+            text=black!75,
+            anchor=south west,
+        },
+        idfleg/.style={
+            font=\scriptsize,
+            text=latticegray,
+            align=left,
+        },
+    ]
+        % --- Panel (a): uniform edge weights ---
+        \begin{scope}
+            \draw[cgpanel, rounded corners=10pt]
+                (-0.55, 2.05) rectangle (5.55, -2.05);
+            \node[idftitle] at (-0.35, 1.85) {(a) Uniform weights};
 
-        % AFTER
-        \node[section] at (8.0, 2.5) {After: IDF weights};
-        \node[seednode] (s2) at (8.0, 1.5) {seed};
-        \node[domnode]  (d3) at (6.5,  0) {auth};
-        \node[domnode]  (d4) at (8.0,  0) {verify};
-        \node[utilnode] (u2) at (9.5,  0) {\tiny isinstance};
-        \draw[line width=2.5pt, color={rgb,255:red,5;green,150;blue,105}]
-            (s2)--(d3) node[lbl,midway,left] {0.87};
-        \draw[line width=2.5pt, color={rgb,255:red,5;green,150;blue,105}]
-            (s2)--(d4) node[lbl,midway,right] {0.82};
-        \draw[line width=0.6pt, color={rgb,255:red,209;green,213;blue,219}]
-            (s2)--(u2) node[lbl,midway,right,color=gray] {0.10};
+            \node[idfsource] (s1) at (0, 0) {\texttt{handle\_req()}};
+            \node[idftarget] (t1) at (4.75, 1.15) {\texttt{process()}};
+            \node[idfhub] (h1) at (4.75, -1.15) {\texttt{Logger.info}};
 
-        % Divider
-        \draw[dashed, gray!40] (4.8, -0.8) -- (4.8, 2.8);
+            \draw[idfarr] (s1.east) to[out=22, in=180] (t1.west);
+            \draw[idfarr] (s1.east) to[out=-22, in=180] (h1.west);
+
+            \node[idfleg, anchor=north west] at (-0.35, -1.75) {%
+                \cglegendline{draw=latticeblue, line width=1.6pt}{Same weight to both targets}%
+            };
+        \end{scope}
+
+        % --- Panel (b): IDF edge weights ---
+        \begin{scope}[shift={(6.85, 0)}]
+            \draw[cgpanel, rounded corners=10pt]
+                (-0.55, 2.05) rectangle (5.55, -2.05);
+            \node[idftitle] at (-0.35, 1.85) {(b) IDF weights};
+
+            \node[idfsource] (s2) at (0, 0) {\texttt{handle\_req()}};
+            \node[idftarget] (t2) at (4.75, 1.15) {\texttt{process()}};
+            \node[idfhub] (h2) at (4.75, -1.15) {\texttt{Logger.info}};
+
+            \draw[idfarr] (s2.east) to[out=22, in=180] (t2.west);
+            \draw[idfarrthin] (s2.east) to[out=-22, in=180] (h2.west);
+
+            \node[idfleg, anchor=north west] at (-0.35, -1.75) {%
+                \cglegendline{draw=latticeblue, line width=1.6pt}{Domain target ($w{=}0.63$)}\\[2pt]
+                \cglegendline{draw=latticegray!75, line width=0.7pt, dashed}{Hub target ($w{=}0.27$)}%
+            };
+        \end{scope}
     \end{tikzpicture}
-    \caption[IDF reweighting: uniform vs.\ IDF]{IDF reweighting demotes utility functions. Left: uniform weights send equal probability to domain functions (\texttt{auth}, \texttt{verify}) and the ubiquitous \texttt{isinstance()}. Right: IDF weights concentrate probability on rare callers; edge thickness encodes weight.}
+    \end{adjustbox}
+    \caption{IDF edge reweighting intuition. Panel~(a) treats all outgoing edges equally; panel~(b) attenuates edges into high in-degree hubs so relevance flow favors domain-specific targets.}
     \label{fig:idf-reweighting}
 \end{figure}
 
-The IDF weight for an edge targeting node~$v$ is:
-
+To account for this effect, CodeGraph assigns each edge a weight based on the in-degree of its target node:
 \begin{equation}
     w(e) = \frac{1}{\log_2\!\bigl(\operatorname{in\_degree}(v) + 2\bigr)}
     \label{eq:idf-weight}
 \end{equation}
+Nodes with many incoming edges receive lower weights, while rare or specialized targets retain stronger weights. The logarithmic form reduces hub influence gradually rather than aggressively, and the $+2$ offset keeps the function finite for low-degree nodes. Empirical comparison against gentler and stronger alternatives supported the $\log_2$ formulation as the best balance for preserving informative shared functions while still demoting ubiquitous utilities.\footnote{Replacing the denominator with $\log_{10}(\mathrm{in\_degree}+1)$ dropped Recall@10 by 2.3\,pp; the inverse-linear form $1/(\mathrm{in\_degree}+1)$ dropped it by 8.1\,pp.}
 
-\noindent where $\operatorname{in\_degree}(v)$ is the number of incoming edges to the target node. The base-2 logarithm gives the formula an interpretable doubling rule: each time a node's in-degree doubles, its incoming edge weight drops by one $\log_2$ unit. A node with in-degree~2 receives weight $1/\log_2(4) = 0.50$; a node with in-degree~14 receives $1/\log_2(16) = 0.25$, half the weight for eight times the connectivity. The $+2$ offset keeps zero-in-degree nodes finite ($1/\log_2(2) = 1.0$) and avoids division by zero. \Cref{tab:idf-examples} shows how weights vary across representative node types.
-
-The $\log_2$ base was chosen empirically from three candidates. Replacing the denominator with $\log_{10}(\text{in\_deg}+1)$ dropped Recall@10 by 2.3\,pp; the simpler inverse-linear $1/(\text{in\_deg}+1)$ dropped it by 8.1\,pp. The inverse-linear form is too aggressive, it penalises moderately-connected domain functions alongside genuine utilities, discarding useful signal. The $\log_{10}$ form is too gentle, highly connected nodes retain enough weight to drain probability from nearby seeds. The $\log_2$ form, with its doubling rule, strikes the right compression: specific domain functions stay informative while pure utilities are demoted.
+\Cref{tab:idf-examples} provides representative examples of how this rule behaves across different kinds of repository entities, from private helpers to global utilities. In the implementation, these weights are applied at retrieval time so they always reflect the current state of the graph.
 
 \begin{table}[H]
     \centering
-    \caption[IDF weight examples]{IDF edge weight as a function of the target node's in-degree. Shading groups three tiers: strong ($>0.40$), moderate ($0.20$--$0.40$), and weak/minimal ($<0.20$).}
+    \caption{Example IDF edge weights by in-degree.}
     \label{tab:idf-examples}
-    \renewcommand{\arraystretch}{1.3}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X
-                                  >{\centering\arraybackslash}p{2.0cm}
-                                  >{\centering\arraybackslash}p{2.0cm}
-                                  >{\raggedright\arraybackslash}p{3.8cm}}
+    \cgtablerows
+    \small
+    \begin{tabularx}{\textwidth}{@{} 
+        >{\RaggedRight\arraybackslash}X 
+        >{\centering\arraybackslash}p{2.5cm} 
+        >{\centering\arraybackslash}p{2.5cm} @{}}
         \toprule
-        \rowcolor{black!6}
-        \textbf{Target Entity} & \textbf{In-degree} & \textbf{IDF Weight} & \textbf{Signal Tier} \\
+        \textbf{Target type} & \textbf{In-deg.} & \textbf{Weight} \\
         \midrule
-        \rowcolor[HTML]{ECFDF5}
-        Private helper, one caller & 1 & 0.63 & Strong \\
-        \rowcolor[HTML]{ECFDF5}
-        Specialized helper & 3 & 0.43 & Strong \\
-        \rowcolor[HTML]{FFFBEB}
-        Internal shared utility & 7 & 0.32 & Moderate \\
-        \rowcolor[HTML]{FFFBEB}
-        Module-level utility & 15 & 0.24 & Moderate \\
-        \rowcolor[HTML]{FFFBEB}
-        Commonly used class method & 30 & 0.20 & Moderate-low \\
-        \rowcolor[HTML]{FEF2F2}
-        Common initializer (\texttt{\_\_init\_\_}) & 62 & 0.17 & Weak \\
-        \rowcolor[HTML]{FEF2F2}
-        Generic getter / setter & 100 & 0.15 & Weak \\
-        \rowcolor[HTML]{FEF2F2}
-        Global logger or constant & 200 & 0.13 & Minimal \\
+        Private helper & 1 & 0.63 \\
+        Specialized helper & 3 & 0.43 \\
+        Shared utility & 7 & 0.32 \\
+        Module utility & 15 & 0.24 \\
+        Common method & 30 & 0.20 \\
+        \texttt{\_\_init\_\_} & 62 & 0.17 \\
+        Getter/setter & 100 & 0.15 \\
+        Global logger & 200 & 0.13 \\
         \bottomrule
     \end{tabularx}
 \end{table}
 
-CodeGraph applies IDF reweighting at retrieval time, not at construction time. This ensures that edge weights always reflect the current state of the graph, which may shift when files are re-parsed and new edges are added. The reweighting runs on every retrieval call as part of the \texttt{ensure\_graph\_ready()} step, incurring approximately 50\,ms overhead, marginal relative to the 250\,ms total query latency.
-
-
 \subsection{GDS Projection}
 \label{sec:gds-projection}
 
-The Neo4j Graph Data Science (GDS) library performs PPR computation on an in-memory graph projection rather than on the disk-backed storage graph. Before PPR can run, the relevant subgraph must be projected into GDS memory.
+Personalized PageRank is not executed directly on Neo4j's disk-backed storage graph. Instead, CodeGraph uses the Neo4j Graph Data Science library, which first projects the repository graph into an in-memory representation optimized for graph traversal.
 
-The projection includes all four node types and all four edge types. Edges are projected as \textbf{undirected}, allowing probability to flow in both directions during the random walk. This is a deliberate choice: an AI agent fixing a function needs to see both what the function depends on (downstream, following call edges forward) and what depends on the function (upstream, following call edges backward). The \texttt{weight} property set by IDF reweighting is included as the relationship weight in the projection.
+The projection includes all four node types and all four edge types defined in the previous subsections. The IDF-derived edge weight is carried into the projected graph as the relationship weight used during ranking.
 
-The projection is dropped and recreated on every retrieval call to ensure consistency with the current IDF weights. For a graph with 50,000 nodes and 200,000 edges, this operation takes approximately 50\,ms and requires roughly 5\,MB of memory, both negligible at the scale of typical development repositories.
+Edges are projected as undirected. This choice allows relevance to flow both downstream, toward the entities a function depends on, and upstream, toward the entities that depend on it. For repository-level assistance, this is important because an AI agent often needs context in both directions, not only the callees of a function but also its callers, dependents, or enclosing usage paths.
+
+The projection is dropped and recreated for each retrieval call so that ranking always reflects the current edge weights produced by query-time IDF reweighting. Although this adds a small setup step, the cost remains modest: for a graph with 50,000 nodes and 200,000 edges, projection requires about 50\,ms and roughly 5\,MB of memory, which is minor relative to total query latency.
 
 
 % =============================================================================
@@ -747,80 +464,63 @@ The projection is dropped and recreated on every retrieval call to ensure consis
 \section{Seed Selection}
 \label{sec:seed-selection}
 
-The graph now exists in Neo4j, encoding every structural dependency in the repository. PPR can propagate relevance through this graph, but it needs a starting point. A pure graph algorithm has no way to distinguish a relevant file from an irrelevant one without some initial signal derived from the task description.
+Personalized PageRank can only rank the repository meaningfully once it has a set of starting points in the graph. Seed selection provides these starting points by translating the natural-language task description into a personalization vector, that is, a probability distribution over graph nodes that determines where restart mass is placed during the random walk. This stage does not need to identify every relevant node perfectly, because PPR can amplify structurally consistent evidence, but it does need to place some probability inside the correct region of the graph. When no seed reaches that region, retrieval quality is capped regardless of how well the graph propagation itself is tuned.
 
-Seed selection answers the question: \emph{where in the graph should the random walk begin?} It translates a natural language task description into a \emph{personalization vector}, a probability distribution over graph nodes that specifies which nodes serve as PPR restart points. The seeds do not need to be perfect; PPR's structural propagation tolerates a fraction of incorrect seeds. But seed quality sets a hard ceiling: when no seed falls in the relevant region of the graph, PPR has no path to the answer regardless of how many iterations it runs. As shown in \cref{ch:evaluation}, seed quality accounts for the dominant share of retrieval improvement across the system's development history.
-
-CodeGraph constructs the personalization vector from three independent signals, each capturing a different dimension of evidence. \Cref{fig:seed-selection} illustrates the signal flow. The default weights (entity match~0.6, BM25~0.3, current file~0.1) reflect the relative reliability of each source: explicit identifier mentions provide the strongest direct evidence, keyword search provides complementary coverage when identifiers are absent, and the current file provides only a weak spatial hint. The specific weights are empirically motivated; \cref{ch:evaluation} examines how seed quality as a whole affects retrieval performance.
+CodeGraph constructs this personalization vector from three complementary signals: direct identifier matches, BM25 keyword retrieval, and file or path hints mentioned in the issue text. Their default weights, 0.6 for entity match, 0.3 for BM25, and 0.2 for issue path hints, reflect the relative reliability of each source. Explicit identifier mentions provide the strongest evidence, keyword search broadens coverage when identifiers are absent or incomplete, and path hints offer weaker but still useful localization to the right subsystem. \Cref{tab:seed-signals} summarizes the three signals; \cref{ch:evaluation} examines how seed quality as a whole affects retrieval performance.
 
 \begin{table}[H]
     \centering
-    \caption[Seed selection signals]{The three signals combined into the personalization vector $\vec{s}$. Default weights reflect the relative reliability of each source: explicit identifier matches provide the strongest evidence; keyword search offers complementary coverage; current file provides a weak spatial hint.}
-    \label{fig:seed-selection}
-    \renewcommand{\arraystretch}{1.3}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.6cm}
-                                  >{\centering\arraybackslash}p{1.4cm}
-                                  >{\raggedright\arraybackslash}X
-                                  >{\raggedright\arraybackslash}p{4.0cm}}
+    \caption{Seed-selection signals.}
+    \label{tab:seed-signals}
+    \cgtablerows
+    \small
+    \begin{tabularx}{\textwidth}{@{} 
+        >{\RaggedRight\arraybackslash}p{3.0cm} 
+        >{\centering\arraybackslash}p{1.5cm} 
+        >{\RaggedRight\arraybackslash}p{4.0cm} 
+        >{\RaggedRight\arraybackslash}X @{}}
         \toprule
-        \rowcolor{black!6}
-        \textbf{Signal} & \textbf{Weight} & \textbf{Method} & \textbf{When it fires} \\
+        \textbf{Signal} & \textbf{Weight} & \textbf{Method} & \textbf{Trigger} \\
         \midrule
-        \rowcolor[HTML]{FEF2F2}
-        Entity Match & 0.6 &
-            Regex extraction of identifiers; graph node lookup with IDF scaling for ambiguous names &
-            Task description mentions code identifiers (e.g., \texttt{TokenExpiredError}) \\[2pt]
-        \rowcolor[HTML]{EFF6FF}
-        BM25 Search & 0.3 &
-            Compound tokenizer (CamelCase + underscore split); BM25 over entity corpus, top-10 results &
-            Task description contains keywords matching entity names or docstrings \\[2pt]
-        \rowcolor[HTML]{F9FAFB}
-        Current File & 0.1 &
-            Direct file entity lookup by path &
-            Agent provides the file currently being edited \\
-        \midrule
-        \multicolumn{4}{l}{\small Signals are summed per node and normalized: $\|\vec{s}\|_1 = 1.0$.} \\
+        Entity match & 0.6 & \texttt{regex\_graph\_lookup} & Named identifiers \\
+        BM25 search & 0.3 & \texttt{compound\_bm25} & Keyword overlap \\
+        Path hint & 0.2 & \texttt{path\_extraction} & File or directory mention \\
         \bottomrule
     \end{tabularx}
 \end{table}
 
-
 \subsection{Entity Match Signal}
 \label{sec:entity-match}
 
-Natural language task descriptions often mention code identifiers directly, class names, function names, or module paths. The entity match signal extracts these identifiers from the task text using regex patterns that recognize Python naming conventions, then matches them against graph nodes to establish high-confidence seed points. The patterns target CamelCase identifiers (\texttt{AuthService}, \texttt{TokenExpiredError}), backtick-quoted identifiers from GitHub Markdown (\texttt{`models.QuerySet`}), dotted paths (\texttt{sql.compiler}), and snake\_case identifiers (\texttt{handle\_subquery}).
+Task descriptions often mention code entities directly, including class names, function names, module references, and other repository-specific identifiers. The entity match signal extracts these mentions from the task text using regex patterns designed for common Python naming conventions, including CamelCase identifiers, backtick-quoted names, dotted paths, and snake\_case forms. This makes the signal especially valuable in bug reports and issue descriptions that already refer to the code in the vocabulary of the repository itself.
 
-Each extracted name is looked up in the graph. When a name matches multiple nodes, for example, \texttt{update} might match dozens of methods across a Django codebase, an \emph{inverse-frequency weighting} correction is applied. The weight assigned to each matching node is scaled by $1 / \log_2(n + 1)$, where $n$ is the number of matches. This prevents ambiguous names from dominating the seed distribution: the name \texttt{update} matching 30~methods contributes far less total weight than the name \texttt{SQLUpdateCompiler} matching a single class.
-
-The entity match signal receives the highest default weight (0.6) because explicit identifier mentions in a bug report, such as ``fix the bug in \texttt{SQLCompiler}'', serve as direct pointers to specific graph nodes, providing the strongest available evidence of relevance.
+Each extracted identifier is then looked up against graph nodes. When a name is highly ambiguous, its contribution is down-weighted by inverse-frequency scaling, specifically $1 / \log_2(n + 1)$, where $n$ is the number of graph matches for that name. As a result, a broad identifier such as \texttt{update} contributes much less total mass than a specific identifier that resolves to a single node. Because explicit identifier mentions are the strongest direct evidence of relevance, this signal receives the highest default weight, 0.6.
 
 
 \subsection{BM25 Signal}
 \label{sec:bm25-signal}
 
-The BM25 signal performs keyword search over a corpus of text documents, one per graph entity. Each document concatenates several text sources: the entity's short name (e.g., \texttt{SQLCompiler}), its qualified name (e.g., \texttt{django/db/models/sql/compiler.py::SQLCompiler}), the file path tokenized as path components (e.g., \texttt{django db models sql compiler}), and the first 200 characters of the docstring.
+Not every task description contains an exact identifier, so the system also uses lexical retrieval to recover likely entry points from partial or approximate wording. For this signal, each graph entity is indexed as a small text document built from its short name, its qualified name, path tokens, and the first 200 characters of its docstring. This gives BM25 access not only to surface names, but also to limited contextual vocabulary associated with the entity.
 
-A critical preprocessing step is \emph{compound tokenization}: splitting identifier names at camelCase boundaries and underscores before indexing. Without this splitting, \texttt{SQLCompiler} and the words ``SQL'' and ``compiler'' are three distinct, unrelated tokens in the BM25 vocabulary, and a query mentioning ``SQL compilation'' fails to match the class. Compound tokenization transforms \texttt{SQLCompiler} into the tokens \texttt{sql} and \texttt{compiler}, enabling partial matching. This preprocessing alone improves the BM25-only baseline by +8.3\,pp Recall@10 (from 49.7\% to 58.0\%), as quantified in \cref{ch:evaluation}.
-
-The BM25 search returns the top-10 results, each scored proportionally by BM25 relevance. These are added to the personalization vector with a default signal weight of~0.3.
+A key preprocessing step is compound tokenization. Identifier names are split at CamelCase boundaries and underscores before indexing, so forms such as \texttt{SQLCompiler} become searchable through partial terms like \texttt{sql} and \texttt{compiler}. Without this step, lexical retrieval would miss many natural-language queries that describe an entity indirectly rather than by its exact spelling. At query time, the BM25 component returns the top 10 results, and these are added to the personalization vector with a default signal weight of 0.3.
 
 
-\subsection{Current File Signal}
-\label{sec:current-file-signal}
+\subsection{Issue Path Hint Signal}
+\label{sec:issue-hint-signal}
 
-When the calling agent provides the path to the file currently being edited, all entities defined in that file are added to the personalization vector with a low weight (default~0.1). This signal acts as a weak proximity hint: the currently active file is often in the neighborhood of the relevant code, even if it is not the relevant file itself.
+Issue reports sometimes include concrete location cues, such as a filename, module path, or directory fragment. The issue path hint signal extracts these references from the task description and maps them to file nodes or to entities located under the corresponding path. Examples such as \texttt{django/db/models} or \texttt{compiler.py} do not always identify the exact target entity, but they can still place probability mass into the correct subsystem.
 
-The current file signal is intentionally weighted low because where the cursor is does not reliably correspond to what the developer cares about. The developer may have navigated to the current file during an exploratory search, and the file may bear no connection to the actual task.
+This signal is intentionally weaker than direct entity matching because path references are often broad. A directory mention may correctly identify the relevant area of the codebase without isolating the exact file or function that needs attention, so its default weight is set to 0.2.
 
 
 \subsection{Personalization Vector Construction}
 \label{sec:pvec-construction}
 
-The three signals are merged into a single personalization vector $\vec{s} \in \mathbb{R}^{|V|}$ by summing the weights for each node across all signals. If a node appears in both the entity match results and the BM25 results, its weights are added. The merged vector is then normalized to satisfy $\|\vec{s}\|_1 = 1$, producing a valid probability distribution over graph nodes. This vector is passed directly to the GDS PPR implementation as the restart distribution.
+The final personalization vector is built by merging the three signals at the node level. If a node is retrieved by more than one signal, for example by both direct entity matching and BM25, its contributions are summed. The merged vector is then normalized so that $\|\vec{s}\|_1 = 1$, producing a valid probability distribution that can be passed directly to the GDS implementation of Personalized PageRank as the restart distribution.
 
-The following example demonstrates how the three signals combine for a typical task. Given the task description ``Fix the authentication failure when \texttt{TokenExpiredError} is raised'', entity extraction identifies the identifier \texttt{TokenExpiredError} and matches it to a single node: \texttt{auth/exceptions.py::TokenExpiredError}. BM25 keyword search on the compound-tokenized index matches several additional entities: \texttt{auth/middleware.py::authenticate}, \texttt{auth/tokens.py::verify\_token}, and \texttt{auth/views.py::LoginView}. No current file is provided. The resulting personalization vector places 0.6 of its mass on the single entity match, distributes 0.3 proportionally across the four BM25 results, and normalizes, concentrating the seed distribution on a tight neighborhood in the authentication subsystem. PPR then propagates from this neighborhood through the graph structure.
+A representative example is the task description, ``Fix the authentication failure in \texttt{auth/tokens.py} when \texttt{AuthError} is raised''. In this case, entity extraction identifies \texttt{AuthError}, BM25 contributes nearby authentication-related entities, and the path hint adds entities under \texttt{auth/tokens.py}. After summation and normalization, the resulting vector concentrates restart probability on the authentication subsystem, allowing PPR to propagate relevance outward through the local dependency structure.
 
-When a task description contains no recognizable identifiers, for example, ``The application crashes on startup'', entity extraction yields nothing and BM25 may only weakly match common tokens like ``application''. In such cases, the BM25 signal dominates by default after normalization, and the personalization vector reflects only shallow keyword evidence. These description-impoverished instances contribute disproportionately to zero-recall cases in evaluation, as discussed in \cref{ch:evaluation}. This pattern identifies a fundamental limitation of static text matching: when the task description does not mention the code by name, no retrieval signal can overcome the absence of identifying information.
+The opposite case is also important. When a task description contains no recognizable identifier and only vague language, such as ``The application crashes on startup'', entity extraction contributes nothing and BM25 can only match shallow generic vocabulary. After normalization, the personalization vector is then dominated by weak lexical evidence, which helps explain why description-poor tasks contribute disproportionately to zero-recall failures. This is not a weakness of PPR itself, but a consequence of insufficient identifying information in the seed stage.
 
 With the personalization vector constructed, the pipeline hands it to Personalized PageRank to propagate relevance through the graph structure.
 
@@ -853,39 +553,34 @@ where $w_i$ is seed $i$'s normalized weight. The combination is mathematically e
 
 \begin{table}[H]
     \centering
-    \caption[Uniform vs.\ weighted restart mode comparison]{Recall@10 and zero-recall counts for uniform and weighted restart modes across two evaluation iterations ($n = 300$ benchmark instances per row). Uniform mode consistently outperforms weighted mode; the gap narrows as seed quality improves but does not disappear. The $\Delta$ column reports Uniform $-$ Weighted in percentage points.}
+    \caption{Uniform vs.\ weighted PPR restart ($n{=}300$).}
     \label{tab:restart-modes}
-    \renewcommand{\arraystretch}{1.2}
-    \begin{tabularx}{\textwidth}{>{\centering\arraybackslash}p{1.4cm}
-                                  >{\raggedright\arraybackslash}X
-                                  >{\centering\arraybackslash}p{2.2cm}
-                                  >{\centering\arraybackslash}p{2.2cm}
-                                  >{\centering\arraybackslash}p{1.6cm}
-                                  >{\centering\arraybackslash}p{2.2cm}}
+    \cgtablerows
+    \small
+    \begin{tabularx}{\textwidth}{@{} 
+        >{\centering\arraybackslash}p{1.2cm} 
+        >{\RaggedRight\arraybackslash}X 
+        >{\centering\arraybackslash}p{1.4cm} 
+        >{\centering\arraybackslash}p{1.4cm} 
+        >{\centering\arraybackslash}p{1.2cm} 
+        >{\centering\arraybackslash}p{1.2cm} @{}}
         \toprule
-        \rowcolor{black!6}
-        \textbf{Iter.} &
-        \textbf{Seed Quality} &
-        \textbf{Weighted R@10} &
-        \textbf{Uniform R@10} &
-        \textbf{$\Delta$} &
-        \textbf{Zero-recall} \\
+        \textbf{Iter.} & \textbf{Seeds} &
+        \multicolumn{2}{c}{\textbf{Recall@10}} &
+        \textbf{$\Delta$} & \textbf{Zero} \\
+        \cmidrule(lr){3-4}
+        & & Wtd. & Unif. & & \\
         \midrule
-        1 & Basic entity match &
-            42.0\% &
-            \cellcolor[HTML]{ECFDF5}\textbf{60.7\%} &
-            +18.7 & 117 \\
-        2 & +BM25, compound tokens &
-            66.7\% &
-            \cellcolor[HTML]{ECFDF5}\textbf{72.3\%} &
-            +5.6 & 83 \\
+        1 & Basic entity & 42.0 & \textbf{60.7} & +18.7 & 117 \\
+        2 & +BM25 tokens & 66.7 & \textbf{72.3} & +5.6 & 83 \\
         \bottomrule
     \end{tabularx}
 \end{table}
+\cgtablenote{$\Delta$ is uniform minus weighted recall (percentage points). Zero = zero-recall instance count.}
 
 \noindent The direction of the advantage is consistent across all 300 benchmark instances in both iterations, suggesting a structural cause rather than an incidental one.
 
-\textbf{Why does uniform mode win?} The explanation centers on overconfident seed weights. When entity extraction picks up an ambiguous name, for example, \texttt{fit} matching 30~scikit-learn estimators, the entity match signal (weight~0.6) distributes substantial restart probability across incorrect nodes. BM25 seeds (weight~0.3) cannot compensate because their contribution is diluted in the weighted sum. Uniform mode avoids this failure by giving every seed, including the BM25 seeds that often locate the correct file neighborhood, equal restart probability. From that point, the graph structure itself arbitrates: the coherent seeds, which share structural paths through shared dependencies, receive compounding PPR mass at their intersection. The isolated incorrect seeds, which lack structural support, dissipate probability locally and are overtaken.
+\textbf{Why does uniform mode win?} The explanation centers on overconfident seed weights. When entity extraction picks up an ambiguous name, for example, \texttt{fit} matching 30~scikit-learn estimators, the entity match signal (weight~0.6) spreads restart probability across many incorrect nodes. BM25 seeds (weight~0.3) cannot compensate because their contribution is diluted in the weighted sum. Uniform mode avoids this failure by giving every seed, including the BM25 seeds that often locate the correct file neighborhood, equal restart probability. From that point, the graph structure itself arbitrates: the coherent seeds, which share structural paths through shared dependencies, receive compounding PPR mass at their intersection. The isolated incorrect seeds, which lack structural support, dissipate probability locally and are overtaken.
 
 This finding reflects a general principle in seed-based graph retrieval: when seed quality is imperfect, seed diversity matters more than seed confidence. Trusting the graph to identify structural consistency is more robust than trusting the seed weighting to identify correctness.
 
@@ -912,15 +607,29 @@ With PPR configuration established, the ranked list of entities moves into the p
 \section{Post-Processing and Context Delivery}
 \label{sec:post-processing}
 
-PPR returns a ranked list of individual entities, functions, methods, classes, but an AI agent needs source code, not node identifiers. Post-processing bridges this gap through four steps: deduplication to avoid redundant file representations, source code extraction at entity-level line ranges, token budget enforcement to respect context window limits, and structured formatting for the MCP response. Each step addresses a distinct constraint between the graph-level result and the agent-level artifact.
+With the ranking stage complete, the retrieval pipeline still has one practical step left: transforming graph-level relevance scores into usable source-code context. Personalized PageRank returns a ranked list of entities, but an AI agent cannot act on node identifiers alone. It needs code snippets, precise locations, and a response format that can be consumed directly by a tool call. Post-processing performs this translation by deduplicating overlapping results, extracting source code at the appropriate granularity, enforcing a token budget, and packaging the final output in a structured form.
 
-\paragraph{File-level deduplication.} PPR scores individual entities (functions, methods, classes), but the agent ultimately needs file-level context. When two or more sub-entities from the same file appear in the top-$k$ results, the corresponding \texttt{File} node is dropped to avoid consuming token budget on a file already represented by its constituent entities. The threshold of two was chosen empirically: a threshold of one would collapse all results to file granularity, discarding the entity-level ranking signal; a threshold of three would allow redundant whole-file representations to inflate token usage when entity-level results already cover the relevant content.
+\subsection{File-Level Deduplication}
+\label{sec:file-dedup}
 
-\paragraph{Source code reading.} For each ranked entity, the system reads the relevant source code from disk using the entity's \texttt{file\_path}, \texttt{line\_number}, and \texttt{end\_line} properties. Entity-level line ranges ensure that only the relevant portion of a file is included rather than the entire file.
+The ranked list produced by PPR may contain several entities from the same file. If those are passed through naively, the returned context becomes repetitive and wastes the available budget. CodeGraph therefore removes the whole-file representation when at least two sub-entities from the same file already appear in the ranked results. This preserves the fine-grained ranking signal from functions, methods, and classes, while avoiding redundant file-level duplication that would otherwise consume tokens without adding new information.
 
-\paragraph{Token budget enforcement.} The total token count of the returned source code is bounded by a configurable budget (default: 15{,}000 tokens, measured with the \texttt{cl100k\_base} tokenizer via \texttt{tiktoken}). Results are added in rank order until the budget is exhausted. At least one result is always returned even if it exceeds the budget, ensuring that the agent receives some context for every query. The 15{,}000-token default was chosen to balance context richness with practical constraints: empirically, most SWE-bench tasks require between 5 and 15 files of source code for sufficient context, and this budget typically accommodates 8--12 files depending on file length. Larger budgets marginally improve recall by including additional ranked results, but at the cost of increasing the context window pressure on the downstream language model, a trade-off that can be tuned via configuration without changes to the pipeline.
+\subsection{Source Code Extraction}
+\label{sec:source-extraction}
 
-\paragraph{Output format.} Each result comprises eight fields: entity name, entity type, qualified name, file path, line range, relevance score, source code text, and token count. This structured output allows the MCP server to format results into a tool response that the agent can parse and act on.
+After deduplication, each retained entity is converted into concrete source text by reading the file from disk using its stored path and line boundaries. This design choice is important because the unit of retrieval is not the repository file as a whole, but the specific code region that the ranking stage judged relevant. By extracting only the lines associated with the entity, the system returns focused evidence instead of burdening the agent with unrelated surrounding code.
+
+\subsection{Token Budget Enforcement}
+\label{sec:token-budget}
+
+The candidate set returned by PPR and the final amount of code delivered to the agent are intentionally controlled by different mechanisms. The ranking stage may keep a broader top-30 candidate pool to preserve recall, while post-processing adds results in rank order only until the configured token budget is exhausted. For MCP calls, the default budget is 6{,}000 tokens when \texttt{token\_budget = 0}, and callers may override it when needed. This separation is methodologically important: it allows retrieval to remain recall-oriented while still respecting the downstream model's context-window constraints. Even in edge cases where the first result alone exceeds the limit, the system still returns that result so the agent always receives at least some context.
+
+\subsection{Structured Response Formatting}
+\label{sec:structured-response}
+
+The final output is not just raw code, but a structured result in which each item includes the entity name, entity type, qualified name, file path, line range, relevance score, source code text, and token count. This response format turns retrieval output into something an agent can inspect, attribute, and act on programmatically. In other words, post-processing does not merely trim the ranked list, it converts retrieval output into an interface artifact suitable for tool-based agent workflows.
+
+Taken together, these steps ensure that retrieval quality is not lost after ranking. Personalized PageRank identifies which parts of the repository are likely to matter, while post-processing decides how that evidence is exposed to the agent under realistic context constraints.
 
 
 % =============================================================================
@@ -940,124 +649,205 @@ CodeGraph implements an MCP server that wraps the entire retrieval pipeline as a
 
 \begin{table}[H]
     \centering
-    \caption[MCP tool reference]{The core tools exposed by the CodeGraph MCP server. Each accepts structured parameters and returns a JSON result.}
+    \caption{MCP tool interface (two tools).}
     \label{tab:mcp-tools}
-    \renewcommand{\arraystretch}{1.3}
+    \cgtablerows
     \small
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.4cm}
-                                  >{\raggedright\arraybackslash}p{3.8cm}
-                                  >{\raggedright\arraybackslash}X}
+    \begin{tabularx}{\textwidth}{@{} 
+        >{\RaggedRight\arraybackslash}p{3.85cm} 
+        >{\RaggedRight\arraybackslash}p{2.35cm} 
+        >{\RaggedRight\arraybackslash}p{3.15cm} 
+        >{\RaggedRight\arraybackslash}X @{}}
         \toprule
-        \rowcolor{black!6}
-        \textbf{Tool} & \textbf{Key Parameters} & \textbf{Use Case} \\
+        \textbf{Tool} & \textbf{Role} & \textbf{Agent supplies} & \textbf{Returns} \\
         \midrule
-        \rowcolor[HTML]{EFF6FF}
-        \texttt{\textbf{get\_relevant\_context}} &
-            \texttt{task\_description},\newline \texttt{entity\_hints} (opt.),\newline \texttt{top\_k}, \texttt{token\_budget} &
-            Full retrieval pipeline; returns ranked source files. Primary entry point. \\[4pt]
-        \texttt{query\_dependencies} &
-            \texttt{entity\_name},\newline \texttt{direction} (up/down),\newline \texttt{depth} (opt.) &
-            Explores the dependency neighborhood of a given entity. \\
+        \cgtoolcell{get\_relevant\_\linebreak context} &
+        Primary retrieval &
+        Task text; optional entity list &
+        Ranked snippets, seeds, and scores \\
+        \cgtoolcell{query\_\linebreak dependencies} &
+        Structural lookup &
+        Symbol or pattern; mode and direction &
+        Dependency rows, matches, or hierarchy \\
         \bottomrule
     \end{tabularx}
-    \normalsize
 \end{table}
+{\footnotesize
+\noindent\textbf{Optional parameters.}
+\begin{itemize}[
+    nosep,
+    leftmargin=1.4em,
+    topsep=4pt,
+    itemsep=3pt,
+    parsep=0pt,
+]
+    \item \texttt{get\_relevant\_context}
+    \begin{itemize}[
+        nosep,
+        leftmargin=1.6em,
+        topsep=2pt,
+        itemsep=1pt,
+        label=\textendash,
+    ]
+        \item \texttt{mentioned\_entities}: optional list of symbol names for seeding
+        \item \texttt{top\_k}: number of ranked results (\texttt{0} selects the default of 30)
+        \item \texttt{token\_budget}: snippet budget in tokens (\texttt{0} selects the default of 6000)
+        \item \texttt{include\_explanations}: attach per-result seed-path explanations (default true)
+        \item \texttt{current\_file}: legacy parameter, ignored
+    \end{itemize}
+    \item \texttt{query\_dependencies}
+    \begin{itemize}[
+        nosep,
+        leftmargin=1.6em,
+        topsep=2pt,
+        itemsep=1pt,
+        label=\textendash,
+    ]
+        \item \texttt{mode}: \texttt{dependencies}, \texttt{symbol\_search}, or \texttt{class\_hierarchy}
+        \item \texttt{direction}: \texttt{upstream}, \texttt{downstream}, or \texttt{both}
+        \item \texttt{depth}: traversal depth 1 or 2 (\texttt{dependencies} mode only)
+    \end{itemize}
+\end{itemize}
+\par}
 
 
 \subsection{Agent Workflow}
 \label{sec:agent-workflow}
 
-\Cref{fig:agent-workflow} shows the typical interaction between an AI agent and the CodeGraph MCP server. The agent receives a task description (e.g., a bug report), calls \texttt{get\_relevant\_context} with the task text, and receives ranked source code in return. It may then optionally call \texttt{query\_dependencies} to explore the neighborhood of suspicious entities before generating a solution.
+\Cref{fig:agent-workflow} shows the typical interaction between an AI agent and the CodeGraph MCP server.
+The primary \texttt{get\_relevant\_context} path selects seeds and formats the response in the MCP server, runs IDF-weighted PPR in Neo4j/GDS, and reads source spans from the repository file system.
+The agent may optionally call \texttt{query\_dependencies} for fast structural lookups without repeating the full ranking pipeline.
 
 \begin{figure}[H]
     \centering
+    \begin{adjustbox}{max width=\linewidth,center}
     \begin{tikzpicture}[
-            actor/.style={draw, rounded corners=8pt,
-                    minimum width=3.0cm, minimum height=1.0cm,
-                    font=\small\bfseries, align=center,
-                    line width=0.8pt, inner sep=6pt},
-            lifeline/.style={dashed, line width=0.8pt,
-                    color={rgb,255:red,156;green,163;blue,175}},
-            callarr/.style={-{Stealth[length=6pt,width=4pt]},
-                    line width=1.2pt,
-                    color={rgb,255:red,37;green,99;blue,235}},
-            retarr/.style={-{Stealth[length=5pt,width=3.5pt]},
-                    line width=0.8pt, dashed,
-                    color={rgb,255:red,107;green,114;blue,128}},
-            mlabel/.style={font=\scriptsize, fill=white,
-                    inner sep=2pt, rounded corners=2pt,
-                    draw={rgb,255:red,209;green,213;blue,219},
-                    text width=3.4cm, align=center},
-            stepnum/.style={circle, minimum size=16pt, inner sep=0pt,
-                    font=\scriptsize\bfseries, text=white, line width=0pt,
-                    fill={rgb,255:red,37;green,99;blue,235}},
-        ]
+        node distance=0.3cm and 2.35cm,
+        seqactor/.style={
+            draw=black!50,
+            rounded corners=4pt,
+            minimum width=1.75cm,
+            minimum height=0.68cm,
+            font=\small\bfseries,
+            align=center,
+            fill=white,
+            line width=0.55pt,
+        },
+        seqlife/.style={dashed, line width=0.45pt, draw=black!22},
+        seqcall/.style={
+            -{Stealth[length=5pt, width=3.2pt]},
+            line width=0.8pt,
+            draw=black!70,
+        },
+        seqret/.style={
+            -{Stealth[length=5pt, width=3.2pt]},
+            line width=0.75pt,
+            draw=black!40,
+            dashed,
+        },
+        seqlbl/.style={
+            font=\scriptsize,
+            fill=white,
+            inner sep=2pt,
+            align=center,
+            text=black!80,
+        },
+        seqselflbl/.style={
+            seqlbl,
+            align=right,
+            text width=2.05cm,
+        },
+        seqopt/.style={
+            font=\scriptsize,
+            inner sep=1.5pt,
+            align=center,
+            text=black!58,
+        },
+    ]
+        \node[seqactor] (agent) {Agent};
+        \node[seqactor, right=of agent] (mcp) {MCP server};
+        \node[seqactor, right=of mcp] (neo4j) {Neo4j / GDS};
+        \node[seqactor, right=of neo4j] (fs) {File system};
 
-        % Participants
-        \node[actor, fill={rgb,255:red,219;green,234;blue,254},
-              draw={rgb,255:red,37;green,99;blue,235}] (agent) at (0,0) {AI Agent};
-        \node[actor, fill={rgb,255:red,254;green,243;blue,199},
-              draw={rgb,255:red,245;green,158;blue,11}] (mcp) at (5.5,0) {MCP Server};
-        \node[actor, fill={rgb,255:red,209;green,250;blue,229},
-              draw={rgb,255:red,5;green,150;blue,105}] (neo4j) at (11.0,0) {Neo4j + GDS};
+        \foreach \a in {agent, mcp, neo4j, fs} {%
+            \draw[seqlife] ($(\a.south)+(0,-0.1)$) -- ++(0,-14.2);%
+        }
 
-        % Lifelines
-        \draw[lifeline] (agent.south)  -- ++(0,-11.5);
-        \draw[lifeline] (mcp.south)    -- ++(0,-11.5);
-        \draw[lifeline] (neo4j.south)  -- ++(0,-11.5);
+        \coordinate (fsreadA) at ([yshift=-6.55cm]mcp.south);
+        \coordinate (fsreadB) at ([yshift=-6.55cm]fs.south);
+        \coordinate (fsretA) at ([yshift=-7.65cm]fs.south);
+        \coordinate (fsretB) at ([yshift=-7.65cm]mcp.south);
 
-        % Step 1,  Agent → MCP
-        \node[stepnum] at ([yshift=-1.4cm]agent.south) {1};
-        \draw[callarr] ([yshift=-1.4cm]agent.south)
-            -- node[mlabel, above=3pt]
-               {\texttt{get\_relevant\_context}\\[1pt]\textit{\tiny task\_desc}}
-            ([yshift=-1.4cm]mcp.south);
+        \draw[seqcall] ([yshift=-1.0cm]agent.south) --
+            node[seqlbl, above=3pt] {\texttt{get\_relevant\_context}(\ldots)}
+            ([yshift=-1.0cm]mcp.south);
 
-        % Step 2,  MCP → Neo4j: seed selection
-        \node[stepnum, fill={rgb,255:red,5;green,150;blue,105}]
-            at ([yshift=-3.2cm]mcp.south) {2};
-        \draw[callarr, color={rgb,255:red,5;green,150;blue,105}]
-            ([yshift=-3.2cm]mcp.south)
-            -- node[mlabel, above=3pt] {Seed Selection\\Entity match + BM25}
-            ([yshift=-3.2cm]neo4j.south);
+        \draw[seqcall] ([yshift=-1.95cm]mcp.south) -- ++(0.34,0) -- ++(0,-0.32) -- ++(-0.34,0);
+        \node[seqselflbl, anchor=east] at ([yshift=-2.11cm, xshift=-0.38cm]mcp.south)
+            {ensure graph ready};
 
-        % Return seed nodes
-        \draw[retarr] ([yshift=-4.8cm]neo4j.south)
-            -- node[mlabel, above=3pt] {Seed Nodes\\[1pt]\textit{\tiny 5 nodes}}
-            ([yshift=-4.8cm]mcp.south);
+        \draw[seqcall] ([yshift=-2.9cm]mcp.south) -- ++(0.34,0) -- ++(0,-0.32) -- ++(-0.34,0);
+        \node[seqselflbl, anchor=east] at ([yshift=-3.06cm, xshift=-0.38cm]mcp.south)
+            {select seeds};
 
-        % Step 3,  MCP → Neo4j: PPR
-        \node[stepnum, fill={rgb,255:red,245;green,158;blue,11}]
-            at ([yshift=-6.4cm]mcp.south) {3};
-        \draw[callarr, color={rgb,255:red,245;green,158;blue,11}]
-            ([yshift=-6.4cm]mcp.south)
-            -- node[mlabel, above=3pt] {Execute PPR\\[1pt]\texttt{\tiny pageRank.stream()}}
-            ([yshift=-6.4cm]neo4j.south);
+        \draw[seqcall] ([yshift=-3.85cm]mcp.south) --
+            node[seqlbl, above=3pt] {IDF reweight + PPR}
+            ([yshift=-3.85cm]neo4j.south);
+        \draw[seqret] ([yshift=-4.7cm]neo4j.south) --
+            node[seqlbl, below=3pt] {ranked nodes}
+            ([yshift=-4.7cm]mcp.south);
 
-        % Return ranked entities
-        \draw[retarr] ([yshift=-8.0cm]neo4j.south)
-            -- node[mlabel, above=3pt] {Ranked Entities\\[1pt]\textit{\tiny top-30 nodes}}
-            ([yshift=-8.0cm]mcp.south);
+        \draw[seqcall] ([yshift=-5.55cm]mcp.south) -- ++(0.34,0) -- ++(0,-0.32) -- ++(-0.34,0);
+        \node[seqselflbl, anchor=east] at ([yshift=-5.71cm, xshift=-0.38cm]mcp.south)
+            {deduplicate + token budget};
 
-        % Step 4,  MCP → Agent: results
-        \node[stepnum] at ([yshift=-9.4cm]mcp.south) {4};
-        \draw[retarr, color={rgb,255:red,37;green,99;blue,235}]
-            ([yshift=-9.4cm]mcp.south)
-            -- node[mlabel, above=3pt] {Results (JSON)\\Files + Source}
-            ([yshift=-9.4cm]agent.south);
+        \draw[seqcall] (fsreadA) -- (fsreadB);
+        \node[seqlbl] at ($(fsreadA)!0.5!(fsreadB)$) [above=7pt] {read source spans};
+        \draw[seqret] (fsretA) -- (fsretB);
+        \node[seqlbl] at ($(fsretA)!0.5!(fsretB)$) [below=7pt] {source + line ranges};
 
-        % Step 5,  Agent → MCP: optional
-        \node[stepnum, fill={rgb,255:red,107;green,114;blue,128}]
-            at ([yshift=-10.8cm]agent.south) {5};
-        \draw[callarr, color={rgb,255:red,107;green,114;blue,128},
-              line width=0.8pt, dashed]
-            ([yshift=-10.8cm]agent.south)
-            -- node[mlabel, above=3pt]
-               {\texttt{query\_dependencies}\\[1pt]\textit{\tiny optional}}
-            ([yshift=-10.8cm]mcp.south);
+        \draw[seqcall] ([yshift=-8.55cm]mcp.south) -- ++(0.34,0) -- ++(0,-0.32) -- ++(-0.34,0);
+        \node[seqselflbl, anchor=east] at ([yshift=-8.71cm, xshift=-0.38cm]mcp.south)
+            {format JSON};
 
+        \coordinate (sumA) at ([yshift=-9.45cm]mcp.south);
+        \coordinate (sumB) at ([yshift=-9.45cm]agent.south);
+        \draw[seqret] (sumA) -- (sumB);
+        \node[seqlbl] at ($(sumA)!0.5!(sumB)$) [below=7pt]
+            {summary, seeds, results};
+
+        \begin{scope}[on background layer]
+            \fill[black!4, rounded corners=3pt]
+                ([yshift=-10.35cm, xshift=-0.3cm]agent.south) rectangle
+                ([yshift=-14.05cm, xshift=0.3cm]fs.south);
+            \node[font=\scriptsize\itshape, text=black!50, anchor=south]
+                at ($(agent.south)!0.5!(fs.south)+(0,-10.32)$) {optional};
+        \end{scope}
+
+        \coordinate (optqA) at ([yshift=-10.85cm]agent.south);
+        \coordinate (optqB) at ([yshift=-10.85cm]mcp.south);
+        \coordinate (opttA) at ([yshift=-11.55cm]mcp.south);
+        \coordinate (opttB) at ([yshift=-11.55cm]neo4j.south);
+        \coordinate (optrA) at ([yshift=-12.25cm]neo4j.south);
+        \coordinate (optrB) at ([yshift=-12.25cm]mcp.south);
+        \coordinate (optjA) at ([yshift=-12.95cm]mcp.south);
+        \coordinate (optjB) at ([yshift=-12.95cm]agent.south);
+
+        \draw[seqcall, draw=black!45] (optqA) -- (optqB);
+        \node[seqopt] at ($(optqA)!0.5!(optqB)$) [above=3pt]
+            {\texttt{query\_dependencies}(\ldots)};
+        \draw[seqcall, draw=black!45] (opttA) -- (opttB);
+        \node[seqopt] at ($(opttA)!0.5!(opttB)$) [above=3pt] {dependency traversal};
+        \draw[seqret] (optrA) -- (optrB);
+        \node[seqopt] at ($(optrA)!0.5!(optrB)$) [below=3pt] {dependency results};
+        \draw[seqret] (optjA) -- (optjB);
+        \node[seqopt] at ($(optjA)!0.5!(optjB)$) [below=3pt] {JSON results};
     \end{tikzpicture}
-    \caption[Agent--MCP interaction sequence]{Interaction sequence during code retrieval. The agent calls \texttt{get\_relevant\_context} (1); the MCP server runs seed selection (2, $\sim$35\,ms) then PPR (3, $\sim$147\,ms) on Neo4j; ranked source files return as JSON (4). The optional \texttt{query\_dependencies} call (5, dashed) explores the dependency neighborhood. Total latency is under 200\,ms.}
+    \end{adjustbox}
+    \caption[Agent--MCP retrieval workflow]{%
+        Agent--MCP retrieval workflow.
+        The primary path (\texttt{get\_relevant\_context}) runs seed selection and response formatting in the MCP server, structural ranking in Neo4j/GDS, and source-span reads from the file system.
+        The shaded region shows the optional \texttt{query\_dependencies} lookup.}
     \label{fig:agent-workflow}
 \end{figure}
 
@@ -1075,17 +865,31 @@ The MCP server includes a system prompt (defined in \texttt{prompts.py}) that gu
 \section{Design Limitations}
 \label{sec:design-limitations}
 
-Every design involves trade-offs. The decisions described in this chapter, static-only analysis, Python-specific parsing, conservative call resolution, fixed batch rebuilds, each sacrifice something in exchange for simplicity, correctness guarantees, or implementation tractability. This section makes those trade-offs explicit and quantifies their impact where possible, providing context for interpreting the evaluation results in \cref{ch:evaluation}.
+Every design decision in CodeGraph trades coverage for tractability, precision, or implementation simplicity. In this chapter, the main limits come from static-only analysis, Python-only parsing, conservative edge resolution, and residual structural noise, not from accidental omissions. This section makes those trade-offs explicit so the evaluation results are interpreted within the system's real operating envelope.
 
-\paragraph{Static analysis only.} CodeGraph builds its graph from static source code analysis. Dynamic behaviors such as monkey-patching, \texttt{eval()}-based code generation, and runtime module loading via \texttt{importlib} are invisible to the parser and produce no graph edges. In codebases that rely heavily on dynamic patterns, such as plugin frameworks or heavily metaclass-driven code, the graph underrepresents the true dependency structure. This limitation is mitigated in practice because the SWE-bench benchmark consists of well-structured, statically analyzable repositories, but it would affect deployment on codebases that use Python's dynamic features extensively.
+\paragraph{Static-only analysis.}
+CodeGraph builds its repository graph from static source-code analysis. The graph still captures structural relations such as \texttt{CONTAINS}, \texttt{IMPORTS}, \texttt{CALLS}, and \texttt{INHERITS\_FROM} when they can be resolved statically, so the limitation is not the absence of structure, but the absence of runtime-only links. Behaviors such as monkey-patching, \texttt{eval()}, and dynamic module loading through \texttt{importlib} do not appear in the graph, which means repositories that rely heavily on dynamic execution patterns will be only partially represented.
 
-\paragraph{Python-only parsing.} The current parser implementation supports only Python. The graph schema, PPR algorithm, and MCP server are all language-agnostic, so adding a new language requires only implementing a language-specific parser with entity extraction and call resolution logic, but that is a non-trivial engineering investment. Python-only support means the system cannot be applied to polyglot repositories without modification. SWE-bench is Python-only, so this limitation does not affect the evaluation in \cref{ch:evaluation}, but it would need to be addressed before broader deployment.
+This is less damaging in the current evaluation setting because SWE-bench Lite uses well-structured Python repositories, but it would matter more in codebases where important dependencies are created at runtime rather than expressed in static program structure.
 
-\paragraph{Incomplete call resolution.} Without type inference, duck-typed method calls (e.g., \texttt{obj.save()} where the type of \texttt{obj} is unknown) cannot be resolved. The resolver drops ambiguous calls to avoid false edges, which means that between 20\% and 40\% of call sites across typical Python repositories produce no \texttt{CALLS} edge, a range consistent with the prevalence of dynamically typed method dispatch relative to directly resolvable function calls. PPR is robust to missing edges (it propagates through whatever structure is available), but missing edges reduce the reachable set and may exclude relevant files that would otherwise be reached via call chains. This limitation correlates with lower retrieval performance on tasks involving deeply encapsulated code, as discussed in \cref{ch:evaluation}.
+\paragraph{Python-only parsing.}
+The current parser implementation supports only Python. The broader architecture is not inherently Python-bound, because the graph schema, the Personalized PageRank ranking stage, and the MCP interface are language-agnostic in design, but extending the system to another language would still require a new parser together with language-specific import and call-resolution logic. As a result, the present system does not transfer directly to polyglot repositories or to projects written primarily in other languages.
 
-\paragraph{Utility function noise.} IDF reweighting (\cref{sec:idf-reweighting}) reduces the influence of highly connected nodes but does not eliminate it entirely. Ubiquitous utility functions can still attract PPR probability and displace more specific results, particularly when seed nodes are in their immediate neighborhood. This effect is visible in the evaluation as a secondary failure mode distinct from the seed quality problem.
+This limitation does not affect the reported benchmark because the evaluation uses SWE-bench Lite, a curated set of 300 issues drawn from Python projects. It does, however, limit how broadly the current implementation can be deployed without additional engineering work.
 
-\paragraph{No incremental graph updates.} The graph must be fully rebuilt when source code changes, taking 5--30\,seconds depending on repository size. For small repositories (under 10,000 lines), this completes in under 5\,seconds and is barely noticeable. For the largest SWE-bench repositories, which can exceed 100,000 lines across hundreds of files, rebuild latency can reach 30\,seconds, making real-time re-indexing impractical during active development. The two-pass construction and \texttt{MERGE}-based idempotent writes lay the groundwork for future incremental update support, but selective re-parsing of changed files is not yet implemented.
+\paragraph{Incomplete call and import resolution.}
+Edge resolution is intentionally conservative. When a callee is ambiguous, the system creates no \texttt{CALLS} edge rather than risking a false one, and import links that cannot be matched reliably to project files also produce no edge. This policy protects graph precision, because incorrect edges would create misleading propagation paths for Personalized PageRank, but it also reduces structural coverage.
+
+In practice, this means that many duck-typed method calls, ambiguous global name matches, and unresolved cross-file references remain absent from the graph by design. Personalized PageRank can still propagate through the structure that does exist, but missing edges reduce the system's ability to reach some relevant files through call chains alone.
+
+\paragraph{Residual utility-function and hub-node noise.}
+IDF-based edge reweighting (\cref{sec:idf-reweighting}) reduces the influence of highly connected utility functions and hub-like nodes, but it does not eliminate that effect completely. Some generic helpers can still attract PageRank mass and displace more task-specific results, especially when the initial seeds are already close to those shared utilities. This remains a secondary failure mode even after the weighting correction.
+
+That limitation is best understood as controlled rather than solved. The system applies IDF weighting before retrieval, which dampens structurally common targets, but the graph still contains those targets and their neighborhoods, so some residual noise remains unavoidable in a purely structural ranking pipeline.
+
+Taken together, these limitations define the intended operating envelope of the current system. CodeGraph is best suited to well-structured Python repositories whose important relationships are visible in static structure. That framing is also consistent with the evaluation setup, which uses fixed repository snapshots from SWE-bench Lite rather than live, continuously changing workspaces.
+
+Within that scope, the design remains effective and practical. Outside it, especially in highly dynamic or polyglot repositories, the same decisions that make the system simple and dependable also become stronger constraints on retrieval quality.
 
 
 % =============================================================================
@@ -1096,8 +900,8 @@ Every design involves trade-offs. The decisions described in this chapter, stati
 
 This chapter presented the design of the CodeGraph retrieval pipeline. The system transforms a Python repository into a weighted property graph via Tree-sitter parsing and two-pass graph construction, translates a natural language task description into a personalization vector via multi-signal seed selection, ranks all graph nodes by structural relevance via Personalized PageRank, and delivers the top-$k$ results to an AI agent through an MCP server interface.
 
-Three organizing principles guided the design decisions described in this chapter. \emph{Parsimony}: CodeGraph performs only static analysis, avoiding the complexity and runtime cost of dynamic analysis, type inference, or execution tracing, accepting known blind spots (dynamic imports, duck-typed calls) in exchange for simplicity and speed. \emph{Composability}: each stage has a well-defined input and output type, so individual components can be improved, replaced, or extended without affecting the rest of the pipeline, as demonstrated by the iterative seed quality improvements in \cref{ch:evaluation}. \emph{Empiricism}: parameter choices, damping factor, top-$k$, signal weights, token budget, were selected based on measured benchmark performance rather than theoretical defaults. Together, these principles produce a system that is easy to reason about, straightforward to extend, and grounded in observed rather than assumed behavior.
+Three organizing principles guided the design decisions described in this chapter. \emph{Parsimony} keeps the graph limited to static analysis, accepting known blind spots such as dynamic imports and duck-typed calls in exchange for simpler construction. \emph{Composability} gives each stage a clear input and output type, so parser, graph, seed, and ranking changes can be tested independently. \emph{Empiricism} ties parameter choices, including damping factor, top-$k$, signal weights, and token budget, to measured benchmark behavior rather than theoretical defaults.
 
-Three specific decisions proved particularly consequential for retrieval quality. First, \emph{uniform PPR restart} outperforms weighted restart because it prevents overconfident seed weights from dominating the computation, a finding that suggests seed diversity matters more than seed confidence when seed quality is imperfect. Second, \emph{IDF-based edge reweighting} reduces the influence of ubiquitous call targets that would otherwise dilute PPR scores across the graph. Third, \emph{compound tokenization} in BM25 seed selection addresses vocabulary fragmentation, a first-order problem in code retrieval. \Cref{ch:evaluation} quantifies the individual and combined impact of each decision, isolating their contributions through a series of controlled ablations.
+Three decisions are especially important for retrieval quality. First, \emph{uniform PPR restart} outperforms weighted restart because it prevents overconfident seed weights from dominating the computation. Second, \emph{IDF-based edge reweighting} reduces the influence of ubiquitous call targets that would otherwise dilute PPR scores across the graph. Third, \emph{compound tokenization} in BM25 seed selection addresses vocabulary fragmentation in code identifiers. \Cref{ch:evaluation} quantifies the individual and combined impact of these choices through controlled ablations.
 
 \Cref{ch:implementation} transitions from design to implementation, presenting the technology stack, code organization, data models, and evaluation harness that transform these architectural principles into a functioning system.

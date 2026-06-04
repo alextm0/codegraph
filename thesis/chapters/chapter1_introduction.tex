@@ -5,29 +5,31 @@
 \chapter{Introduction}
 \label{ch:introduction}
 
-The rise of Large Language Models (LLMs) has expanded the capabilities of software engineering, enabling the development of autonomous agents capable of resolving complex bugs and implementing new features. However, the effectiveness of these agents is limited by the context window of the underlying models. While modern agents can reason deeply about a few hundred lines of code, they frequently fail when tasked with navigating repositories containing millions of tokens. This thesis introduces CodeGraph: a hybrid retrieval system that grounds AI agents in the structural topology of a codebase to solve the challenge of repository-scale code navigation.
+Large Language Models (LLMs) have made AI coding agents useful for more than isolated code completion. Agents can now inspect files, propose patches, and run tests, but their success still depends on a simple prerequisite: they must see the right code. Repository-scale tasks make this difficult. A bug report may describe a symptom in natural language, while the relevant implementation is spread across imports, calls, and inheritance relationships that are not visible to text search alone.
+
+This thesis introduces CodeGraph, a hybrid retrieval system for repository-level code navigation. CodeGraph parses Python repositories into a dependency graph, selects seed entities from a task description, and uses Personalized PageRank to rank structurally related code. The central claim is not that graph structure replaces lexical search, but that lexical and structural signals solve different parts of the retrieval problem. Lexical signals identify where the search can begin; graph propagation identifies which connected code entities are likely to matter.
 
 % =============================================================================
 \section{Motivation}
 \label{sec:motivation}
 % =============================================================================
 
-Current approaches to code retrieval typically rely on lexical keyword matching or dense vector embeddings. While effective for simple document search, these methods often fail to capture the multi-file dependencies and logical hierarchies that define complex software systems. A bug described in natural language may have symptoms in a UI component but a root cause in a deeply nested database utility. Text-based search often fails to bridge this gap, leaving the AI agent to search blindly through irrelevant files.
+Current approaches to code retrieval typically rely on lexical keyword matching or dense vector embeddings. These methods are useful for finding textually similar files, but software changes often follow structure rather than vocabulary. A bug described in a view, parser, or public API may require a change in a helper, compiler, or base class several edges away from the named component. This mismatch between natural language symptoms and source-code structure is the Semantic Gap addressed throughout the thesis.
 
-The primary bottleneck in this process is the initial seed extraction: the difficulty of accurately translating ambiguous natural language task descriptions into precise starting points within a massive codebase. Without a reliable way to identify these seeds and follow their logical relationships, agents waste computational resources and context budget on exploratory navigation, often leading to hallucinations or task failure.
+The primary bottleneck is Seed Extraction: translating an ambiguous task description into useful starting points inside the code graph. If no seed lands near the relevant subsystem, even a strong ranking algorithm has little useful signal to propagate. If the seed set contains a mix of correct and noisy matches, graph structure can still help by amplifying the region where independent signals converge. CodeGraph is designed around this division of labor.
 
 % =============================================================================
 \section{Research Objectives and Original Contributions}
 \label{sec:objectives}
 % =============================================================================
 
-This research aims to develop a retrieval architecture that uses the structural signals of source code to improve agent performance. The specific objectives of this thesis are:
+This research develops and evaluates a retrieval architecture that uses source-code structure as an explicit relevance signal. The objectives are:
 
 \begin{enumerate}
-    \item To design a graph-based representation of source code that captures essential dependencies (calls, imports, and inheritance) while maintaining high construction performance.
-    \item To implement a hybrid retrieval pipeline that pairs high-recall lexical anchoring with high-precision structural propagation using the Personalized PageRank (PPR) algorithm.
-    \item To evaluate the effectiveness of this approach using a rigorous, industry-standard benchmark (SWE-bench Lite) and identify the specific factors that drive retrieval success.
-    \item To provide a seamless integration path for AI agents through the Model Context Protocol (MCP), establishing a deterministic foundation for autonomous code navigation.
+    \item To design a graph representation of Python source code that captures calls, imports, containment, and inheritance without indexing every AST node.
+    \item To implement a hybrid retrieval pipeline that combines lexical anchoring with structural propagation using Personalized PageRank (PPR).
+    \item To evaluate the approach on SWE-bench Lite and identify which design choices drive file-level retrieval success.
+    \item To expose the retrieval pipeline through the Model Context Protocol (MCP), so AI agents can request ranked source context through a stable tool interface.
 \end{enumerate}
 
 % =============================================================================

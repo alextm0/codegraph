@@ -24,7 +24,7 @@
 \usepackage[ruled, vlined, linesnumbered]{algorithm2e} % formal algorithms
 \usepackage{xcolor}         % colors for listings
 
-% Code listing style — shared across all chapters
+% Code listing style shared across all chapters
 \definecolor{codegray}{rgb}{0.5,0.5,0.5}
 \definecolor{codepurple}{rgb}{0.58,0,0.82}
 \definecolor{codeblue}{rgb}{0.13,0.29,0.53}
@@ -122,34 +122,37 @@
 \tikzset{
     lattice_stage/.style={
         draw, 
-        rounded corners=8pt,
-        minimum width=3.2cm, 
-        minimum height=1.6cm,
-        line width=1.2pt, 
-        inner sep=10pt,
+        rounded corners=6pt,
+        minimum width=2.8cm, 
+        minimum height=1.4cm,
+        line width=0.9pt, 
+        inner sep=8pt,
         align=center,
         fill=white,
         font=\small\bfseries
     },
     lattice_arrow/.style={
-        -{Stealth[length=8pt, width=5pt]}, 
-        line width=1.5pt,
+        -{Stealth[length=7pt, width=4.5pt]}, 
+        line width=1.1pt,
         latticeblue
     },
     lattice_gray_arrow/.style={
         -{Stealth[length=6pt, width=4pt]}, 
-        line width=1.2pt,
+        line width=0.9pt,
         latticegray
     },
     lattice_badge/.style={
         circle, 
         fill=latticeblue, 
         text=white, 
-        inner sep=2pt, 
+        inner sep=1pt, 
         font=\scriptsize\bfseries,
-        minimum size=14pt
+        minimum size=16pt
     }
 }
+
+\usepackage{cg-visuals}
+\cgdiagramsetup
 
 %\geometry{a4paper,top=2.5cm,left=3cm,right=2.5cm,bottom=2.5cm}
 %in style
@@ -182,9 +185,9 @@
 \hrule
 \vspace{0.5cm}
 
-LLM-based coding agents are increasingly capable of resolving real software engineering tasks, moving beyond simple code generation to the autonomous management of entire repositories. However, as codebases grow to millions of tokens, the effectiveness of these agents is strictly limited by their ability to navigate complex file structures. Traditional retrieval methods, such as keyword search or dense embeddings, treat code as flat text and often fail to bridge the gap between a natural-language issue and its structural root cause. This thesis introduces CodeGraph, a hybrid retrieval system that leverages the inherent graph structure of source code to facilitate agentic navigation. By extracting lexical seeds from task descriptions and propagating relevance through a dependency graph using Personalized PageRank, CodeGraph provides agents with a deterministic and structurally-grounded view of the codebase.
+LLM-based coding agents can now inspect files, propose patches, and run tests, but they still depend on retrieving the right code. As repositories grow to millions of tokens, this retrieval step becomes a major constraint. Traditional keyword search and dense retrieval treat code mostly as text, so they often miss relationships expressed through imports, calls, containment, and inheritance. This thesis introduces CodeGraph, a hybrid retrieval system that uses source-code structure for agent navigation. CodeGraph extracts lexical seeds from task descriptions and propagates relevance through a dependency graph using Personalized PageRank, giving agents a ranked and inspectable view of the repository.
 
-The system was validated on SWE-bench Lite, a benchmark of 300 real-world software issues. CodeGraph achieved a 74.0\% Recall@10, marking a substantial 32-percentage-point increase over traditional lexical search. These results prove that while initial seed quality is a critical bottleneck, leveraging the structural dependency graph of the source code allows agents to pinpoint relevant files within complex repositories. By transforming a codebase into a navigable map of logical links, this work establishes that explicit structural context is a fundamental requirement for the next generation of autonomous coding agents. The engineering artifacts produced—including the custom Tree-sitter parsing pipeline, the specialized graph schema, and the deterministic ranking engine—constitute original contributions to the field of software engineering for autonomous agents.
+The system is evaluated on SWE-bench Lite, a benchmark of 300 real software issues. CodeGraph achieves 74.0\% Recall@10, a 32 percentage point improvement over the initial baseline. The results show that seed quality is the main retrieval bottleneck: when useful seeds are present, graph propagation can rank structurally related files near the top; when no seed reaches the relevant region, ranking has little signal to recover the target. The thesis contributes a Tree-sitter parsing pipeline, a Python code graph schema, a deterministic PPR retrieval engine, and MCP/CLI interfaces for AI coding agents.
 
 \tableofcontents
 

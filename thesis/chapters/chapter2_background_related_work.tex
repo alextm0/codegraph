@@ -44,41 +44,41 @@ While standard PageRank provides a global importance score for every node, \emph
 
 LLM-based coding agents face a fundamental selection problem: given a natural language task description and a large code repository, which source files should the agent examine? This section defines the retrieval problem, establishes its constraints, and we survey three classes of methods (sparse, dense, and graph-based) that represent increasingly structural approaches to solving it.
 
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 \subsection{The Retrieval Problem}
 \label{sec:retrieval-problem}
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 
 For current production models, this limit ranges from 32{,}000 to 200{,}000 tokens~\cite{gpt4,claude3}, while a moderately sized Python repository (Django being a representative example) contains several million tokens of source code.
 
 This selection problem has an asymmetric cost structure. A false negative (failing to retrieve a file that the agent must modify) renders the task unsolvable regardless of the agent's subsequent reasoning quality. A false positive (retrieving an irrelevant file) incurs only a noise cost: it consumes context budget but does not prevent a correct solution.
- This asymmetry makes retrieval fundamentally \emph{recall-oriented}: the primary measure of retrieval quality is whether the relevant files appear within the top-$k$ results, rather than the precision of the entire retrieved set.
+ This asymmetry makes retrieval \emph{recall-oriented}: the primary measure of retrieval quality is whether the relevant files appear within the top-$k$ results, rather than the precision of the entire retrieved set.
 
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 \subsection{Retrieval-Augmented Generation for Code}
 \label{sec:rag}
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 
 Retrieval-augmented generation (RAG)~\cite{lewis2020rag} addresses the context window limitation by treating the repository as an external knowledge base. A typical RAG pipeline first retrieves candidate code entities, then uses an LLM to reason over the retrieved context. The quality of generation is limited by retrieval: an LLM cannot produce a correct fix for code it was not shown.
 
 RAG for code faces a fundamental challenge: bridging the modal gap between natural language task descriptions and structured source code. A bug report uses high-level, ambiguous prose, while the retrieval targets are syntax-constrained code entities interconnected through explicit dependencies. Surface-level text similarity often fails to identify the relevant code. Recent empirical work confirms that retrieval quality, rather than reasoning capacity, is the dominant bottleneck in agent performance~\cite{yang2024swebench}. Evaluations on benchmarks such as SWE-bench demonstrate that agents with targeted retrieval mechanisms outperform those given larger but unfocused context~\cite{yang2024swebench}.
 
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 \subsection{Sparse, Dense, and Graph-Based Retrieval}
 \label{sec:retrieval-families}
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 
 This section examines three classes of retrieval methods in turn, analyzing their strengths and fundamental limitations.
 The key characteristics of these families are summarized in \cref{tab:retrieval-comparison}, and their respective conceptual workflows are illustrated in \cref{fig:retrieval-flow}.
 
 \paragraph{Sparse retrieval.}
-Sparse retrieval methods compute relevance as a weighted term overlap between the query and the indexed code tokens. BM25~\cite{bm25}, the dominant method in this class, scores each document using term frequency, inverse document frequency, and a saturation function that prevents overfitting to high-frequency terms. Sparse methods require no learned parameters, scale to large corpora, and produce interpretable scores. Their principal limitation is lexical sensitivity: relevance is measured at the token level, so a query term and a code identifier that express the same concept but differ in surface form will not match. In source code, this is a pervasive problem. Identifiers frequently combine multiple semantic units into a single compound token, such as \texttt{SQLCompiler}, \texttt{get\_absolute\_url}, or \texttt{BaseHasher}, using camelCase or underscore conventions. A query mentioning SQL compilation does not match the token \texttt{SQLCompiler} under atomic tokenization. Sparse methods are therefore most effective when the vocabulary of the task description closely mirrors the vocabulary of the relevant source code, and degrade when it does not.
+Sparse retrieval methods compute relevance as weighted term overlap between the query and indexed code tokens. BM25~\cite{bm25}, the dominant method in this class, scores each document using term frequency, inverse document frequency, and a saturation function that prevents high-frequency terms from dominating. Sparse methods require no learned parameters, scale to large corpora, and produce interpretable scores.
+
+Their main limitation is lexical sensitivity. Relevance is measured at the token level, so a query term and a code identifier that express the same concept but differ in surface form will not match. In source code, this is common. Identifiers often combine several semantic units into one token, such as \texttt{SQLCompiler}, \texttt{get\_absolute\_url}, or \texttt{BaseHasher}. A query mentioning SQL compilation does not match \texttt{SQLCompiler} under atomic tokenization. Sparse methods therefore work best when the vocabulary of the task description closely mirrors the vocabulary of the relevant source code.
 
 \paragraph{Dense retrieval.}
-Dense retrieval methods encode queries and code entities into a shared continuous vector space and rank candidates by cosine similarity. Models such as CodeBERT~\cite{codebert}, GraphCodeBERT~\cite{graphcodebert}, and UniXcoder~\cite{unixcoder} are trained on large code corpora to align natural language descriptions with code representations, enabling matching that is robust to vocabulary variation and paraphrase. However, dense methods have three limitations for repository-scale retrieval. First, they compute similarity from token sequences alone and have no structural awareness: the score assigned to a candidate file is determined entirely by its textual content, without regard to which modules it imports, which functions it calls, or which components depend on it. Second, achieving competitive performance typically requires fine-tuning on domain-specific code--query pairs, which may not be available for every repository or language. Third, embedding similarity scores are opaque: there is no principled way to trace why a specific candidate received a high score, making it difficult to diagnose retrieval failures or improve the system systematically.
+Dense retrieval methods encode queries and code entities into a shared vector space and rank candidates by cosine similarity. Models such as CodeBERT~\cite{codebert}, GraphCodeBERT~\cite{graphcodebert}, and UniXcoder~\cite{unixcoder} are trained on large code corpora to align natural language descriptions with code representations. This makes them more tolerant of vocabulary variation and paraphrase than sparse methods.
+
+Dense methods have three limitations for repository-scale retrieval. First, they compute similarity from token sequences alone. The score assigned to a candidate file is determined by its text, not by which modules it imports, which functions it calls, or which components depend on it. Second, competitive performance often requires fine-tuning on code-query pairs that may not exist for a specific repository or language. Third, embedding scores are difficult to inspect: there is no simple path trace explaining why a candidate received a high score.
 
 \paragraph{Graph-based retrieval.}
-Graph-based retrieval methods represent code relationships as edges in a typed directed graph and propagate relevance from query-matched seed entities to structurally connected entities. Unlike sparse and dense methods, which score candidates independently, graph-based methods model relevance as flowing along structural connections between code entities. Recent work demonstrates the effectiveness of this approach. GraphCoder~\cite{liu2024graphcoder} captures call and data-flow relationships through a code context graph to enhance repository-level code completion. Athale and Vaddina~\cite{athale2025knowledge} construct a knowledge graph over repository structure and use graph queries to retrieve context for LLM-based generation. CodexGraph~\cite{liu2024codexgraph} further demonstrates the utility of bridging LLMs and code repositories via graph databases. These systems use sparse retrieval to identify seed nodes in a code dependency graph, then apply graph traversal or ranking algorithms (such as Personalized PageRank) to reach structurally relevant entities.
+Graph-based retrieval methods represent code relationships as edges in a typed directed graph and propagate relevance from query-matched seed entities to structurally connected entities. Unlike sparse and dense methods, which score candidates independently, graph-based methods model relevance as moving along dependencies between code entities.
+
+Recent systems use this idea in different ways. GraphCoder~\cite{liu2024graphcoder} captures call and data-flow relationships through a code context graph for repository-level code completion. Athale and Vaddina~\cite{athale2025knowledge} construct a knowledge graph over repository structure and use graph queries to retrieve context for LLM-based generation. CodexGraph~\cite{liu2024codexgraph} connects LLMs to code repositories through Neo4j queries. These systems use sparse retrieval to identify seed nodes, then apply graph traversal or ranking algorithms, including Personalized PageRank, to reach structurally relevant entities.
 
 \begin{table}[H]
     \centering
@@ -112,13 +112,11 @@ Graph-based retrieval methods represent code relationships as edges in a typed d
             title/.style={font=\small\bfseries, align=left}
         ]
 
-        %,  Sparse, 
         \node[title] (sparse_title) at (-3, 3.5) {Sparse Retrieval\\(e.g., BM25)};
         \node[box] (sq) at (0, 3.5) {Query: SQL compilation};
         \node[codebox] (sc) at (5, 3.5) {class SQLCompiler};
         \draw[<->, dashed, thick, draw=red!60] (sq) -- node[lbl, above] {Keyword mismatch\\(no overlap)} (sc);
 
-        %,  Dense, 
         \node[title] (dense_title) at (-3, 1) {Dense Retrieval\\(e.g., CodeBERT)};
         \node[box] (dq) at (0, 1.5) {Query};
         \node[codebox] (dc) at (5, 1.5) {Code};
@@ -128,7 +126,6 @@ Graph-based retrieval methods represent code relationships as edges in a typed d
         \draw[arrow] (dc) -- node[lbl, right] {Encoder} (dvc);
         \draw[<->, thick, draw=green!60!black] (dvq) -- node[lbl, above] {Vector Similarity\\(High score)} (dvc);
 
-        %,  Graph-based, 
         \node[title] (graph_title) at (-3, -2) {Graph-based\\Retrieval};
         \node[box] (gq) at (0.2, -2) {Matched Entity\\(e.g., function)};
         
@@ -157,10 +154,8 @@ Graph-based retrieval methods represent code relationships as edges in a typed d
 
 Having motivated graph-based retrieval as a family in \cref{sec:retrieval-families}, this section examines four concrete systems that represent the current state of the art. Each treats a repository as a typed directed graph, but differs in how the graph is constructed, how seeds are chosen, and how relevance is propagated through the graph. \Cref{tab:graph-systems} in \cref{sec:gaps} summarises their design choices side by side; the following subsections describe each system individually and identify the core limitation that each leaves unresolved.
 
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 \subsection{RepoGraph: Line-Level Ego-Graph Retrieval}
 \label{sec:repograph}
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 
 RepoGraph~\cite{ouyang2025repograph} constructs a line-level dependency graph of a repository, in which each node corresponds to a single line of source code and edges encode references between symbols defined or used on those lines. At retrieval time, RepoGraph identifies a set of seed lines from the task description and returns the $k$-hop \emph{ego-graph} around those seeds, that is, every line reachable within $k$ edges. Integrated into an agentic framework for SWE-bench Lite, the authors report a 32.8\% relative improvement in task resolution rate over a text-only baseline.
 
@@ -233,32 +228,26 @@ The central limitation of RepoGraph is that $k$-hop expansion is \emph{unranked}
 
 The absence of ranking under a fixed context budget is examined as Gap~1 in \cref{sec:gaps}.
 
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 \subsection{LocAgent: BFS Traversal with Sparse Rescoring}
 \label{sec:locagent}
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 
 LocAgent~\cite{chen2025locagent} targets the narrower problem of \emph{issue-to-file localisation}: given a bug report, identify which file must be modified. It builds an entity-level graph (files, classes, functions) and combines a breadth-first traversal from query-matched seeds with a BM25 re-ranking step over the nodes visited during the traversal. On their benchmark, LocAgent reports 92.7\% file-level localisation accuracy.
 
 LocAgent demonstrates that graph structure improves localisation even when combined with conventional sparse scoring. However, its BFS-based traversal is inherently local: relevance is determined by proximity to the seed set, not by global graph structure. A file that is structurally central to the repository, for example, a core utility module transitively involved in many code paths, receives no signal from BFS unless it happens to lie within the traversal radius. This locality constraint means that no fixed-radius traversal alone can capture the global structural importance of the repository's most connected entities.
 
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 \subsection{CodexGraph: LLM-Generated Cypher Queries}
 \label{sec:codexgraph}
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 
 CodexGraph~\cite{liu2024codexgraph} takes a different route to graph-based retrieval. Rather than defining a fixed retrieval algorithm, it exposes a Neo4j graph of the repository to an LLM agent and asks the agent to \emph{write Cypher queries} to navigate it. The graph schema, nodes for files, classes, and methods, with edges for \texttt{contains}, \texttt{inherits}, \texttt{has\_method}, and \texttt{uses}, closely mirrors the entity-level structure that several systems in this family adopt. Retrieval, however, is expressed as natural language translated to graph queries on the fly.
 
 This design elegantly reuses the LLM's reasoning ability, but pays a cost on every retrieval query: each round requires an additional LLM call to produce the Cypher expression, and incorrect queries must be detected and retried. Latency, token cost, and query correctness all depend on the language model. A retrieval step that is deterministic and query-time cheap would sidestep these costs entirely.
 
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 \subsection{GraphCoder: Code Context Graphs and Subgraph Matching}
 \label{sec:graphcoder}
-%, ,, ,, ,, ,, ,, ,, ,, ,, ,, , 
 
 GraphCoder~\cite{liu2024graphcoder} targets repository-level code \emph{completion} rather than issue resolution. It represents each function as a Code Context Graph (CCG) that combines control-flow and data-dependence edges at the statement level, and retrieves candidate snippets by computing subgraph edit distance between the current completion context and candidate graphs in the repository. GraphCoder reports a 6.06\% improvement in exact-match accuracy over strong RAG baselines.
 
-GraphCoder validates that fine-grained structural signals (control flow, data flow) improve code retrieval, but subgraph edit distance is an expensive operation: in the worst case it is NP-hard, and even approximate variants scale poorly with graph size. This restricts GraphCoder to narrow, local matching scenarios and makes it unsuitable for interactive, repository-scale retrieval. The key insight,  that structural edges carry retrieval signal,  stands even if the specific matching algorithm is replaced by a cheaper alternative.
+GraphCoder validates that fine-grained structural signals (control flow, data flow) improve code retrieval, but subgraph edit distance is an expensive operation: in the worst case it is NP-hard, and even approximate variants scale poorly with graph size. This restricts GraphCoder to narrow, local matching scenarios and makes it unsuitable for interactive, repository-scale retrieval. The key insight, that structural edges carry retrieval signal, stands even if the specific matching algorithm is replaced by a cheaper alternative.
 
 % ============================================================
 \section{Research Gaps}

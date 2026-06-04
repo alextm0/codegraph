@@ -1,0 +1,348 @@
+% CodeGraph thesis: shared diagrams and code listing presentation
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{cg-visuals}[2026/06/03 CodeGraph thesis visuals]
+
+\RequirePackage{tcolorbox}
+\tcbuselibrary{listings,skins,breakable}
+
+% ---------------------------------------------------------------------------
+% Listing styles (require colors from main.tex)
+% ---------------------------------------------------------------------------
+\lstdefinestyle{cgpython}{
+    style=pythonstyle,
+    basicstyle=\ttfamily\small,
+    numbers=none,
+    frame=none,
+    backgroundcolor=\color{backcolour},
+    xleftmargin=0pt,
+    xrightmargin=0pt,
+    aboveskip=4pt,
+    belowskip=4pt,
+}
+
+\lstdefinestyle{cgjson}{
+    style=pseudostyle,
+    basicstyle=\ttfamily\small,
+    numbers=none,
+    frame=none,
+    backgroundcolor=\color{backcolour},
+    xleftmargin=0pt,
+    xrightmargin=0pt,
+}
+
+\lstdefinestyle{cgshell}{
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{backcolour},
+    keywordstyle=\color{latticeblue}\bfseries,
+    commentstyle=\color{codegreen}\itshape,
+    numbers=none,
+    frame=none,
+    breaklines=true,
+    showstringspaces=false,
+    xleftmargin=0pt,
+    xrightmargin=0pt,
+}
+
+\lstdefinestyle{cgcypher}{
+    style=pseudostyle,
+    basicstyle=\ttfamily\small,
+    numbers=none,
+    frame=none,
+    commentstyle=\color{codegreen}\itshape,
+    keywordstyle=\color{latticeblue}\bfseries,
+    xleftmargin=0pt,
+    xrightmargin=0pt,
+}
+
+% ---------------------------------------------------------------------------
+% Framed listing environments
+% ---------------------------------------------------------------------------
+\tcbset{
+    cgbox/.style={
+        enhanced,
+        arc=4pt,
+        boxrule=0.55pt,
+        colframe=latticegray!45,
+        colback=backcolour,
+        left=6pt,
+        right=6pt,
+        top=5pt,
+        bottom=5pt,
+        fonttitle=\bfseries\small,
+        coltitle=black!85,
+        titlerule=0.35pt,
+        colbacktitle=white,
+        before skip=8pt plus 2pt minus 2pt,
+        after skip=10pt plus 2pt minus 2pt,
+        attach boxed title to top left={
+            yshift=-2.5mm,
+            xshift=3mm
+        },
+        boxed title style={
+            arc=2pt,
+            boxrule=0.35pt,
+            colframe=latticegray!40,
+        },
+    },
+}
+
+\newtcblisting{cgpython}[2][]{
+    cgbox,
+    title={#2},
+    listing only,
+    listing options={style=cgpython},
+    #1
+}
+
+\newtcblisting{cgjson}[2][]{
+    cgbox,
+    title={#2},
+    listing only,
+    listing options={style=cgjson,language=json},
+    #1
+}
+
+\newtcblisting{cgshell}[2][]{
+    cgbox,
+    title={#2},
+    listing only,
+    listing options={style=cgshell},
+    #1
+}
+
+\newtcblisting{cgcypher}[2][]{
+    cgbox,
+    title={#2},
+    listing only,
+    listing options={style=cgcypher},
+    #1
+}
+
+% Side-by-side code panels (chapter 4)
+\newenvironment{cgcodesplit}[1][Code extraction example]%
+{%
+    \begin{figure}[htbp]
+    \centering
+    \caption{#1}%
+}{%
+    \end{figure}%
+}
+
+\newcommand{\cgcodesplitpanel}[2]{%
+    \begin{minipage}[t]{0.48\textwidth}%
+    \begin{cgpython}[#1]{#2}%
+}
+
+\newcommand{\cgcodesplitpanelend}{%
+    \end{cgpython}%
+    \end{minipage}%
+}
+
+% ---------------------------------------------------------------------------
+% TikZ diagram styles (call after \usepackage{tikz})
+% ---------------------------------------------------------------------------
+\newcommand{\cgdiagramsetup}{%
+    \tikzset{
+        cgstage/.style={
+            lattice_stage,
+            minimum width=2.6cm,
+            minimum height=1.35cm,
+            font=\small\bfseries,
+            text width=2.4cm,
+        },
+        cgstage/parse/.style={cgstage, draw=latticeblue, fill=white},
+        cgstage/graph/.style={cgstage, draw=latticegreen, fill=white},
+        cgstage/online/.style={cgstage, draw=latticeorange, fill=white},
+        cgstage/deliver/.style={cgstage, draw=latticeblue!70!black, fill=white},
+        cgbadge/.style={
+            lattice_badge,
+            minimum size=18pt,
+            font=\scriptsize\bfseries,
+        },
+        cgarr/.style={lattice_arrow},
+        cgarrthin/.style={
+            -{Stealth[length=6pt,width=4pt]},
+            line width=1pt,
+            latticegray,
+        },
+        cglabel/.style={
+            font=\scriptsize\itshape,
+            text=latticegray,
+            align=center,
+        },
+        cgactor/.style={
+            draw=latticegray!80,
+            rounded corners=6pt,
+            minimum width=2.4cm,
+            minimum height=0.9cm,
+            font=\small\bfseries,
+            align=center,
+            fill=white,
+            line width=0.8pt,
+        },
+        cglifeline/.style={
+            dashed,
+            line width=0.8pt,
+            draw=latticegray!40,
+        },
+        cgdecision/.style={
+            draw=latticegray!60,
+            rounded corners=5pt,
+            minimum width=4.2cm,
+            minimum height=0.75cm,
+            text width=4cm,
+            align=center,
+            font=\small,
+            fill=white,
+            inner sep=5pt,
+        },
+        cgoutcome/.style={
+            draw=latticegreen!70!black,
+            rounded corners=5pt,
+            minimum width=2.6cm,
+            minimum height=0.75cm,
+            text width=2.4cm,
+            align=center,
+            font=\small\bfseries,
+            fill=white,
+            inner sep=5pt,
+        },
+        cgdrop/.style={
+            draw=latticered!70!black,
+            rounded corners=5pt,
+            minimum width=4.2cm,
+            minimum height=0.75cm,
+            text width=4cm,
+            align=center,
+            font=\small\bfseries,
+            fill=white,
+            inner sep=5pt,
+        },
+        cgnodefile/.style={
+            draw=latticeblue,
+            rounded corners=6pt,
+            fill=white,
+            font=\small\ttfamily,
+            align=center,
+            inner sep=6pt,
+            line width=0.8pt,
+        },
+        cgnodeclass/.style={
+            draw=latticegreen,
+            rounded corners=6pt,
+            fill=white,
+            font=\small\ttfamily,
+            align=center,
+            inner sep=6pt,
+            line width=0.8pt,
+        },
+        cgnodefunc/.style={
+            draw=latticeorange,
+            rounded corners=6pt,
+            fill=white,
+            font=\small\ttfamily,
+            align=center,
+            inner sep=6pt,
+            line width=0.8pt,
+        },
+        cgtypesub/.style={font=\tiny, text=latticegray},
+        cgpanel/.style={
+            draw=latticegray!35,
+            rounded corners=8pt,
+            fill=black!2,
+            inner sep=12pt,
+        },
+        cgstructpanel/.style={
+            draw=latticegray!45,
+            rounded corners=6pt,
+            inner sep=10pt,
+            fill=white,
+        },
+        cgstructarr/.style={
+            -{Stealth[length=2.2mm, width=1.8mm]},
+            line width=0.85pt,
+            draw=latticeblue!75!black,
+        },
+        cgstructarrred/.style={
+            -{Stealth[length=2.2mm, width=1.8mm]},
+            line width=0.9pt,
+            draw=latticered!75!black,
+            dashed,
+        },
+        cgstructarrgray/.style={
+            -{Stealth[length=2.2mm, width=1.8mm]},
+            line width=0.85pt,
+            draw=latticegray,
+            dashed,
+        },
+        cgstructnote/.style={
+            font=\footnotesize,
+            text=black!65,
+            align=center,
+        },
+        cgedgelabel/.style={
+            font=\scriptsize\ttfamily,
+            fill=white,
+            inner sep=2pt,
+            text=black!80,
+            rounded corners=1pt,
+        },
+        cglegendbox/.style={
+            draw=latticegray!40,
+            rounded corners=4pt,
+            inner sep=6pt,
+            font=\footnotesize,
+            align=left,
+            text width=3.6cm,
+        },
+        cgswimlane/.style={
+            cgpanel,
+            minimum width=2.15cm,
+            minimum height=6.8cm,
+        },
+        cgmsg/.style={
+            font=\footnotesize,
+            fill=white,
+            inner sep=2.5pt,
+            text width=2.8cm,
+            align=center,
+        },
+        cgseqactor/.style={
+            cgactor,
+            minimum width=2.15cm,
+            minimum height=0.85cm,
+        },
+    }%
+}
+
+% Sequence message at fixed depth below actor.south (cm); avoids stacked overlaps.
+\newcommand{\cgseqmsg}[5]{%
+    \draw[#1] ([yshift=-#2cm]#3.south) --
+        node[cgmsg, midway, above=2pt] {#5} ([yshift=-#2cm]#4.south);%
+}
+
+% Short table note below a figure or table (detail stays in body text).
+\newcommand{\cgtablenote}[1]{%
+    \par\vspace{0.4em}%
+    {\footnotesize #1}%
+}
+
+% Small sample edge for in-node legends (avoids nested tikzpicture environments).
+\newcommand{\cglegendline}[2]{%
+    \tikz[baseline=-0.55ex] {%
+        \draw[-{Stealth[length=2mm, width=1.6mm]}, line width=0.9pt, #1] (0,0) -- (0.55,0);%
+    }%
+    \ #2%
+}
+
+% Consistent row spacing for Chapter 3 tables.
+\newcommand{\cgtablerows}{%
+    \renewcommand{\arraystretch}{1.35}%
+}
+
+% Monospace MCP/CLI name inside a fixed table column (prevents overflow into neighbors).
+\newcommand{\cgtoolcell}[1]{%
+    \begin{minipage}[t]{\linewidth}%
+        \raggedright\ttfamily\footnotesize #1%
+    \end{minipage}%
+}
