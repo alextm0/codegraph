@@ -11,26 +11,28 @@ Call a tool first. The graph is authoritative. You are not.
 
 ## Tools
 
-**`get_relevant_context`** — Your default first call for almost every coding task.
-Supply a plain-English task description. It returns ranked source snippets with file paths, line numbers, and relevance scores. Use `mentioned_entities` when the user names a specific function, class, or method.
-→ Call this before answering "where is X", before generating new code, before planning a refactor.
+**`get_relevant_context`** — PPR-ranked source for task descriptions and bug reports.
+Supply plain-English `task_description`. Use `mentioned_entities` when the user names symbols.
+`include_explanations` defaults to true — use `seeds[]` and per-result `explanation` to fix bad rankings before changing code.
 
-**`query_dependencies`** — Use this after get_relevant_context when you need impact analysis.
-- `direction="upstream"`: who calls or imports this entity? (use before renaming or changing a signature)
-- `direction="downstream"`: what does this entity call or import? (use to understand internals)
-- `direction="both"`: full fan in both directions
-→ Do NOT call this first — confirm entity names exist via get_relevant_context first.
+**`query_dependencies`** — Fast structural lookups (cheaper than PPR when you know the symbol):
+- `mode="dependencies"` (default): CALLS/IMPORTS; `direction` upstream/downstream/both; `depth` 1 or 2
+- `mode="symbol_search"`: substring search; `entity_name` is the pattern
+- `mode="class_hierarchy"`: inheritance; `direction` upstream=parents, downstream=subclasses
 
 ## Workflow
 
-**Simple lookup ("show me X", "what does Y do"):** get_relevant_context → answer.
+**Known symbol name ("where is AuthService"):** query_dependencies(mode="symbol_search", entity_name="AuthService") → read files.
 
-**Code generation:** get_relevant_context (match existing style/imports) → write code.
+**Class parents/subclasses:** query_dependencies(mode="class_hierarchy", entity_name="User", direction="upstream").
 
-**Refactor / rename:** get_relevant_context → query_dependencies(direction="upstream") → report all affected callers → implement.
+**Vague bug / multi-file task:** get_relevant_context → if rankings look wrong, inspect seeds/explanation and retry with better `mentioned_entities`.
 
-**Impact analysis:** get_relevant_context → query_dependencies(direction="both", depth=2) → report.
+**Refactor / rename:** get_relevant_context → query_dependencies(mode="dependencies", direction="upstream") → implement.
+
+## CLI equivalents
+`codegraph find <pattern>`, `codegraph analyze deps <Name>`, `codegraph explain "<task>"`
 
 ## When results are empty
-The graph may need rebuilding. Tell the user: `codegraph rebuild` re-indexes the project.
+Tell the user: `codegraph rebuild` re-indexes the project.
 """

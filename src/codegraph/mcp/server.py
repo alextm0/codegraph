@@ -60,8 +60,8 @@ def get_relevant_context(
     current_file: str | None,
     top_k: int,
     token_budget: int,
-    include_explanations: bool,
     ctx: Context,
+    include_explanations: bool = True,
 ) -> str:
     """Return structurally relevant source code for a task using Personalized PageRank.
 
@@ -95,7 +95,7 @@ def get_relevant_context(
       current_file         — deprecated compatibility field; ignored by retrieval
       top_k                — max results; 0 = server default (~30)
       token_budget         — max total tokens; 0 = server default (~6000)
-      include_explanations — when true, attach seed provenance and reasoning paths per result
+      include_explanations — default true; attach seed provenance and reasoning paths per result
     """
     state = ctx.request_context.lifespan_context
     return get_relevant_context_impl(
@@ -115,33 +115,34 @@ def query_dependencies(
     direction: str,
     depth: int,
     ctx: Context,
+    mode: str = "dependencies",
 ) -> str:
-    """Return callers, callees, and imports for a specific code entity.
+    """Return structural relationships for a code entity (dependencies, search, hierarchy).
 
-    Use this AFTER get_relevant_context when you need to understand:
-    - Who calls a function before you change its signature (direction="upstream")
-    - What a function calls internally (direction="downstream")
-    - The full dependency fan in both directions (direction="both")
+    Modes:
+    - mode="dependencies" (default): CALLS/IMPORTS neighbors; use direction and depth.
+    - mode="symbol_search": fast substring search; entity_name is the pattern; depth ignored.
+    - mode="class_hierarchy": INHERITS_FROM ancestors/subclasses; direction upstream/downstream/both.
 
-    Do NOT use this as the first tool — you need to confirm entity names exist first
-    via get_relevant_context.
+    Use symbol_search or class_hierarchy when you know the symbol name and want a cheap lookup
+    instead of running full PPR via get_relevant_context.
 
     CRITICAL USAGE HINTS:
-    - Use 'depth=1' for direct dependencies, or 'depth=2' to see transitive dependencies.
+    - dependencies: depth=1 direct, depth=2 transitive
+    - class_hierarchy: upstream=parents, downstream=subclasses
     - If the graph is empty, this tool will auto-trigger a rebuild and ask you to wait.
 
     Returns a JSON object:
-      result_count — number of related entities returned
-      results[]    — each item has:
-        qualified_name, name, label, file_path, relationship_type
+      mode, result_count, results[] (qualified_name, name, label, file_path, relationship_type)
 
     Parameters:
-      entity_name — exact name or qualified_name (use get_relevant_context to confirm)
+      entity_name — name, qualified_name, or search pattern (symbol_search mode)
       direction   — "upstream", "downstream", or "both"
-      depth       — 1 for direct neighbors; 2 for two-hop (can be large)
+      depth       — 1 or 2 (dependencies mode only)
+      mode        — "dependencies", "symbol_search", or "class_hierarchy"
     """
     state = ctx.request_context.lifespan_context
-    return query_dependencies_impl(entity_name, direction, depth, state)
+    return query_dependencies_impl(entity_name, direction, depth, state, mode=mode)
 
 
 def main() -> None:

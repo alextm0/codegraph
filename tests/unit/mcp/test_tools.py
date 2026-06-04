@@ -19,6 +19,7 @@ def _make_state(
     project_root="/project",
     default_top_k=30,
     default_token_budget=6000,
+    default_include_explanations=True,
     indexing_in_progress=False,
     exclude_seed_paths=None,
 ):
@@ -34,6 +35,7 @@ def _make_state(
     state.signal_weights = {}
     state.exclude_seed_paths = exclude_seed_paths or ["tests/", "test_"]
     state.config_path = "/project/config.yaml"
+    state.default_include_explanations = default_include_explanations
     return state
 
 
@@ -282,6 +284,43 @@ class TestGetRelevantContextImpl:
 # ---------------------------------------------------------------------------
 
 class TestQueryDependenciesImpl:
+    def test_symbol_search_mode(self):
+        from codegraph.core.graph.queries import NodeInfo
+
+        state = _make_state()
+        node = NodeInfo(
+            qualified_name="/project/auth.py::AuthService",
+            name="AuthService",
+            label="Class",
+            file_path="/project/auth.py",
+        )
+
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.search_symbols", return_value=[node]) as mock_search,
+        ):
+            output = query_dependencies_impl(
+                "Auth", "both", 1, state, mode="symbol_search"
+            )
+
+        mock_search.assert_called_once_with(
+            driver=state.driver,
+            pattern="Auth",
+            limit=100,
+            project_scope=None,
+        )
+        payload = json.loads(output)
+        assert payload["mode"] == "symbol_search"
+        assert payload["result_count"] == 1
+        assert payload["results"][0]["relationship_type"] == "MATCH"
+
+    def test_invalid_mode_returns_error(self):
+        state = _make_state()
+        with patch("codegraph.mcp.tools._graph_is_empty", return_value=False):
+            output = query_dependencies_impl("x", "both", 1, state, mode="invalid")
+        payload = json.loads(output)
+        assert "error" in payload
+
     def test_happy_path_returns_result_count_and_results(self):
         from codegraph.core.graph.queries import NodeInfoWithRel
 

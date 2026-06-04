@@ -47,6 +47,7 @@ class McpRuntimeSettings:
     exclude_seed_paths: list[str]
     default_token_budget: int
     default_top_k: int
+    default_include_explanations: bool
 
 
 def load_mcp_runtime_settings(config_path: Path) -> McpRuntimeSettings:
@@ -74,6 +75,9 @@ def load_mcp_runtime_settings(config_path: Path) -> McpRuntimeSettings:
         exclude_seed_paths=seed_section.get("exclude_seed_paths") or [],
         default_token_budget=mcp_section.get("default_token_budget", 6000),
         default_top_k=mcp_section.get("default_top_k", 30),
+        default_include_explanations=mcp_section.get(
+            "default_include_explanations", True
+        ),
     )
 
 
@@ -90,6 +94,7 @@ class ServerState:
     exclude_seed_paths: list[str]
     default_token_budget: int
     default_top_k: int
+    default_include_explanations: bool
     indexing_lock: threading.Lock = field(default_factory=threading.Lock)
     indexing_in_progress: bool = False
 
@@ -130,6 +135,7 @@ class ServerStateFactory:
             exclude_seed_paths=settings.exclude_seed_paths,
             default_token_budget=settings.default_token_budget,
             default_top_k=settings.default_top_k,
+            default_include_explanations=settings.default_include_explanations,
         )
 
     @staticmethod

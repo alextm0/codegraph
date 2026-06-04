@@ -23,7 +23,7 @@ def test_stabilization_smoke(tmp_path, monkeypatch):
         f"""
 project_root: "{_FIXTURE}"
 ppr:
-  damping_factor: 0.70
+  damping_factor: 0.50
   top_k: 10
 seed_selection:
   entity_match_weight: 0.6

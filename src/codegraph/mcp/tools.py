@@ -15,10 +15,19 @@ import threading
 from typing import TYPE_CHECKING
 
 from codegraph.core.graph.ppr import PPRConfig
-from codegraph.core.graph.queries import count_nodes_by_label, query_entity_dependencies
+from codegraph.core.graph.queries import (
+    count_nodes_by_label,
+    query_class_hierarchy,
+    query_entity_dependencies,
+    search_symbols,
+)
 from codegraph.core.retrieval.pipeline import run_core_retrieval
 from codegraph.core.retrieval.post_processing import format_context
-from codegraph.utils.paths import make_relative_path, make_relative_qualified_name
+from codegraph.utils.paths import (
+    graph_file_path_scope,
+    make_relative_path,
+    make_relative_qualified_name,
+)
 
 if TYPE_CHECKING:
     from codegraph.mcp.server import ServerState
@@ -104,11 +113,13 @@ def get_relevant_context_impl(
     top_k: int,
     token_budget: int,
     state: ServerState,
-    include_explanations: bool = False,
+    include_explanations: bool | None = None,
 ) -> str:
     """Implementation of get_relevant_context tool."""
     # Kept in the MCP signature for compatibility; active-file seeding is deprecated.
     _ = current_file
+    if include_explanations is None:
+        include_explanations = state.default_include_explanations
     effective_top_k = top_k if top_k > 0 else state.default_top_k
     effective_budget = token_budget if token_budget > 0 else state.default_token_budget
 
@@ -233,32 +244,68 @@ def get_relevant_context_impl(
     return json.dumps(output, indent=2)
 
 
+_VALID_QUERY_MODES = frozenset({"dependencies", "symbol_search", "class_hierarchy"})
+
+
 def query_dependencies_impl(
     entity_name: str,
     direction: str,
     depth: int,
     state: ServerState,
+    mode: str = "dependencies",
 ) -> str:
     """Implementation of query_dependencies tool."""
+    mode = (mode or "dependencies").strip().lower()
     logger.info(
-        "query_dependencies called: entity='%s' direction=%s depth=%d",
+        "query_dependencies called: entity='%s' mode=%s direction=%s depth=%d",
         entity_name,
+        mode,
         direction,
         depth,
     )
+
+    if mode not in _VALID_QUERY_MODES:
+        return json.dumps(
+            {
+                "error": f"Invalid mode '{mode}'.",
+                "hint": (
+                    "Use mode='dependencies', 'symbol_search', or 'class_hierarchy'."
+                ),
+            }
+        )
 
     if _graph_is_empty(state):
         logger.warning("query_dependencies: graph is empty — triggering auto-index")
         _start_background_index(state)
         return json.dumps(_empty_graph_payload())
 
+    project_scope = graph_file_path_scope(state.project_root)
+
     try:
-        nodes = query_entity_dependencies(
-            driver=state.driver,
-            entity_name=entity_name,
-            direction=direction,
-            depth=depth,
-        )
+        if mode == "symbol_search":
+            nodes = search_symbols(
+                driver=state.driver,
+                pattern=entity_name,
+                limit=100,
+                project_scope=project_scope,
+            )
+            rel_type = "MATCH"
+        elif mode == "class_hierarchy":
+            nodes = query_class_hierarchy(
+                driver=state.driver,
+                class_name=entity_name,
+                direction=direction,
+                project_scope=project_scope,
+            )
+            rel_type = None
+        else:
+            nodes = query_entity_dependencies(
+                driver=state.driver,
+                entity_name=entity_name,
+                direction=direction,
+                depth=depth,
+            )
+            rel_type = None
     except ValueError as exc:
         msg = str(exc)
         if "direction" in msg.lower():
@@ -279,17 +326,33 @@ def query_dependencies_impl(
         )
 
     if not nodes:
+        hints = {
+            "dependencies": (
+                f"No {direction} dependencies found for '{entity_name}'. "
+                "Try direction='both' or depth=2."
+            ),
+            "symbol_search": (
+                f"No symbols matching '{entity_name}'. "
+                "Try a shorter pattern or codegraph find."
+            ),
+            "class_hierarchy": (
+                f"No inheritance links for class '{entity_name}'. "
+                "Confirm the class name with mode='symbol_search'."
+            ),
+        }
         return json.dumps(
             {
+                "mode": mode,
                 "result_count": 0,
                 "results": [],
-                "hint": f"No {direction} dependencies found for '{entity_name}'. Try direction='both' or depth=2.",
+                "hint": hints.get(mode, "No results found."),
             }
         )
 
     project_root = state.project_root
-    serializable = [
-        {
+    serializable = []
+    for node in nodes:
+        row = {
             "qualified_name": make_relative_qualified_name(
                 node.qualified_name,
                 node.file_path,
@@ -298,13 +361,16 @@ def query_dependencies_impl(
             "name": node.name,
             "label": node.label,
             "file_path": make_relative_path(node.file_path, project_root),
-            "relationship_type": node.relationship_type,
         }
-        for node in nodes
-    ]
+        if hasattr(node, "relationship_type"):
+            row["relationship_type"] = node.relationship_type or rel_type or ""
+        else:
+            row["relationship_type"] = rel_type or ""
+        serializable.append(row)
 
     return json.dumps(
         {
+            "mode": mode,
             "result_count": len(serializable),
             "results": serializable,
         },

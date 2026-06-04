@@ -56,6 +56,7 @@ def test_load_mcp_runtime_settings_defaults(tmp_path: Path) -> None:
     assert settings.default_token_budget == 6000
     assert settings.default_top_k == 30
     assert settings.exclude_seed_paths == []
+    assert settings.default_include_explanations is True
 
 
 def test_load_mcp_runtime_settings_custom_ppr_and_mcp(tmp_path: Path) -> None:
@@ -112,6 +113,7 @@ def test_server_state_factory_create(
         exclude_seed_paths=[],
         default_token_budget=6000,
         default_top_k=30,
+        default_include_explanations=True,
     )
 
     db = MagicMock()
@@ -153,6 +155,7 @@ def test_server_state_factory_exits_when_neo4j_unreachable(
         exclude_seed_paths=[],
         default_token_budget=6000,
         default_top_k=30,
+        default_include_explanations=True,
     )
 
     db = MagicMock()
@@ -185,6 +188,7 @@ def test_server_state_factory_continues_on_warmup_failure(
         exclude_seed_paths=[],
         default_token_budget=6000,
         default_top_k=30,
+        default_include_explanations=True,
     )
 
     db = MagicMock()
@@ -218,6 +222,7 @@ def test_server_state_indexing_lock_is_per_instance() -> None:
         exclude_seed_paths=[],
         default_token_budget=6000,
         default_top_k=30,
+        default_include_explanations=True,
     )
     b = ServerState(
         driver=MagicMock(),
@@ -229,5 +234,6 @@ def test_server_state_indexing_lock_is_per_instance() -> None:
         exclude_seed_paths=[],
         default_token_budget=6000,
         default_top_k=30,
+        default_include_explanations=True,
     )
     assert a.indexing_lock is not b.indexing_lock
