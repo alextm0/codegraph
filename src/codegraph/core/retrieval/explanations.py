@@ -15,7 +15,7 @@ from codegraph.core.retrieval.post_processing import _deduplicate_file_entities
 
 logger = logging.getLogger(__name__)
 
-_LEXICAL_SOURCES = frozenset({"entity_match", "bm25"})
+_LEXICAL_SOURCES = frozenset({"entity_match", "bm25", "issue_hint"})
 
 
 @dataclass(frozen=True)
