@@ -36,3 +36,29 @@ def test_run_core_retrieval_returns_expected_structure(
     mock_seeds.assert_called_once()
     mock_ready.assert_called_once()
     mock_ppr.assert_called_once_with(gds, driver, seeds.seeds, ANY)
+
+
+@patch("codegraph.core.retrieval.pipeline.extract_seeds")
+@patch("codegraph.core.retrieval.pipeline.ensure_graph_ready")
+@patch("codegraph.core.retrieval.pipeline.run_ppr_from_node_ids")
+@patch("codegraph.core.retrieval.pipeline.prepare_bm25_index")
+def test_run_core_retrieval_skips_graph_ready_when_flag_set(
+    mock_bm25, mock_ppr, mock_ready, mock_seeds
+) -> None:
+    driver = MagicMock()
+    gds = MagicMock()
+    mock_bm25.return_value = (MagicMock(), [])
+    seeds = PersonalizationVector(seeds={1: 1.0})
+    mock_seeds.return_value = seeds
+    mock_ppr.return_value = [MagicMock(score=1.0)]
+
+    run_core_retrieval(
+        driver=driver,
+        gds=gds,
+        task_description="task",
+        bm25_index=mock_bm25.return_value[0],
+        searchable_nodes=[],
+        graph_ready=True,
+    )
+
+    mock_ready.assert_not_called()

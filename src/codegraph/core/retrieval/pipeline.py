@@ -9,6 +9,8 @@ Design notes:
 
 import logging
 from dataclasses import dataclass
+from typing import Any
+
 from graphdatascience import GraphDataScience
 from graphdatascience.graph.graph_object import Graph
 from neo4j import Driver
@@ -57,10 +59,18 @@ def run_core_retrieval(
     orientation: str = "UNDIRECTED",
     apply_idf: bool = True,
     exclude_seed_paths: list[str] | None = None,
+    bm25_index: Any | None = None,
+    searchable_nodes: list[dict] | None = None,
+    graph_ready: bool = False,
 ) -> RawRetrievalResult | None:
     """Core retrieval engine: seeds extraction -> PPR.
-    
+
     This is the ground-truth retrieval logic used across all interfaces.
+
+    Args:
+        bm25_index: Optional pre-built BM25 index (e.g. SWE-bench group setup).
+        searchable_nodes: Rows aligned with bm25_index.
+        graph_ready: When True, skip ensure_graph_ready (projection already exists).
     """
     if ppr_config is None:
         ppr_config = PPRConfig()
@@ -72,10 +82,10 @@ def run_core_retrieval(
         e for e in auto_entities if e not in existing
     ]
 
-    # Pre-build BM25 index once for reuse in seed selection and directory injection.
-    bm25_index, searchable_nodes = prepare_bm25_index(
-        driver, exclude_paths=exclude_seed_paths
-    )
+    if bm25_index is None or searchable_nodes is None:
+        bm25_index, searchable_nodes = prepare_bm25_index(
+            driver, exclude_paths=exclude_seed_paths
+        )
 
     # Step 1: Extract seeds from the task description.
     seeds = extract_seeds(
@@ -92,13 +102,14 @@ def run_core_retrieval(
         return None
 
     # Step 2: Prepare the graph for PPR (IDF weights + fresh GDS projection).
-    ensure_graph_ready(
-        driver,
-        gds,
-        relationship_types=relationship_types,
-        orientation=orientation,
-        apply_idf=apply_idf,
-    )
+    if not graph_ready:
+        ensure_graph_ready(
+            driver,
+            gds,
+            relationship_types=relationship_types,
+            orientation=orientation,
+            apply_idf=apply_idf,
+        )
 
     # Step 3: Run Personalized PageRank (uniform mode uses equal restart per seed).
     ppr_results = run_ppr_from_node_ids(gds, driver, seeds.seeds, ppr_config)
@@ -107,6 +118,31 @@ def run_core_retrieval(
         return None
 
     return RawRetrievalResult(seeds=seeds, ppr_results=ppr_results)
+
+
+def file_paths_from_ppr_results(
+    ppr_results: list[PPRResult],
+    *,
+    rank_by: str = "first_entity",
+) -> list[str]:
+    """Collapse entity-level PPR hits to an ordered file list for file-level metrics.
+
+    Args:
+        ppr_results: Ranked PPR output (highest score first).
+        rank_by: ``first_entity`` preserves first-seen file order; ``max_score`` ranks
+            files by the maximum entity score in that file.
+    """
+    if rank_by == "max_score":
+        best: dict[str, float] = {}
+        for result in ppr_results:
+            if not result.file_path:
+                continue
+            prev = best.get(result.file_path, -1.0)
+            if result.score > prev:
+                best[result.file_path] = result.score
+        return sorted(best, key=best.get, reverse=True)
+
+    return list(dict.fromkeys(r.file_path for r in ppr_results if r.file_path))
 
 
 def run_retrieval_pipeline(
