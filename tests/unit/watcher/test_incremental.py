@@ -1,6 +1,4 @@
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, patch
 
 from codegraph.watcher.incremental import update_file_in_graph
 

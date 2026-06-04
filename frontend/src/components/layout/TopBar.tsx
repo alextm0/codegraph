@@ -1,20 +1,28 @@
+import { useState } from 'react'
 import { useTheme } from '../../context/ThemeContext'
+import ProjectSettingsModal from './ProjectSettingsModal'
+import { ProjectHistoryItem } from '../../api/client'
 
 interface TopBarProps {
-  nodeCount: number
-  edgeCount: number
-  wsConnected: boolean
-  topK: number
+  gitInfo?: { repo: string; commit: string }
+  projectHistory?: ProjectHistoryItem[]
+  onGraphRefresh?: () => void
 }
 
-export default function TopBar({
-  nodeCount, edgeCount, wsConnected, topK,
-}: TopBarProps) {
+export default function TopBar({ gitInfo, projectHistory = [], onGraphRefresh }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
+  const [showProjectModal, setShowProjectModal] = useState(false)
 
   return (
     <>
-      {/* Primary top bar — 40px */}
+      {showProjectModal && (
+        <ProjectSettingsModal
+          onClose={() => setShowProjectModal(false)}
+          history={projectHistory}
+          onIndexed={onGraphRefresh}
+        />
+      )}
+
       <div
         style={{
           gridColumn: '1 / -1',
@@ -26,95 +34,39 @@ export default function TopBar({
           flexShrink: 0,
         }}
       >
-        {/* Wordmark */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '0 16px',
-            height: '100%',
-            borderRight: '1px solid var(--border)',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: '100%', borderRight: '1px solid var(--border)' }}>
           <LatticeLogoMark />
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: '0.06em',
-              color: 'var(--text)',
-            }}
-          >
-            CODEGRAPH
-          </span>
-          <span
-            style={{
-              fontSize: 10,
-              color: 'var(--text-muted)',
-              letterSpacing: '0.10em',
-            }}
-          >
-            / v0.4.2
-          </span>
+          <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text)', fontFamily: 'var(--font-display)' }}>CodeGraph</span>
         </div>
 
-        <MetaChip label="repo" value="codegraph @ main" />
-        <MetaChip label="commit" value="09e091fc" />
+        {gitInfo && (
+          <div style={{ display: 'flex', height: '100%', alignItems: 'center' }}>
+            <MetaChip label="repo" value={gitInfo.repo} />
+            <MetaChip label="commit" value={gitInfo.commit} />
+            <button
+              onClick={() => setShowProjectModal(true)}
+              style={{
+                height: '100%',
+                padding: '0 12px',
+                background: 'none',
+                border: 'none',
+                borderLeft: '1px solid var(--border)',
+                color: 'var(--text-muted)',
+                fontSize: 9,
+                letterSpacing: '0.10em',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+                transition: 'color 120ms',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+            >
+              Switch
+            </button>
+          </div>
+        )}
 
         <div style={{ flex: 1 }} />
-
-        <MetaChip label="nodes" value={nodeCount.toLocaleString()} />
-        <MetaChip label="edges" value={edgeCount.toLocaleString()} />
-
-        {/* Live indicator */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '0 14px',
-            height: '100%',
-            borderLeft: '1px solid var(--border)',
-            background: wsConnected ? 'var(--accent-soft)' : 'transparent',
-          }}
-        >
-          <div
-            style={{
-              width: 6,
-              height: 6,
-              background: wsConnected ? 'var(--accent)' : 'var(--text-muted)',
-              animation: wsConnected ? 'lattice-blink 1.4s steps(2) infinite' : 'none',
-            }}
-          />
-          <span
-            style={{
-              fontSize: 10,
-              color: wsConnected ? 'var(--accent-ink)' : 'var(--text-muted)',
-              letterSpacing: '0.10em',
-            }}
-          >
-            {wsConnected ? 'LIVE' : 'OFFLINE'}
-          </span>
-        </div>
-
-        {/* Query hint */}
-        <div
-          style={{
-            padding: '0 16px',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            borderLeft: '1px solid var(--border)',
-            fontSize: 10,
-            color: 'var(--text-muted)',
-            letterSpacing: '0.08em',
-          }}
-        >
-          ~/codegraph/query &gt;{' '}
-          <span style={{ color: 'var(--accent)', marginLeft: 4 }}>cg run</span>
-          <span style={{ marginLeft: 4 }}>--top-k={topK}</span>
-        </div>
 
         <button
           onClick={toggleTheme}
@@ -140,7 +92,7 @@ export default function TopBar({
             e.currentTarget.style.background = 'none'
           }}
         >
-          {theme === 'dark' ? '[LIGHT]' : '[DARK]'}
+          {theme === 'dark' ? 'Light' : 'Dark'}
         </button>
       </div>
     </>

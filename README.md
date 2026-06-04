@@ -16,7 +16,7 @@ Your repo
   → returns ranked source code within a token budget
 ```
 
-Results improve dramatically when the AI mentions specific entity names (e.g. `AuthService`, `validate_token`). Entity name matching is the strongest signal (0.6 weight), followed by BM25 text match (0.3), and current file (0.1).
+Results improve dramatically when the AI mentions specific entity names (e.g. `AuthService`, `validate_token`). Entity name matching is the strongest signal (0.6 weight), followed by BM25 text match (0.3).
 
 ## Use cases
 
@@ -63,8 +63,7 @@ The MCP server exposes two tools:
 ```
 task_description   plain-English description of what you're trying to do
 mentioned_entities list of exact entity names the user mentioned, or null
-current_file       relative path of the file currently open, or null
-top_k              max results (0 = server default ~15)
+top_k              max results (0 = server default ~30)
 token_budget       max total tokens across results (0 = server default ~6000)
 ```
 
@@ -120,7 +119,7 @@ ppr:
 
 mcp:
   default_token_budget: 6000
-  default_top_k: 15
+  default_top_k: 30
 ```
 
 Password is read from `NEO4J_PASSWORD` in `.env` (written by `codegraph init`) or from the environment.

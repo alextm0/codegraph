@@ -1,12 +1,16 @@
 """Shared path utilities for converting absolute paths to project-relative ones."""
 
 import os
+from pathlib import Path
 
 
 def make_relative_path(abs_path: str, project_root: str) -> str:
     """Convert an absolute path to a relative path from project_root."""
     if not abs_path:
         return abs_path
+    # Graph stores paths relative to project root; relpath would mis-resolve them.
+    if not os.path.isabs(abs_path):
+        return abs_path.replace("\\", "/")
     try:
         return os.path.relpath(abs_path, project_root).replace("\\", "/")
     except ValueError:
@@ -26,3 +30,22 @@ def make_relative_qualified_name(
         suffix = qualified_name[len(abs_file_path) :]
         return rel_file_path + suffix
     return qualified_name
+
+
+def graph_file_path_scope(project_root: str) -> str | None:
+    """Return a ``file_path`` prefix for Neo4j ``STARTS WITH`` filters, if any.
+
+    Indexed nodes store paths relative to ``project_root``. Passing the absolute
+    project root as scope matches nothing; use ``None`` for whole-graph search or
+    a relative prefix (e.g. ``src/``) to narrow results.
+    """
+    _ = project_root
+    return None
+
+
+def resolve_absolute_path(path: str) -> str:
+    """Resolve a path string to an absolute path, falling back to the input on error."""
+    try:
+        return str(Path(path).resolve())
+    except Exception:
+        return path

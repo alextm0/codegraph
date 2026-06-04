@@ -13,7 +13,7 @@ The results presented in \cref{ch:evaluation} established that CodeGraph provide
 \label{sec:interpretation}
 % =============================================================================
 
-The primary success of CodeGraph lies in its ability to improve seed extraction: the challenge of translating abstract natural language symptoms into precise starting nodes in a code graph. By analyzing the trajectory of the system's performance, we can identify the specific factors that drive retrieval success.
+CodeGraph's main result is that better Seed Extraction makes graph-based retrieval more effective. The challenge is to translate abstract natural language symptoms into precise starting nodes in a code graph. The performance trajectory in \cref{ch:evaluation} shows which changes improved that translation.
 
 \subsection{Seed Quality as the Dominant Bottleneck}
 The evaluation shows that seed quality, not algorithm tuning, is the primary bottleneck in CodeGraph. The most impactful performance jump, rising from 42.0\% to the final 74.0\% Recall@10, was driven by refinements to the seed extraction process, such as compound tokenization and inverse-frequency weighting. Our observation of a bimodal distribution in the results further supports this: when the seeds land near the correct region, the structural propagation stage almost always pushes the target file into the top ranks. This suggests that the retrieval ceiling is set by the reachability of the target from the initial seeds, rather than by the finesse of the ranking algorithm.
@@ -29,16 +29,16 @@ The effectiveness of CodeGraph is tied to both the style of the bug report and t
 \label{sec:implications}
 % =============================================================================
 
-The high retrieval rate achieved by the system fundamentally changes the workflow for an AI coding agent. By accurately surfacing the target file in the majority of cases, CodeGraph shifts the bottleneck from search to reasoning. Agents can spend more of their finite context window and compute budget on understanding the bug and writing the fix, rather than hunting for where the logic lives. 
+The retrieval rate achieved by the system changes where an AI coding agent spends its effort. When CodeGraph places the target file near the top of the result list, the agent can use more of its context window to understand the bug and write the fix. The search problem does not disappear, but it becomes a smaller part of the task.
 
-Furthermore, deterministic, graph-based navigation reduces the risk of path hallucinations. By working within a concrete map of actual files and edges through the Model Context Protocol, the agent is grounded in the reality of the implementation. This structure provides a verifiable environment for the agent, ensuring that its navigation steps are based on existing code relationships rather than speculative guesses. We refer to this property as \emph{topological determinism}: the mechanical restriction of the agent's focus to the discrete, syntactically verified landscape of the codebase. While large language models operate in a continuous, probabilistic semantic space, CodeGraph forces them to navigate a rigid structural topology, effectively bridging the gap between generative reasoning and the compiled reality of software.
+Deterministic graph navigation also reduces a common failure mode in agent workflows: guessing file locations that do not exist or following relationships that are only implied by language. Through MCP, the agent receives paths, entities, and relationships extracted from the repository itself. This does not make the agent's reasoning deterministic, but it gives the reasoning step a concrete substrate: files that exist, edges that were parsed, and scores that can be inspected.
 
 % =============================================================================
 \section{Technical Boundaries and Generalizability}
 \label{sec:technical-limitations}
 % =============================================================================
 
-While CodeGraph demonstrates practical efficiency, its effectiveness is subject to several technical and methodological constraints that must be considered when applying the system to broader contexts.
+CodeGraph's results depend on assumptions that do not hold for every repository. This section separates limitations of the static graph from limitations of the evaluation protocol.
 
 \paragraph{Static Analysis Boundary.} 
 CodeGraph cannot see dynamic behaviors like runtime module loading or monkey-patching. These dynamic patterns create missing edges in the static graph, contributing to connectivity gaps where a target file is structurally isolated from its seeds. Without runtime signals, the graph remains an incomplete map of the program's actual execution flow.
@@ -50,4 +50,4 @@ The current system is Python-specific. Adapting it to other languages would requ
 The use of Recall@10 assumes that retrieving the correct file is equivalent to solving the retrieval portion of the task. While this is a standard proxy, it does not measure whether the agent can correctly interpret the file or if the bug requires edits across many files that are not as easily ranked. We also evaluate only the first retrieval step, which does not capture the human-like iterative pattern of an agent exploring a repository over multiple turns.
 
 \paragraph{Scalability.} 
-While PPR is efficient at the scale of typical SWE-bench repositories, million-node graphs and real-time incremental rebuilds remain open engineering problems. Maintaining low-latency responses while the underlying codebase is being modified by an agent is critical for a seamless interactive experience.
+PPR is efficient at the scale of the SWE-bench repositories evaluated in this thesis, but million-node graphs and continuous updates remain open engineering problems. Interactive use also requires the graph to stay fresh while an agent or developer edits files, which is harder than rebuilding a static snapshot.

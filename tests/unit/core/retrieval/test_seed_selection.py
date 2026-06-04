@@ -1,8 +1,14 @@
 """Unit tests for pure-function helpers in seed_selection.py."""
 
-import pytest
+from unittest.mock import MagicMock
 
-from codegraph.core.retrieval.seed_selection import extract_entity_names, tokenize
+from codegraph.core.retrieval.seed_selection import (
+    _effective_exclude_paths,
+    _match_entities,
+    extract_entity_names,
+    extract_path_hints,
+    tokenize,
+)
 
 
 class TestExtractEntityNames:
@@ -121,3 +127,54 @@ class TestTokenize:
         assert "fix" in tokens
         assert "auth" in tokens
         assert "timeout" in tokens
+
+
+class TestExtractPathHints:
+    def test_py_path_from_backticks(self):
+        hints = extract_path_hints("Fix bug in `src/auth/service.py`")
+        assert "src/auth/service.py" in hints
+
+    def test_traceback_file_line(self):
+        hints = extract_path_hints('File "app/models/user.py", line 42')
+        assert "app/models/user.py" in hints
+
+    def test_dotted_module_path(self):
+        hints = extract_path_hints("Issue in auth.validators module")
+        assert "auth.validators" in hints
+
+
+class TestEffectiveExcludePaths:
+    def test_drops_tests_exclude_when_issue_mentions_test(self):
+        result = _effective_exclude_paths(
+            "failing unit test in login",
+            ["tests/", "migrations/"],
+        )
+        assert "tests/" not in (result or [])
+        assert "migrations/" in (result or [])
+
+    def test_generic_logger_not_extracted(self):
+        names = extract_entity_names("check logger and utils modules")
+        assert "logger" not in names
+        assert "utils" not in names
+
+
+class TestMatchEntitiesExcludePaths:
+    """Verify entity match passes exclude_paths into Cypher."""
+
+    def test_exclude_paths_forwarded_to_cypher(self):
+        driver = MagicMock()
+        session = MagicMock()
+        driver.session.return_value.__enter__.return_value = session
+        session.run.return_value = []
+
+        _match_entities(
+            driver,
+            ["User"],
+            base_weight=0.6,
+            exclude_paths=["tests/", "test_"],
+        )
+
+        _, kwargs = session.run.call_args
+        assert kwargs["exclude_paths"] == ["tests/", "test_"]
+        query = session.run.call_args[0][0]
+        assert "exclude_paths" in query

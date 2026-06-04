@@ -85,6 +85,90 @@ def ensure_constraints(driver: Driver) -> None:
     logger.info("Constraints ensured.")
 
 
+class GraphBuilder:
+    """Encapsulates graph construction state for a batch of parsed entities."""
+
+    def __init__(
+        self,
+        driver: Driver,
+        all_entities: list[FileEntities],
+        progress_callback: Callable[[str, int], None] | None = None,
+    ) -> None:
+        self.driver = driver
+        self.all_entities = all_entities
+        self.progress_callback = progress_callback
+        self.lookup = _build_entity_lookup(all_entities)
+        self.all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
+        self.counts: dict[str, int] = {
+            "File": 0,
+            "Function": 0,
+            "Class": 0,
+            "Method": 0,
+            "CONTAINS": 0,
+            "CALLS": 0,
+            "IMPORTS": 0,
+            "INHERITS_FROM": 0,
+        }
+
+    def build(self) -> dict[str, int]:
+        """Build the full code graph from parsed entities."""
+        ensure_constraints(self.driver)
+
+        with self.driver.session() as session:
+            self._write_nodes(session)
+            self._write_edges(session)
+
+        logger.info("Graph built: %s", self.counts)
+        return self.counts
+
+    def _report(self, stage: str, count: int) -> None:
+        logger.debug("Graph build: %s → %d", stage, count)
+        if self.progress_callback:
+            self.progress_callback(stage, count)
+
+    def _write_nodes(self, session: object) -> None:
+        entities = self.all_entities
+        self.counts["File"] = session.execute_write(_create_file_nodes, entities)
+        self._report("File nodes", self.counts["File"])
+        self.counts["Function"] = session.execute_write(_create_function_nodes, entities)
+        self._report("Function nodes", self.counts["Function"])
+        self.counts["Class"] = session.execute_write(_create_class_nodes, entities)
+        self._report("Class nodes", self.counts["Class"])
+        self.counts["Method"] = session.execute_write(_create_method_nodes, entities)
+        self._report("Method nodes", self.counts["Method"])
+
+    def _write_edges(self, session: object) -> None:
+        entities = self.all_entities
+        self.counts["CONTAINS"] += session.execute_write(
+            _create_contains_function_edges, entities
+        )
+        self.counts["CONTAINS"] += session.execute_write(
+            _create_contains_class_edges, entities
+        )
+        self.counts["CONTAINS"] += session.execute_write(
+            _create_contains_method_edges, entities
+        )
+        self._report("CONTAINS edges", self.counts["CONTAINS"])
+        self.counts["INHERITS_FROM"] = session.execute_write(
+            _create_inherits_edges,
+            entities,
+            self.lookup,
+            self.all_file_paths,
+        )
+        self._report("INHERITS_FROM edges", self.counts["INHERITS_FROM"])
+        self.counts["CALLS"] = session.execute_write(
+            _create_calls_edges,
+            entities,
+            self.lookup,
+            self.all_file_paths,
+        )
+        self._report("CALLS edges", self.counts["CALLS"])
+        self.counts["IMPORTS"] = session.execute_write(
+            _create_imports_edges, entities
+        )
+        self._report("IMPORTS edges", self.counts["IMPORTS"])
+
+
 def build_graph(
     driver: Driver,
     all_entities: list[FileEntities],
@@ -101,70 +185,7 @@ def build_graph(
     Returns:
         Dict with creation counts keyed by node/edge type.
     """
-
-    def _report(stage: str, count: int) -> None:
-        logger.debug("Graph build: %s → %d", stage, count)
-        if progress_callback:
-            progress_callback(stage, count)
-
-    lookup = _build_entity_lookup(all_entities)
-    all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
-    counts: dict[str, int] = {
-        "File": 0,
-        "Function": 0,
-        "Class": 0,
-        "Method": 0,
-        "CONTAINS": 0,
-        "CALLS": 0,
-        "IMPORTS": 0,
-        "INHERITS_FROM": 0,
-    }
-
-    ensure_constraints(driver)
-
-    with driver.session() as session:
-        # --- Nodes ---
-        # To add a new node label: add a _create_*_nodes() function, call it here,
-        # add its key to the counts dict above, and add a constraint in ensure_constraints().
-        counts["File"] = session.execute_write(_create_file_nodes, all_entities)
-        _report("File nodes", counts["File"])
-        counts["Function"] = session.execute_write(_create_function_nodes, all_entities)
-        _report("Function nodes", counts["Function"])
-        counts["Class"] = session.execute_write(_create_class_nodes, all_entities)
-        _report("Class nodes", counts["Class"])
-        counts["Method"] = session.execute_write(_create_method_nodes, all_entities)
-        _report("Method nodes", counts["Method"])
-
-        # --- Edges ---
-        counts["CONTAINS"] += session.execute_write(
-            _create_contains_function_edges, all_entities
-        )
-        counts["CONTAINS"] += session.execute_write(
-            _create_contains_class_edges, all_entities
-        )
-        counts["CONTAINS"] += session.execute_write(
-            _create_contains_method_edges, all_entities
-        )
-        _report("CONTAINS edges", counts["CONTAINS"])
-        counts["INHERITS_FROM"] = session.execute_write(
-            _create_inherits_edges,
-            all_entities,
-            lookup,
-            all_file_paths,
-        )
-        _report("INHERITS_FROM edges", counts["INHERITS_FROM"])
-        counts["CALLS"] = session.execute_write(
-            _create_calls_edges,
-            all_entities,
-            lookup,
-            all_file_paths,
-        )
-        _report("CALLS edges", counts["CALLS"])
-        counts["IMPORTS"] = session.execute_write(_create_imports_edges, all_entities)
-        _report("IMPORTS edges", counts["IMPORTS"])
-
-    logger.info("Graph built: %s", counts)
-    return counts
+    return GraphBuilder(driver, all_entities, progress_callback).build()
 
 
 # ---------------------------------------------------------------------------

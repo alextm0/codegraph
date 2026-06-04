@@ -16,7 +16,9 @@ from codegraph.core.graph.queries import (
     find_callers,
     find_callees,
     find_node_by_name,
+    find_node_by_pattern,
     get_inheritance_chain,
+    query_class_hierarchy,
 )
 from tests.conftest import neo4j_required
 
@@ -260,3 +262,32 @@ def test_get_inheritance_chain_base_model_is_empty(populated_db, qnames):
     qname = qnames["BaseModel"]
     chain = get_inheritance_chain(populated_db, qname)
     assert chain == []
+
+
+# ---------------------------------------------------------------------------
+# find_node_by_pattern / class hierarchy
+# ---------------------------------------------------------------------------
+
+
+@neo4j_required
+def test_find_node_by_pattern_finds_auth_service(populated_db):
+    """Case-insensitive substring search finds AuthService."""
+    results = find_node_by_pattern(populated_db, "authservice")
+    names = {r.name for r in results}
+    assert "AuthService" in names
+
+
+@neo4j_required
+def test_query_class_hierarchy_user_ancestors(populated_db, qnames):
+    """User class hierarchy upstream includes BaseModel."""
+    results = query_class_hierarchy(populated_db, "User", direction="upstream")
+    names = {r.name for r in results}
+    assert "BaseModel" in names
+
+
+@neo4j_required
+def test_query_class_hierarchy_subclasses(populated_db, qnames):
+    """BaseModel downstream includes User subclass."""
+    results = query_class_hierarchy(populated_db, "BaseModel", direction="downstream")
+    names = {r.name for r in results}
+    assert "User" in names

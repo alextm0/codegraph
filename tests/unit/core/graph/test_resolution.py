@@ -1,6 +1,5 @@
 """Unit tests for resolution helpers — no Neo4j required."""
 
-import pytest
 
 from codegraph.core.parser.models import (
     FileEntities,
@@ -8,7 +7,6 @@ from codegraph.core.parser.models import (
     ClassEntity,
     MethodEntity,
     ImportEntity,
-    CallEntity,
 )
 from codegraph.core.graph.resolution import (
     _build_entity_lookup,

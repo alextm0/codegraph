@@ -1,11 +1,9 @@
 """Unit tests for evaluation/dashboard/state.py."""
 from __future__ import annotations
 
-import json
 import sqlite3
 from pathlib import Path
 
-import pytest
 
 from evaluation.dashboard.models import RunConfig, RunRecord
 from evaluation.dashboard.state import (

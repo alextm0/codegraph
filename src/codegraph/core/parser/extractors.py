@@ -65,8 +65,9 @@ def extract_functions(
             FunctionEntity(
                 name=name,
                 file_path=file_path,
-                line_number=actual_node.start_point[0] + 1,
-                end_line=actual_node.end_point[0] + 1,
+                # Use node.start_point if decorated, otherwise actual_node (same thing if not decorated)
+                line_number=node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
                 signature=get_function_signature(actual_node, source),
                 docstring=get_docstring(body_node, source),
             )
@@ -111,8 +112,8 @@ def extract_classes(root: Node, source: bytes, file_path: str) -> list[ClassEnti
             ClassEntity(
                 name=name,
                 file_path=file_path,
-                line_number=actual_node.start_point[0] + 1,
-                end_line=actual_node.end_point[0] + 1,
+                line_number=node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
                 bases=get_class_bases(actual_node, source),
             )
         )
@@ -208,7 +209,8 @@ def _collect_methods_from_class(
                 name=name,
                 class_name=class_name,
                 file_path=file_path,
-                line_number=actual.start_point[0] + 1,
+                # Use item.start_point if decorated, otherwise actual (same thing if not decorated)
+                line_number=item.start_point[0] + 1,
                 end_line=actual.end_point[0] + 1,
                 signature=get_function_signature(actual, source),
                 docstring=get_docstring(body, source),

@@ -1,11 +1,50 @@
-import type { PPRFileResult, GraphNode } from '../../types/api'
+import { useMemo, useState } from 'react'
+import type { PPREntityResult, BM25FileResult, GraphNode } from '../../types/api'
 
 interface ResultsListProps {
-  results: PPRFileResult[]
+  results: PPREntityResult[]
+  bm25Results?: BM25FileResult[]
+  task?: string
   onNodeSelect?: (node: GraphNode) => void
 }
 
-export default function ResultsList({ results, onNodeSelect }: ResultsListProps) {
+type ViewMode = 'ppr' | 'bm25' | 'compare'
+
+export default function ResultsList({
+  results,
+  bm25Results = [],
+  task = '',
+  onNodeSelect,
+}: ResultsListProps) {
+  const [copied, setCopied] = useState(false)
+  const [mode, setMode] = useState<ViewMode>('ppr')
+
+  const bm25RankByFile = useMemo(
+    () => new Map(bm25Results.map((r) => [r.file_path, r.rank])),
+    [bm25Results],
+  )
+  const pprFiles = useMemo(() => new Set(results.map((r) => r.file_path)), [results])
+  const bm25OnlyFiles = useMemo(
+    () => bm25Results.filter((r) => !pprFiles.has(r.file_path)).map((r) => r.file_path),
+    [bm25Results, pprFiles],
+  )
+  const pprOnlyFiles = useMemo(
+    () => results.filter((r) => !bm25RankByFile.has(r.file_path)).map((r) => r.file_path),
+    [results, bm25RankByFile],
+  )
+
+  const headerStyle = {
+    padding: '8px 12px',
+    borderBottom: '1px solid var(--border)',
+    background: 'var(--surface2)',
+    fontSize: 10,
+    letterSpacing: '0.12em',
+    color: 'var(--text-dim)',
+    textTransform: 'uppercase' as const,
+    fontWeight: 600,
+    flexShrink: 0,
+  }
+
   return (
     <div
       style={{
@@ -17,23 +56,39 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
         borderLeft: '1px solid var(--border)',
       }}
     >
-      {/* Section header */}
-      <div
-        style={{
-          padding: '8px 12px',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--surface2)',
-          fontSize: 10,
-          letterSpacing: '0.16em',
-          color: 'var(--text-dim)',
-          textTransform: 'uppercase',
-          flexShrink: 0,
-        }}
-      >
-        ▸ structural.ranking
+      <div style={headerStyle}>
+        <div style={{ marginBottom: 6 }}>Retrieval comparison</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['ppr', 'bm25', 'compare'] as ViewMode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              style={{
+                flex: 1,
+                padding: '4px 6px',
+                fontSize: 9,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                border: `1px solid ${mode === m ? 'var(--accent)' : 'var(--border)'}`,
+                background: mode === m ? 'color-mix(in oklch, var(--accent) 15%, transparent)' : 'transparent',
+                color: mode === m ? 'var(--accent)' : 'var(--text-muted)',
+                cursor: 'pointer',
+              }}
+            >
+              {m === 'ppr' ? 'Structural' : m === 'bm25' ? 'Lexical' : 'Delta'}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Column headers — simplified */}
+      {mode === 'compare' && (
+        <div style={{ padding: '8px 12px', fontSize: 10, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+          <div><span style={{ color: 'var(--accent)' }}>+{pprOnlyFiles.length}</span> files only PPR surfaced</div>
+          <div><span style={{ color: 'var(--text-dim)' }}>−{bm25OnlyFiles.length}</span> files only BM25 surfaced</div>
+        </div>
+      )}
+
       <div
         style={{
           padding: '8px 12px 6px',
@@ -48,156 +103,39 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
           justifyContent: 'space-between',
         }}
       >
-        <span>ranked entities</span>
-        <span style={{ color: 'var(--accent)' }}>structural score</span>
+        <span>{mode === 'bm25' ? 'BM25 files' : 'Ranked entities'}</span>
+        <span style={{ color: 'var(--accent)' }}>{mode === 'bm25' ? 'Lexical' : 'PPR score'}</span>
       </div>
 
-      {/* Rows */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {results.length === 0 ? (
-          <div
-            style={{
-              padding: 20,
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              fontStyle: 'italic',
-              letterSpacing: '0.02em',
-            }}
-          >
-            // awaiting query results...
-          </div>
+        {mode === 'bm25' ? (
+          bm25Results.length === 0 ? (
+            <EmptyHint />
+          ) : (
+            bm25Results.map((row) => (
+              <Bm25Row
+                key={row.file_path}
+                row={row}
+                highlight={!pprFiles.has(row.file_path)}
+              />
+            ))
+          )
+        ) : results.length === 0 ? (
+          <EmptyHint />
         ) : (
-          results.map((res) => {
-            const fp = res.file_path
-            const parts = fp.split('/')
-            const short = parts.pop() ?? fp
-            const dir = parts.join('/')
-
-            const handleClick = () => {
-              if (onNodeSelect) {
-                onNodeSelect({
-                  id: fp,
-                  label: 'File',
-                  name: short,
-                  file_path: fp,
-                  ppr_score: res.score,
-                  is_seed: false,
-                  seed_weight: 0,
-                })
-              }
-            }
-
-            return (
-              <div
-                key={fp}
-                onClick={handleClick}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  borderBottom: `1px solid var(--border)`,
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: '10px 12px',
-                  transition: 'background 120ms',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in oklch, var(--surface2) 60%, transparent)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                    gap: 12,
-                    marginBottom: 2,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      minWidth: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        color: 'var(--text-muted)',
-                        fontVariantNumeric: 'tabular-nums',
-                        fontSize: 10,
-                        width: 14,
-                        textAlign: 'right',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {res.rank}
-                    </div>
-                    <div
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        color: 'var(--text)',
-                        fontWeight: 600,
-                        fontSize: 12,
-                        letterSpacing: '0.01em',
-                      }}
-                    >
-                      {short}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      color: 'var(--accent)',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      fontVariantNumeric: 'tabular-nums slashed-zero',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {res.score.toFixed(4)}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    paddingLeft: 24,
-                    fontSize: 9.5,
-                    color: 'var(--text-muted)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title={fp}
-                >
-                  {dir ? `${dir}/` : ''}<span style={{ color: 'var(--text-dim)' }}>{short}</span>
-                </div>
-
-                {res.path && (
-                  <div
-                    style={{
-                      padding: '6px 0 0 24px',
-                      fontSize: 9,
-                      color: 'var(--text-dim)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      fontFamily: 'var(--font-mono)',
-                      opacity: 0.8,
-                    }}
-                    title={res.path}
-                  >
-                    <span style={{ color: 'var(--accent)', opacity: 0.6 }}>↳</span> {res.path}
-                  </div>
-                )}
-              </div>
-            )
-          })
+          results.map((res) => (
+            <PprRow
+              key={res.qualified_name}
+              res={res}
+              bm25Rank={bm25RankByFile.get(res.file_path)}
+              highlightPprOnly={mode === 'compare' && !bm25RankByFile.has(res.file_path)}
+              onNodeSelect={onNodeSelect}
+            />
+          ))
         )}
       </div>
 
-      {/* Footer */}
-      {results.length > 0 && (
+      {(results.length > 0 || bm25Results.length > 0) && (
         <div
           style={{
             padding: '8px 12px',
@@ -205,18 +143,145 @@ export default function ResultsList({ results, onNodeSelect }: ResultsListProps)
             background: 'var(--surface2)',
             fontSize: 9,
             color: 'var(--text-dim)',
-            letterSpacing: '0.06em',
+            flexShrink: 0,
             display: 'flex',
             justifyContent: 'space-between',
-            flexShrink: 0,
+            alignItems: 'center',
           }}
         >
-          <span>
-            <span style={{ color: 'var(--accent)' }}>◆</span> {results.length} entities ranked
-          </span>
-          <span>
-            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </span>
+          <span>PPR: {results.length} · BM25: {bm25Results.length}</span>
+          <button
+            type="button"
+            onClick={() => {
+              const payload = {
+                task_description: task,
+                summary: { result_count: results.length },
+                results: results.map(r => ({
+                  entity_name: r.name,
+                  entity_type: r.label,
+                  qualified_name: r.qualified_name,
+                  file_path: r.file_path,
+                  lines: [r.line_number, r.line_end],
+                  relevance_score: r.score,
+                  reasoning_path: r.path,
+                })),
+              }
+              navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            }}
+            style={{
+              fontSize: 9,
+              padding: '3px 8px',
+              border: '1px solid var(--border)',
+              background: 'transparent',
+              color: copied ? 'var(--accent)' : 'var(--text-muted)',
+              cursor: 'pointer',
+            }}
+          >
+            {copied ? 'copied' : 'copy MCP context'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EmptyHint() {
+  return (
+    <div style={{ padding: 20, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+      Run a query to compare structural (PPR) vs lexical (BM25) rankings.
+    </div>
+  )
+}
+
+function Bm25Row({ row, highlight }: { row: BM25FileResult; highlight: boolean }) {
+  return (
+    <div
+      style={{
+        padding: '10px 12px',
+        borderBottom: '1px solid var(--border)',
+        background: highlight ? 'color-mix(in oklch, var(--accent) 8%, transparent)' : 'transparent',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+        <span style={{ color: 'var(--text)' }}>{row.rank}. {row.file_path}</span>
+        {highlight && <span style={{ fontSize: 9, color: 'var(--accent)' }}>BM25 only</span>}
+      </div>
+    </div>
+  )
+}
+
+function PprRow({
+  res,
+  bm25Rank,
+  highlightPprOnly,
+  onNodeSelect,
+}: {
+  res: PPREntityResult
+  bm25Rank?: number
+  highlightPprOnly: boolean
+  onNodeSelect?: (node: GraphNode) => void
+}) {
+  const fp = res.file_path
+  const parts = fp.split('/')
+  const fileName = parts.pop() ?? fp
+  const dir = parts.join('/')
+
+  const handleClick = () => {
+    onNodeSelect?.({
+      id: res.qualified_name,
+      label: res.label as GraphNode['label'],
+      name: res.name,
+      file_path: fp,
+      ppr_score: res.score,
+      is_seed: false,
+      seed_weight: 0,
+      line_number: res.line_number,
+      line_end: res.line_end,
+      reasoning_path: res.path_ids,
+    })
+  }
+
+  return (
+    <div
+      onClick={handleClick}
+      style={{
+        padding: '10px 12px',
+        borderBottom: '1px solid var(--border)',
+        cursor: 'pointer',
+        background: highlightPprOnly
+          ? 'color-mix(in oklch, var(--accent) 10%, transparent)'
+          : 'transparent',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontWeight: 600, fontSize: 12 }}>{res.rank}. {res.name}</span>
+        <span style={{ color: 'var(--accent)', fontSize: 10 }}>{res.score.toFixed(4)}</span>
+      </div>
+      <div style={{ fontSize: 9.5, color: 'var(--text-muted)' }}>
+        {dir ? `${dir}/` : ''}{fileName}
+      </div>
+      {bm25Rank !== undefined && (
+        <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 4 }}>
+          BM25 rank: {bm25Rank}
+          {bm25Rank > res.rank && (
+            <span style={{ color: 'var(--accent)', marginLeft: 6 }}>↑ structural boost</span>
+          )}
+        </div>
+      )}
+      {highlightPprOnly && (
+        <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 4 }}>PPR only — missed by BM25</div>
+      )}
+      {res.contribution && (
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+          via <span style={{ color: 'var(--accent)' }}>{res.contribution}</span>
+          {res.seed_sources?.length ? ` · seeds: ${res.seed_sources.join(', ')}` : ''}
+        </div>
+      )}
+      {res.path && (
+        <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+          ↳ {res.path}
         </div>
       )}
     </div>

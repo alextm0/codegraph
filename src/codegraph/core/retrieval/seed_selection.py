@@ -1,9 +1,9 @@
 """Seed selection: score graph nodes as PPR starting points.
 
 Design notes:
-- Three signals combine to form the personalization vector: entity name match
-  (task description contains a known function/class name), BM25 document similarity,
-  and current-file proximity. Weights are configurable via config.yaml.
+- Two signals combine to form the personalization vector: entity name match
+  (task description contains a known function/class name) and BM25 document
+  similarity. Weights are configurable via config.yaml.
 - The resulting PersonalizationVector is normalized to sum to 1.0 before PPR.
 - Seed quality is the dominant factor in retrieval performance — see thesis findings.
 """
@@ -20,11 +20,25 @@ logger = logging.getLogger(__name__)
 # These are overridden by the seed_selection section in config.yaml.
 # entity_match: reward for task description containing a known entity name (highest weight).
 # bm25: reward from BM25 document similarity score.
-# current_file: reward for entities in the currently open file.
 _DEFAULT_ENTITY_MATCH_WEIGHT: float = 0.6
 _DEFAULT_BM25_WEIGHT: float = 0.3
-_DEFAULT_CURRENT_FILE_WEIGHT: float = 0.1
+_DEFAULT_ISSUE_HINT_WEIGHT: float = 0.2
 _DEFAULT_BM25_TOP_N: int = 10
+
+_GENERIC_ENTITY_NAMES: frozenset[str] = frozenset(
+    {"logger", "utils", "helper", "helpers", "common", "base", "main", "config"}
+)
+
+
+_PATH_EXCLUDE_OVERRIDES: tuple[tuple[str, str], ...] = (
+    ("tests/", "test"),
+    ("test_", "test"),
+    ("migrations/", "migration"),
+    ("migration/", "migration"),
+    ("admin/", "admin"),
+    ("templates/", "template"),
+    ("template/", "template"),
+)
 
 
 @dataclass(frozen=True)
@@ -34,7 +48,7 @@ class SeedNode:
     node_id: int
     qualified_name: str
     weight: float
-    source: str  # "entity_match", "bm25", "current_file"
+    source: str  # "entity_match", "bm25", "issue_hint"
 
 
 @dataclass(frozen=False)
@@ -61,7 +75,6 @@ def extract_seeds(
     driver: Driver,
     task_description: str,
     mentioned_entities: list[str] | None = None,
-    current_file: str | None = None,
     signal_weights: dict[str, float] | None = None,
     project_scope: str | None = None,
     bm25_index: BM25Okapi | None = None,
@@ -74,7 +87,6 @@ def extract_seeds(
         driver: Active Neo4j driver.
         task_description: Free-form task text (e.g., "fix the auth timeout bug").
         mentioned_entities: Explicit entity names mentioned in the task (e.g., ["AuthService"]).
-        current_file: File path the agent is currently editing. Used as a low-weight hint.
         signal_weights: Override default weights for each source signal.
         project_scope: Optional file path prefix. When set, only nodes whose
             file_path starts with this prefix are considered. Use to prevent
@@ -95,14 +107,32 @@ def extract_seeds(
     if project_scope is not None:
         project_scope = project_scope.replace("\\", "/")
 
+    effective_exclude = _effective_exclude_paths(task_description, exclude_paths)
+
     all_seeds: list[SeedNode] = []
 
     if mentioned_entities:
         entity_seeds = _match_entities(
-            driver, mentioned_entities, weights["entity_match"], project_scope
+            driver,
+            mentioned_entities,
+            weights["entity_match"],
+            project_scope,
+            effective_exclude,
         )
         all_seeds.extend(entity_seeds)
         logger.debug("Entity match seeds: %d", len(entity_seeds))
+
+    path_hints = extract_path_hints(task_description)
+    if path_hints and weights.get("issue_hint", 0) > 0:
+        hint_seeds = _match_path_hints(
+            driver,
+            path_hints,
+            weights["issue_hint"],
+            project_scope,
+            effective_exclude,
+        )
+        all_seeds.extend(hint_seeds)
+        logger.debug("Issue path hint seeds: %d", len(hint_seeds))
 
     bm25_seeds = _bm25_search(
         driver,
@@ -112,17 +142,10 @@ def extract_seeds(
         project_scope,
         bm25_index,
         searchable_nodes,
-        exclude_paths,
+        effective_exclude,
     )
     all_seeds.extend(bm25_seeds)
     logger.debug("BM25 seeds: %d", len(bm25_seeds))
-
-    if current_file:
-        file_seeds = _current_file_seeds(
-            driver, current_file, weights["current_file"], project_scope
-        )
-        all_seeds.extend(file_seeds)
-        logger.debug("Current file seeds: %d", len(file_seeds))
 
     if not all_seeds:
         logger.warning(
@@ -171,10 +194,68 @@ def extract_entity_names(text: str) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
     for name in camel_multi + camel_single + camel_allcaps + snake + backtick + dotted:
+        if name in _GENERIC_ENTITY_NAMES:
+            continue
         if name not in seen:
             seen.add(name)
             result.append(name)
     return result
+
+
+def extract_path_hints(text: str) -> list[str]:
+    """Extract file and module path hints from issue or task text."""
+    hints: list[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: str) -> None:
+        normalized = raw.strip().strip("`\"'").replace("\\", "/")
+        if not normalized or normalized in seen:
+            return
+        if len(normalized) < 3:
+            return
+        seen.add(normalized)
+        hints.append(normalized)
+
+    for match in re.findall(
+        r"`([^`]+\.(?:py|pyi))`|\"([^\"]+\.(?:py|pyi))\"|'([^']+\.(?:py|pyi))'",
+        text,
+    ):
+        for group in match:
+            if group:
+                _add(group)
+
+    for match in re.findall(
+        r"(?:^|[\s(/])([a-zA-Z0-9_./-]+(?:/[\w.-]+)+\.py)\b", text
+    ):
+        _add(match)
+
+    for match in re.findall(
+        r'File "([^"]+\.py)"', text
+    ):
+        _add(match)
+
+    for match in re.findall(
+        r"\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]+)+)\b", text
+    ):
+        if "/" not in match and match.count(".") >= 1:
+            _add(match)
+
+    return hints
+
+
+def _effective_exclude_paths(
+    task_description: str,
+    exclude_paths: list[str] | None,
+) -> list[str] | None:
+    """Drop exclude patterns when the task text explicitly references that area."""
+    if not exclude_paths:
+        return exclude_paths
+    lower = task_description.lower()
+    effective = list(exclude_paths)
+    for pattern, keyword in _PATH_EXCLUDE_OVERRIDES:
+        if pattern in effective and keyword in lower:
+            effective = [p for p in effective if p != pattern]
+    return effective or None
 
 
 def prepare_bm25_index(
@@ -208,20 +289,70 @@ def prepare_bm25_index(
 # ---------------------------------------------------------------------------
 
 
+def _match_path_hints(
+    driver: Driver,
+    path_hints: list[str],
+    base_weight: float,
+    project_scope: str | None = None,
+    exclude_paths: list[str] | None = None,
+) -> list[SeedNode]:
+    """Seed nodes whose file_path or qualified_name matches issue path hints."""
+    matches_by_hint: dict[str, list[tuple[int, str]]] = {}
+    with driver.session() as session:
+        for hint in path_hints:
+            result = session.run(
+                """
+                MATCH (n)
+                WHERE (n:Function OR n:Method OR n:Class OR n:File)
+                  AND (
+                    n.file_path CONTAINS $hint
+                    OR n.qualified_name CONTAINS $hint
+                  )
+                  AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
+                  AND ($exclude_paths IS NULL OR
+                       NOT any(pattern IN $exclude_paths
+                               WHERE n.file_path CONTAINS pattern))
+                RETURN id(n) AS nid, n.qualified_name AS qname
+                ORDER BY
+                  CASE WHEN n.file_path ENDS WITH $hint THEN 0 ELSE 1 END,
+                  n.file_path
+                LIMIT 20
+                """,
+                hint=hint,
+                scope=project_scope,
+                exclude_paths=exclude_paths or [],
+            )
+            records = [(r["nid"], r["qname"] or hint) for r in result]
+            if records:
+                matches_by_hint[hint] = records
+
+    seeds: list[SeedNode] = []
+    for hint, records in matches_by_hint.items():
+        per_node_weight = base_weight / len(records)
+        for nid, qname in records:
+            seeds.append(
+                SeedNode(
+                    node_id=nid,
+                    qualified_name=qname,
+                    weight=per_node_weight,
+                    source="issue_hint",
+                )
+            )
+    return seeds
+
+
 def _match_entities(
     driver: Driver,
     mentioned_entities: list[str],
     base_weight: float,
     project_scope: str | None = None,
+    exclude_paths: list[str] | None = None,
 ) -> list[SeedNode]:
-    """Match entity names against graph nodes, weighted by inverse match frequency.
+    """Match entity names against graph nodes with per-entity mass capping.
 
-    Unique entity names (1 match) get full base_weight. Ambiguous names
-    (many matches, e.g. "fit" in sklearn) get reduced weight per match:
-    weight = base_weight / log2(n_matches + 1).
-
-    This prevents common method names from drowning the personalization
-    signal when multiple unrelated nodes match the same entity name.
+    Total mass per entity name is capped at base_weight and split evenly
+    across all matches. This prevents ambiguous names (e.g. "fit" with 30
+    matches) from receiving more aggregate seed mass than unique names.
     """
     # Collect all matches per entity name before assigning weights
     matches_by_entity: dict[str, list[tuple[int, str]]] = {}
@@ -234,10 +365,13 @@ def _match_entities(
                    OR n.qualified_name = $name
                    OR (n:Method AND (n.class_name + "." + n.name) = $name))
                   AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
+                  AND ($exclude_paths IS NULL OR
+                       NOT any(pattern IN $exclude_paths WHERE n.file_path CONTAINS pattern))
                 RETURN id(n) AS nid, n.qualified_name AS qname
                 """,
                 name=entity,
                 scope=project_scope,
+                exclude_paths=exclude_paths or [],
             )
             records = [(r["nid"], r["qname"] or entity) for r in result]
             if records:
@@ -336,43 +470,6 @@ def _bm25_search(
     return seeds
 
 
-def _current_file_seeds(
-    driver: Driver,
-    current_file: str,
-    base_weight: float,
-    project_scope: str | None = None,
-) -> list[SeedNode]:
-    """Return seeds for all entities contained in current_file."""
-    seeds: list[SeedNode] = []
-    # Normalise to forward slashes for cross-platform matching.
-    # Use ENDS WITH so callers can pass a relative suffix like
-    # 'services/auth_service.py' even though the graph stores full paths.
-    normalised = current_file.replace("\\", "/")
-    with driver.session() as session:
-        result = session.run(
-            """
-            MATCH (n)
-            WHERE replace(n.file_path, '\\\\', '/') ENDS WITH $file_path
-              AND ($scope IS NULL OR n.file_path STARTS WITH $scope)
-            RETURN id(n) AS nid, n.qualified_name AS qname
-            """,
-            file_path=normalised,
-            scope=project_scope,
-        )
-        for record in result:
-            seeds.append(
-                SeedNode(
-                    node_id=record["nid"],
-                    qualified_name=record["qname"] or "",
-                    weight=base_weight,
-                    source="current_file",
-                )
-            )
-    if not seeds:
-        logger.debug("Current file seeds: no nodes found for file '%s'", current_file)
-    return seeds
-
-
 # ---------------------------------------------------------------------------
 # Private: normalization and helpers
 # ---------------------------------------------------------------------------
@@ -384,10 +481,12 @@ def _normalize_seeds(all_seeds: list[SeedNode]) -> PersonalizationVector:
     metadata: dict[int, dict[str, str]] = {}
     for seed in all_seeds:
         merged[seed.node_id] = merged.get(seed.node_id, 0.0) + seed.weight
-        # Keep track of the 'best' source if multiple signals hit the same node
-        # (Entity match takes precedence over BM25)
+        # Prefer entity_match > issue_hint > bm25 for provenance display.
+        precedence = {"entity_match": 3, "issue_hint": 2, "bm25": 1}
         current = metadata.get(seed.node_id)
-        if not current or seed.source == "entity_match":
+        if not current or precedence.get(seed.source, 0) >= precedence.get(
+            current["source"], 0
+        ):
             metadata[seed.node_id] = {
                 "qname": seed.qualified_name,
                 "source": seed.source,
@@ -474,7 +573,7 @@ def _resolve_signal_weights(signal_weights: dict[str, float] | None) -> dict:
     defaults: dict = {
         "entity_match": _DEFAULT_ENTITY_MATCH_WEIGHT,
         "bm25": _DEFAULT_BM25_WEIGHT,
-        "current_file": _DEFAULT_CURRENT_FILE_WEIGHT,
+        "issue_hint": _DEFAULT_ISSUE_HINT_WEIGHT,
         "bm25_top_n": _DEFAULT_BM25_TOP_N,
     }
     if not signal_weights:

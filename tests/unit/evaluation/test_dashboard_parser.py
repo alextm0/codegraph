@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import json
-import sqlite3
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import pytest
 
-from evaluation.dashboard.models import InstanceRecord, LiveProgress
+from evaluation.dashboard.models import InstanceRecord
 from evaluation.dashboard.parser import compute_live_progress, read_instances, read_log_tail
 from evaluation.dashboard.state import discover_existing_runs
 

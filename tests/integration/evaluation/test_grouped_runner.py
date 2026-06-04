@@ -6,15 +6,11 @@ GitHub access needed) and verify the orchestration logic of _run_grouped().
 
 import io
 import json
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from evaluation.swe_bench_runner import (
-    InstanceGroup,
-    _group_instances,
     _run_grouped,
-    _zero_result,
 )
 
 

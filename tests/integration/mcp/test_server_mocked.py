@@ -25,7 +25,10 @@ def test_query_dependencies_mocked(mock_state):
         relationship_type="CALLS",
     )
 
-    with patch("codegraph.mcp.tools.query_entity_dependencies") as mock_deps:
+    with (
+        patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+        patch("codegraph.mcp.tools.query_entity_dependencies") as mock_deps,
+    ):
         mock_deps.return_value = [mock_node]
 
         result = query_dependencies_impl("f", "both", 1, mock_state)

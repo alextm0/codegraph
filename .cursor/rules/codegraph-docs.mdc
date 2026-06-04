@@ -1,0 +1,16 @@
+---
+description: CodeGraph documentation source of truth for agents
+alwaysApply: true
+---
+
+# CodeGraph documentation
+
+Before changing architecture, MCP tools, retrieval, CLI, or graph behavior:
+
+1. Read [docs/README.md](docs/README.md) and follow links to the relevant guide or reference page.
+2. Treat [DECISIONS.md](DECISIONS.md) as current design context (update it when you change defaults or surfaces).
+3. Use [AGENTS.md](AGENTS.md) for MCP workflow; use [docs/guides/cookbook.md](docs/guides/cookbook.md) for command recipes.
+
+**Do not** treat `docs/CodeGraphContext-Docs-From-Github/` or an external CodeGraphContext checkout as authoritative for this repo.
+
+When code and docs disagree, fix the docs in the same change set. See [docs/UPDATING_DOCS.md](docs/UPDATING_DOCS.md).

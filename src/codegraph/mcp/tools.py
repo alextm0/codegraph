@@ -15,9 +15,19 @@ import threading
 from typing import TYPE_CHECKING
 
 from codegraph.core.graph.ppr import PPRConfig
-from codegraph.core.graph.queries import count_nodes_by_label, query_entity_dependencies
-from codegraph.core.retrieval.pipeline import run_retrieval_pipeline
-from codegraph.utils.paths import make_relative_path, make_relative_qualified_name
+from codegraph.core.graph.queries import (
+    count_nodes_by_label,
+    query_class_hierarchy,
+    query_entity_dependencies,
+    search_symbols,
+)
+from codegraph.core.retrieval.pipeline import run_core_retrieval
+from codegraph.core.retrieval.post_processing import format_context
+from codegraph.utils.paths import (
+    graph_file_path_scope,
+    make_relative_path,
+    make_relative_qualified_name,
+)
 
 if TYPE_CHECKING:
     from codegraph.mcp.server import ServerState
@@ -25,12 +35,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _empty_graph_payload() -> dict[str, str]:
+    """Standard JSON payload when the graph has no indexed nodes."""
+    return {
+        "error": "Graph index is empty — indexing is now running in the background.",
+        "action": "Wait for indexing to complete, then retry this tool.",
+        "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
+    }
+
+
 def _graph_is_empty(state: ServerState) -> bool:
     """Return True if the Neo4j graph has no indexed nodes."""
     try:
         counts = count_nodes_by_label(state.driver)
         return sum(counts.values()) == 0
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Could not verify graph population (%s); assuming graph is not empty",
+            exc,
+        )
         return False
 
 
@@ -90,8 +113,13 @@ def get_relevant_context_impl(
     top_k: int,
     token_budget: int,
     state: ServerState,
+    include_explanations: bool | None = None,
 ) -> str:
     """Implementation of get_relevant_context tool."""
+    # Kept in the MCP signature for compatibility; active-file seeding is deprecated.
+    _ = current_file
+    if include_explanations is None:
+        include_explanations = state.default_include_explanations
     effective_top_k = top_k if top_k > 0 else state.default_top_k
     effective_budget = token_budget if token_budget > 0 else state.default_token_budget
 
@@ -103,10 +131,9 @@ def get_relevant_context_impl(
     )
 
     logger.info(
-        "get_relevant_context called: task='%s...' entities=%s current_file=%s top_k=%d budget=%d",
+        "get_relevant_context called: task='%s...' entities=%s top_k=%d budget=%d",
         task_description[:60],
         mentioned_entities,
-        current_file,
         effective_top_k,
         effective_budget,
     )
@@ -114,25 +141,45 @@ def get_relevant_context_impl(
     if _graph_is_empty(state):
         logger.warning("get_relevant_context: graph is empty — triggering auto-index")
         _start_background_index(state)
-        return json.dumps(
-            {
-                "error": "Graph index is empty — indexing is now running in the background.",
-                "action": "Wait for indexing to complete, then call get_relevant_context again.",
-                "hint": "Indexing typically takes 10–60 seconds. Check progress with: codegraph status",
-            }
-        )
+        return json.dumps(_empty_graph_payload())
 
     try:
-        context_items = run_retrieval_pipeline(
+        from codegraph.core.retrieval.explanations import (
+            build_explained_results,
+            explained_result_to_dict,
+        )
+
+        core_result = run_core_retrieval(
             driver=state.driver,
             gds=state.gds,
             task_description=task_description,
-            project_root=state.project_root,
             mentioned_entities=mentioned_entities,
-            current_file=current_file,
             ppr_config=ppr_config,
             signal_weights=state.signal_weights or None,
-            token_budget=effective_budget,
+            exclude_seed_paths=state.exclude_seed_paths or None,
+        )
+        if not core_result:
+            return json.dumps(
+                {
+                    "summary": {
+                        "result_count": 0,
+                        "total_tokens": 0,
+                        "token_budget": effective_budget,
+                    },
+                    "results": [],
+                    "hint": "No results found. Is the graph indexed? Run: codegraph rebuild",
+                }
+            )
+
+        explanation_by_qname: dict = {}
+        if include_explanations:
+            explained = build_explained_results(
+                state.driver, core_result, top_k=effective_top_k
+            )
+            explanation_by_qname = {e.qualified_name: e for e in explained}
+
+        context_items = format_context(
+            core_result.ppr_results, state.project_root, effective_budget
         )
     except Exception as exc:
         logger.exception("get_relevant_context pipeline failed")
@@ -159,8 +206,9 @@ def get_relevant_context_impl(
 
     total_tokens = sum(item.token_count for item in context_items)
 
-    results = [
-        {
+    results = []
+    for item in context_items:
+        row = {
             "entity_name": item.entity_name,
             "entity_type": item.entity_type,
             "qualified_name": item.qualified_name,
@@ -170,19 +218,33 @@ def get_relevant_context_impl(
             "token_count": item.token_count,
             "source_code": item.source_code,
         }
-        for item in context_items
-    ]
+        if include_explanations and item.qualified_name in explanation_by_qname:
+            row["explanation"] = explained_result_to_dict(
+                explanation_by_qname[item.qualified_name]
+            )
+        results.append(row)
 
-    output = {
+    output: dict = {
         "summary": {
             "result_count": len(results),
             "total_tokens": total_tokens,
             "token_budget": effective_budget,
             "visualizer_url": "http://localhost:8474",
         },
+        "seeds": [
+            {
+                "qualified_name": meta["qname"],
+                "source": meta["source"],
+                "weight": round(core_result.seeds.seeds[nid], 4),
+            }
+            for nid, meta in core_result.seeds.metadata.items()
+        ],
         "results": results,
     }
     return json.dumps(output, indent=2)
+
+
+_VALID_QUERY_MODES = frozenset({"dependencies", "symbol_search", "class_hierarchy"})
 
 
 def query_dependencies_impl(
@@ -190,29 +252,69 @@ def query_dependencies_impl(
     direction: str,
     depth: int,
     state: ServerState,
+    mode: str = "dependencies",
 ) -> str:
     """Implementation of query_dependencies tool."""
+    mode = (mode or "dependencies").strip().lower()
     logger.info(
-        "query_dependencies called: entity='%s' direction=%s depth=%d",
+        "query_dependencies called: entity='%s' mode=%s direction=%s depth=%d",
         entity_name,
+        mode,
         direction,
         depth,
     )
 
-    try:
-        nodes = query_entity_dependencies(
-            driver=state.driver,
-            entity_name=entity_name,
-            direction=direction,
-            depth=depth,
-        )
-    except ValueError as exc:
+    if mode not in _VALID_QUERY_MODES:
         return json.dumps(
             {
-                "error": str(exc),
-                "hint": "Entity not found. Use get_relevant_context first to confirm the entity name exists.",
+                "error": f"Invalid mode '{mode}'.",
+                "hint": (
+                    "Use mode='dependencies', 'symbol_search', or 'class_hierarchy'."
+                ),
             }
         )
+
+    if _graph_is_empty(state):
+        logger.warning("query_dependencies: graph is empty — triggering auto-index")
+        _start_background_index(state)
+        return json.dumps(_empty_graph_payload())
+
+    project_scope = graph_file_path_scope(state.project_root)
+
+    try:
+        if mode == "symbol_search":
+            nodes = search_symbols(
+                driver=state.driver,
+                pattern=entity_name,
+                limit=100,
+                project_scope=project_scope,
+            )
+            rel_type = "MATCH"
+        elif mode == "class_hierarchy":
+            nodes = query_class_hierarchy(
+                driver=state.driver,
+                class_name=entity_name,
+                direction=direction,
+                project_scope=project_scope,
+            )
+            rel_type = None
+        else:
+            nodes = query_entity_dependencies(
+                driver=state.driver,
+                entity_name=entity_name,
+                direction=direction,
+                depth=depth,
+            )
+            rel_type = None
+    except ValueError as exc:
+        msg = str(exc)
+        if "direction" in msg.lower():
+            hint = "Use direction='upstream', 'downstream', or 'both'."
+        else:
+            hint = (
+                "Use get_relevant_context first to confirm the entity name exists."
+            )
+        return json.dumps({"error": msg, "hint": hint})
     except Exception as exc:
         logger.exception("query_dependencies failed")
         return json.dumps(
@@ -224,17 +326,33 @@ def query_dependencies_impl(
         )
 
     if not nodes:
+        hints = {
+            "dependencies": (
+                f"No {direction} dependencies found for '{entity_name}'. "
+                "Try direction='both' or depth=2."
+            ),
+            "symbol_search": (
+                f"No symbols matching '{entity_name}'. "
+                "Try a shorter pattern or codegraph find."
+            ),
+            "class_hierarchy": (
+                f"No inheritance links for class '{entity_name}'. "
+                "Confirm the class name with mode='symbol_search'."
+            ),
+        }
         return json.dumps(
             {
+                "mode": mode,
                 "result_count": 0,
                 "results": [],
-                "hint": f"No {direction} dependencies found for '{entity_name}'. Try direction='both' or depth=2.",
+                "hint": hints.get(mode, "No results found."),
             }
         )
 
     project_root = state.project_root
-    serializable = [
-        {
+    serializable = []
+    for node in nodes:
+        row = {
             "qualified_name": make_relative_qualified_name(
                 node.qualified_name,
                 node.file_path,
@@ -243,13 +361,16 @@ def query_dependencies_impl(
             "name": node.name,
             "label": node.label,
             "file_path": make_relative_path(node.file_path, project_root),
-            "relationship_type": node.relationship_type,
         }
-        for node in nodes
-    ]
+        if hasattr(node, "relationship_type"):
+            row["relationship_type"] = node.relationship_type or rel_type or ""
+        else:
+            row["relationship_type"] = rel_type or ""
+        serializable.append(row)
 
     return json.dumps(
         {
+            "mode": mode,
             "result_count": len(serializable),
             "results": serializable,
         },

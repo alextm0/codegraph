@@ -28,7 +28,6 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.core.parser.models import FileEntities
 from codegraph.core.parser.python_parser import create_parser, parse_directory, parse_file
 
 # Reorganized path: tests/unit/core/parser/test_flask.py

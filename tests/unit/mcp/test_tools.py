@@ -3,7 +3,6 @@
 import json
 import threading
 from unittest.mock import MagicMock, patch
-import pytest
 
 from codegraph.mcp.tools import (
     _graph_is_empty,
@@ -11,14 +10,18 @@ from codegraph.mcp.tools import (
     get_relevant_context_impl,
     query_dependencies_impl,
 )
+from codegraph.core.retrieval.pipeline import RawRetrievalResult
 from codegraph.core.retrieval.post_processing import ContextResult
+from codegraph.core.retrieval.seed_selection import PersonalizationVector
 
 
 def _make_state(
     project_root="/project",
-    default_top_k=15,
+    default_top_k=30,
     default_token_budget=6000,
+    default_include_explanations=True,
     indexing_in_progress=False,
+    exclude_seed_paths=None,
 ):
     state = MagicMock()
     state.driver = MagicMock()
@@ -30,7 +33,9 @@ def _make_state(
     state.indexing_lock = threading.Lock()
     state.ppr_config = MagicMock(damping_factor=0.70, max_iterations=20, tolerance=1e-7)
     state.signal_weights = {}
+    state.exclude_seed_paths = exclude_seed_paths or ["tests/", "test_"]
     state.config_path = "/project/config.yaml"
+    state.default_include_explanations = default_include_explanations
     return state
 
 
@@ -48,6 +53,16 @@ def _make_context_result(**kwargs):
     )
     defaults.update(kwargs)
     return ContextResult(**defaults)
+
+
+def _make_core_result(**metadata_entry):
+    meta = metadata_entry or {
+        42: {"qname": "auth.py::login", "source": "entity_match"},
+    }
+    return RawRetrievalResult(
+        seeds=PersonalizationVector(seeds={nid: 1.0 for nid in meta}, metadata=meta),
+        ppr_results=[],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -112,21 +127,24 @@ class TestStartBackgroundIndex:
 # ---------------------------------------------------------------------------
 
 class TestGetRelevantContextImpl:
-    def test_returns_json_with_summary_and_results(self):
+    def test_returns_json_with_summary_results_and_seeds(self):
         state = _make_state()
         result = _make_context_result()
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]),
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()),
+            patch("codegraph.mcp.tools.format_context", return_value=[result]),
         ):
             output = get_relevant_context_impl("fix auth bug", None, None, 0, 0, state)
 
         payload = json.loads(output)
         assert "summary" in payload
         assert "results" in payload
+        assert "seeds" in payload
         assert payload["summary"]["result_count"] == 1
         assert payload["results"][0]["entity_name"] == "login"
+        assert payload["seeds"][0]["source"] == "entity_match"
 
     def test_empty_graph_triggers_background_index_and_returns_error(self):
         state = _make_state()
@@ -147,7 +165,7 @@ class TestGetRelevantContextImpl:
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", side_effect=RuntimeError("GDS down")),
+            patch("codegraph.mcp.tools.run_core_retrieval", side_effect=RuntimeError("GDS down")),
         ):
             output = get_relevant_context_impl("task", None, None, 0, 0, state)
 
@@ -156,12 +174,26 @@ class TestGetRelevantContextImpl:
         assert "detail" in payload
         assert "GDS down" in payload["detail"]
 
-    def test_empty_pipeline_result_returns_hint(self):
+    def test_empty_core_result_returns_hint(self):
         state = _make_state()
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[]),
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=None),
+        ):
+            output = get_relevant_context_impl("task", None, None, 0, 0, state)
+
+        payload = json.loads(output)
+        assert payload["results"] == []
+        assert "hint" in payload
+
+    def test_empty_format_context_returns_hint(self):
+        state = _make_state()
+
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()),
+            patch("codegraph.mcp.tools.format_context", return_value=[]),
         ):
             output = get_relevant_context_impl("task", None, None, 0, 0, state)
 
@@ -175,11 +207,12 @@ class TestGetRelevantContextImpl:
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]) as mock_pipeline,
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()) as mock_core,
+            patch("codegraph.mcp.tools.format_context", return_value=[result]),
         ):
             get_relevant_context_impl("task", None, None, top_k=0, token_budget=0, state=state)
 
-        call_kwargs = mock_pipeline.call_args[1]
+        call_kwargs = mock_core.call_args[1]
         assert call_kwargs["ppr_config"].top_k == 25
 
     def test_zero_budget_uses_state_default(self):
@@ -188,25 +221,41 @@ class TestGetRelevantContextImpl:
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]) as mock_pipeline,
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()),
+            patch("codegraph.mcp.tools.format_context", return_value=[result]) as mock_format,
         ):
             get_relevant_context_impl("task", None, None, top_k=5, token_budget=0, state=state)
 
-        call_kwargs = mock_pipeline.call_args[1]
-        assert call_kwargs["token_budget"] == 8000
+        call_kwargs = mock_format.call_args[0]
+        assert call_kwargs[2] == 8000
 
     def test_explicit_top_k_overrides_default(self):
-        state = _make_state(default_top_k=15)
+        state = _make_state(default_top_k=30)
         result = _make_context_result()
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]) as mock_pipeline,
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()) as mock_core,
+            patch("codegraph.mcp.tools.format_context", return_value=[result]),
         ):
             get_relevant_context_impl("task", None, None, top_k=5, token_budget=0, state=state)
 
-        call_kwargs = mock_pipeline.call_args[1]
+        call_kwargs = mock_core.call_args[1]
         assert call_kwargs["ppr_config"].top_k == 5
+
+    def test_passes_exclude_seed_paths_from_state(self):
+        state = _make_state(exclude_seed_paths=["tests/", "test_"])
+        result = _make_context_result()
+
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()) as mock_core,
+            patch("codegraph.mcp.tools.format_context", return_value=[result]),
+        ):
+            get_relevant_context_impl("task", None, None, 0, 0, state)
+
+        call_kwargs = mock_core.call_args[1]
+        assert call_kwargs["exclude_seed_paths"] == ["tests/", "test_"]
 
     def test_result_json_has_all_required_fields(self):
         state = _make_state()
@@ -214,7 +263,8 @@ class TestGetRelevantContextImpl:
 
         with (
             patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
-            patch("codegraph.mcp.tools.run_retrieval_pipeline", return_value=[result]),
+            patch("codegraph.mcp.tools.run_core_retrieval", return_value=_make_core_result()),
+            patch("codegraph.mcp.tools.format_context", return_value=[result]),
         ):
             output = get_relevant_context_impl("task", None, None, 0, 0, state)
 
@@ -234,6 +284,43 @@ class TestGetRelevantContextImpl:
 # ---------------------------------------------------------------------------
 
 class TestQueryDependenciesImpl:
+    def test_symbol_search_mode(self):
+        from codegraph.core.graph.queries import NodeInfo
+
+        state = _make_state()
+        node = NodeInfo(
+            qualified_name="/project/auth.py::AuthService",
+            name="AuthService",
+            label="Class",
+            file_path="/project/auth.py",
+        )
+
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.search_symbols", return_value=[node]) as mock_search,
+        ):
+            output = query_dependencies_impl(
+                "Auth", "both", 1, state, mode="symbol_search"
+            )
+
+        mock_search.assert_called_once_with(
+            driver=state.driver,
+            pattern="Auth",
+            limit=100,
+            project_scope=None,
+        )
+        payload = json.loads(output)
+        assert payload["mode"] == "symbol_search"
+        assert payload["result_count"] == 1
+        assert payload["results"][0]["relationship_type"] == "MATCH"
+
+    def test_invalid_mode_returns_error(self):
+        state = _make_state()
+        with patch("codegraph.mcp.tools._graph_is_empty", return_value=False):
+            output = query_dependencies_impl("x", "both", 1, state, mode="invalid")
+        payload = json.loads(output)
+        assert "error" in payload
+
     def test_happy_path_returns_result_count_and_results(self):
         from codegraph.core.graph.queries import NodeInfoWithRel
 
@@ -246,7 +333,10 @@ class TestQueryDependenciesImpl:
             relationship_type="CALLS",
         )
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]),
+        ):
             output = query_dependencies_impl("login", "downstream", 1, state)
 
         payload = json.loads(output)
@@ -257,7 +347,13 @@ class TestQueryDependenciesImpl:
     def test_value_error_returns_error_json(self):
         state = _make_state()
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", side_effect=ValueError("Invalid direction")):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch(
+                "codegraph.mcp.tools.query_entity_dependencies",
+                side_effect=ValueError("Invalid direction"),
+            ),
+        ):
             output = query_dependencies_impl("login", "sideways", 1, state)
 
         payload = json.loads(output)
@@ -267,7 +363,13 @@ class TestQueryDependenciesImpl:
     def test_generic_exception_returns_error_with_detail(self):
         state = _make_state()
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", side_effect=RuntimeError("DB timeout")):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch(
+                "codegraph.mcp.tools.query_entity_dependencies",
+                side_effect=RuntimeError("DB timeout"),
+            ),
+        ):
             output = query_dependencies_impl("login", "both", 1, state)
 
         payload = json.loads(output)
@@ -278,7 +380,10 @@ class TestQueryDependenciesImpl:
     def test_empty_result_returns_hint(self):
         state = _make_state()
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[]),
+        ):
             output = query_dependencies_impl("ghost", "both", 1, state)
 
         payload = json.loads(output)
@@ -297,9 +402,11 @@ class TestQueryDependenciesImpl:
             relationship_type="CALLS",
         )
 
-        with patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]):
+        with (
+            patch("codegraph.mcp.tools._graph_is_empty", return_value=False),
+            patch("codegraph.mcp.tools.query_entity_dependencies", return_value=[node]),
+        ):
             output = query_dependencies_impl("login", "downstream", 1, state)
 
         payload = json.loads(output)
-        # file_path should be relative, not the absolute /project/auth.py
         assert payload["results"][0]["file_path"] == "auth.py"

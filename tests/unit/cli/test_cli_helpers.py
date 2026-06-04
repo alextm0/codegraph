@@ -4,11 +4,8 @@ All file I/O and Neo4j interactions are mocked so no database is needed.
 """
 
 import json
-import platform
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +100,8 @@ class TestFindMcpRegistrations:
         from codegraph.cli.cli_helpers import _find_mcp_registrations
         config_path = tmp_path / "config.yaml"
         with (
-            patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[]),
-            patch("codegraph.cli.cli_helpers._gemini_settings_paths", return_value=[]),
+            patch("codegraph.cli.commands.install._claude_desktop_config_paths", return_value=[]),
+            patch("codegraph.cli.commands.install._gemini_settings_paths", return_value=[]),
         ):
             result = _find_mcp_registrations(config_path)
         assert result == []
@@ -115,8 +112,8 @@ class TestFindMcpRegistrations:
         mcp_file = tmp_path / ".mcp.json"
         mcp_file.write_text(json.dumps({"mcpServers": {"codegraph": {}}}))
         with (
-            patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[]),
-            patch("codegraph.cli.cli_helpers._gemini_settings_paths", return_value=[]),
+            patch("codegraph.cli.commands.install._claude_desktop_config_paths", return_value=[]),
+            patch("codegraph.cli.commands.install._gemini_settings_paths", return_value=[]),
         ):
             result = _find_mcp_registrations(config_path)
         assert any("mcp.json" in r for r in result)
@@ -129,8 +126,8 @@ class TestFindMcpRegistrations:
         desktop_file = tmp_path / "claude.json"
         desktop_file.write_text(json.dumps({"mcpServers": {"codegraph": {}}}))
         with (
-            patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[desktop_file]),
-            patch("codegraph.cli.cli_helpers._gemini_settings_paths", return_value=[]),
+            patch("codegraph.cli.commands.install._claude_desktop_config_paths", return_value=[desktop_file]),
+            patch("codegraph.cli.commands.install._gemini_settings_paths", return_value=[]),
         ):
             result = _find_mcp_registrations(config_path)
         assert len(result) == 2
@@ -142,8 +139,8 @@ class TestFindMcpRegistrations:
         # Mocking that it has codegraph
         gemini_file.write_text(json.dumps({"mcpServers": {"codegraph": {}}}))
         with (
-            patch("codegraph.cli.cli_helpers._claude_desktop_config_paths", return_value=[]),
-            patch("codegraph.cli.cli_helpers._gemini_settings_paths", return_value=[gemini_file]),
+            patch("codegraph.cli.commands.install._claude_desktop_config_paths", return_value=[]),
+            patch("codegraph.cli.commands.install._gemini_settings_paths", return_value=[gemini_file]),
         ):
             result = _find_mcp_registrations(config_path)
         assert any("settings.json" in r for r in result)
@@ -324,10 +321,9 @@ class TestQueryHelper:
         mock_result = self._make_mock_result()
 
         with (
-            patch("codegraph.cli.cli_helpers._initialize_db"),
-            patch("codegraph.cli.cli_helpers.load_full_config", return_value={}),
-            patch("codegraph.cli.cli_helpers.resolve_project_root", return_value=tmp_path),
-            patch("codegraph.cli.cli_helpers.get_database_manager") as mock_dm_getter,
+            patch("codegraph.cli.commands.query.load_full_config", return_value={}),
+            patch("codegraph.cli.commands.query.resolve_project_root", return_value=tmp_path),
+            patch("codegraph.cli.commands.query.get_database_manager") as mock_dm_getter,
             patch("codegraph.core.retrieval.pipeline.run_retrieval_pipeline", return_value=[mock_result]),
             patch("codegraph.core.graph.ppr.create_gds_client"),
         ):
@@ -336,14 +332,13 @@ class TestQueryHelper:
             mock_dm.get_driver.return_value = MagicMock()
             mock_dm_getter.return_value = mock_dm
 
-            from io import StringIO
             output_lines = []
-            with patch("codegraph.cli.cli_helpers.console") as mock_console:
+            with patch("codegraph.cli.commands.query.console") as mock_console:
                 mock_console.print = lambda *a, **kw: output_lines.append(str(a))
-                query_helper(config_path, "fix auth", None, None, 0, 0, json_out=True)
+                query_helper(config_path, "fix auth", None, 0, 0, json_out=True)
 
             # Find the JSON output line
-            json_line = next((l for l in output_lines if '"results"' in l or "results" in l), None)
+            next((l for l in output_lines if '"results"' in l or "results" in l), None)
             # We can't easily capture rich console JSON output in unit tests,
             # but we can verify no exception was raised and pipeline was called
         # Verify pipeline was called with correct task
@@ -355,10 +350,9 @@ class TestQueryHelper:
         config_path.write_text("")
 
         with (
-            patch("codegraph.cli.cli_helpers._initialize_db"),
-            patch("codegraph.cli.cli_helpers.load_full_config", return_value={}),
-            patch("codegraph.cli.cli_helpers.resolve_project_root", return_value=tmp_path),
-            patch("codegraph.cli.cli_helpers.get_database_manager") as mock_dm_getter,
+            patch("codegraph.cli.commands.query.load_full_config", return_value={}),
+            patch("codegraph.cli.commands.query.resolve_project_root", return_value=tmp_path),
+            patch("codegraph.cli.commands.query.get_database_manager") as mock_dm_getter,
             patch("codegraph.core.retrieval.pipeline.run_retrieval_pipeline", return_value=[]),
             patch("codegraph.core.graph.ppr.create_gds_client"),
         ):
@@ -368,9 +362,9 @@ class TestQueryHelper:
             mock_dm_getter.return_value = mock_dm
 
             printed = []
-            with patch("codegraph.cli.cli_helpers.console") as mock_console:
+            with patch("codegraph.cli.commands.query.console") as mock_console:
                 mock_console.print = lambda *a, **kw: printed.append(str(a))
-                query_helper(config_path, "task", None, None, 0, 0, json_out=False)
+                query_helper(config_path, "task", None, 0, 0, json_out=False)
 
             # Should print some "no results" message
             full_output = " ".join(printed)
@@ -384,26 +378,23 @@ class TestQueryHelper:
 class TestExplainHelper:
     def test_no_seeds_prints_hint(self, tmp_path):
         from codegraph.cli.cli_helpers import explain_helper
-        from codegraph.core.retrieval.seed_selection import PersonalizationVector
         config_path = tmp_path / "config.yaml"
         config_path.write_text("")
 
-        empty_vector = PersonalizationVector(seeds={})
-
         with (
-            patch("codegraph.cli.cli_helpers._initialize_db"),
-            patch("codegraph.cli.cli_helpers.load_raw_config", return_value={}),
-            patch("codegraph.cli.cli_helpers.get_database_manager") as mock_dm_getter,
-            patch("codegraph.core.retrieval.seed_selection.prepare_bm25_index", return_value=(MagicMock(), [])),
-            patch("codegraph.core.retrieval.seed_selection.extract_seeds", return_value=empty_vector),
+            patch("codegraph.cli.commands.explain.load_raw_config", return_value={}),
+            patch("codegraph.cli.commands.explain.create_gds_client", return_value=MagicMock()),
+            patch("codegraph.cli.commands.explain.run_core_retrieval", return_value=None),
         ):
             mock_dm = MagicMock()
             mock_dm.is_connected.return_value = True
             mock_dm.get_driver.return_value = MagicMock()
-            mock_dm_getter.return_value = mock_dm
 
             printed = []
-            with patch("codegraph.cli.cli_helpers.console") as mock_console:
+            with (
+                patch("codegraph.cli.commands.explain._initialize_db", return_value=mock_dm),
+                patch("codegraph.cli.commands.explain.console") as mock_console,
+            ):
                 mock_console.print = lambda *a, **kw: printed.append(str(a))
                 explain_helper(config_path, "fix auth bug")
 

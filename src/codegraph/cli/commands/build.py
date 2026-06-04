@@ -1,0 +1,171 @@
+"""Graph rebuild command helper."""
+
+from __future__ import annotations
+
+import logging
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
+
+from codegraph.core.graph import build_graph, clear_database
+from codegraph.core.parser import create_parser, parse_directory
+from codegraph.utils.config import load_raw_config, resolve_project_root
+from codegraph.utils.ignore import load_ignore_patterns
+from codegraph.utils.logging import setup_logging
+
+from codegraph.cli.commands._shared import (
+    _initialize_db,
+    _write_build_timestamp,
+    console,
+    logger,
+)
+
+
+def _graph_totals(counts: dict[str, int]) -> tuple[int, int]:
+    """Return (node_count, edge_count) from build_graph counts."""
+    node_keys = ("File", "Function", "Class", "Method")
+    edge_keys = ("CONTAINS", "CALLS", "IMPORTS", "INHERITS_FROM")
+    return (
+        sum(counts.get(k, 0) for k in node_keys),
+        sum(counts.get(k, 0) for k in edge_keys),
+    )
+
+
+def rebuild_helper(
+    config_path: Path,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> None:
+    """Rebuild the graph with progress output.
+
+    Args:
+        config_path: Path to config.yaml.
+        progress_callback: Optional callable invoked with progress payloads for
+            live indexing UIs (e.g. visualizer WebSocket ``rebuild_progress``).
+    """
+    setup_logging(level=logging.INFO)
+
+    raw_config = load_raw_config(config_path)
+    project_root = resolve_project_root(raw_config, config_path)
+
+    db_manager = _initialize_db(config_path)
+    driver = db_manager.get_driver()
+
+    try:
+        with console.status("[bold green]Connecting to Neo4j..."):
+            if not db_manager.is_connected():
+                console.print(
+                    "[bold red]ERROR:[/bold red] Cannot reach Neo4j. Is it running?"
+                )
+                sys.exit(1)
+
+        console.print("[green]+[/green] Connected to Neo4j.")
+
+        with console.status("[bold yellow]Clearing existing graph..."):
+            deleted = clear_database(driver)
+        console.print(f"[green]+[/green] Cleared {deleted} nodes.")
+
+        # Load ignore patterns
+        ignore_file = project_root / ".cgignore"
+        exclude = raw_config.get("parser", {}).get("exclude_patterns", [])
+        exclude += raw_config.get("exclude_patterns", [])
+        if ignore_file.exists():
+            console.print(
+                f"  Loading ignore patterns from [blue]{ignore_file.name}[/blue]"
+            )
+            exclude.extend(load_ignore_patterns(ignore_file))
+
+        console.print(f"Parsing: [bold cyan]{project_root}[/bold cyan]")
+        parser = create_parser()
+
+        all_entities = []
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            parse_task = progress.add_task("Parsing files...", total=None)
+
+            def parse_progress(current: int, total: int, file_path: str) -> None:
+                progress.update(
+                    parse_task,
+                    total=total,
+                    completed=current,
+                    description=f"Parsing {Path(file_path).name}",
+                )
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "stage": "parsing",
+                            "files_parsed": current,
+                            "files_total": total,
+                            "current_file": Path(file_path).name,
+                        }
+                    )
+
+            all_entities = parse_directory(
+                str(project_root),
+                parser,
+                exclude_patterns=exclude,
+                progress_callback=parse_progress,
+            )
+        console.print(f"[green]+[/green] Parsed {len(all_entities)} files.")
+
+        console.print("Building graph...")
+
+        build_counts: dict[str, int] = {}
+        stage_to_key = {
+            "File nodes": "File",
+            "Function nodes": "Function",
+            "Class nodes": "Class",
+            "Method nodes": "Method",
+            "CONTAINS edges": "CONTAINS",
+            "CALLS edges": "CALLS",
+            "IMPORTS edges": "IMPORTS",
+            "INHERITS_FROM edges": "INHERITS_FROM",
+        }
+
+        def graph_progress(stage: str, count: int) -> None:
+            console.print(f"  {stage}: [bold]{count}[/bold]")
+            key = stage_to_key.get(stage)
+            if key:
+                build_counts[key] = count
+            if progress_callback:
+                nodes, edges = _graph_totals(build_counts)
+                progress_callback(
+                    {
+                        "stage": "building",
+                        "build_stage": stage,
+                        "node_count": nodes,
+                        "edge_count": edges,
+                    }
+                )
+
+        build_graph(
+            driver,
+            all_entities,
+            progress_callback=graph_progress,
+        )
+
+        from codegraph.core.graph.queries import count_edges_by_type, count_nodes_by_label
+
+        total_nodes = sum(count_nodes_by_label(driver).values())
+        total_edges = sum(count_edges_by_type(driver).values())
+        _write_build_timestamp(config_path)
+        console.print(
+            f"\n[bold green]Graph rebuild complete:[/bold green] {total_nodes} nodes, {total_edges} edges."
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error during rebuild:[/bold red] {e}")
+        logger.exception("Rebuild failed")
+        sys.exit(1)

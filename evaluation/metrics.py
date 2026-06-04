@@ -83,3 +83,26 @@ def aggregate_metrics(instance_results: list[dict]) -> dict:
         summary["success_only"] = None
 
     return summary
+
+
+def per_repo_recall_at_10(instance_results: list[dict]) -> dict[str, dict]:
+    """Mean Recall@10 and zero count per repo org (first path segment).
+
+    Example key: ``django`` for ``django/django``.
+    """
+    by_repo: dict[str, list[float]] = {}
+    for row in instance_results:
+        if row.get("error"):
+            continue
+        repo = (row.get("repo") or "unknown").split("/")[0]
+        by_repo.setdefault(repo, []).append(float(row.get("recall_at_10", 0.0)))
+
+    out: dict[str, dict] = {}
+    for repo, scores in sorted(by_repo.items()):
+        zeros = sum(1 for v in scores if v == 0.0)
+        out[repo] = {
+            "n": len(scores),
+            "mean_recall_at_10": statistics.mean(scores) if scores else 0.0,
+            "zero_recall": zeros,
+        }
+    return out

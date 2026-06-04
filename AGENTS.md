@@ -2,6 +2,8 @@
 
 This file helps AI agents understand the CodeGraph system's mental model and current state.
 
+**Full documentation:** [`docs/README.md`](docs/README.md) — concepts, CLI/MCP reference, guides, thesis alignment. Prefer that tree as source of truth over this short summary.
+
 ## System Philosophy
 
 Code is treated as a **structural graph**, not a text blob. Relevance is determined by graph connectivity (Personalized PageRank) rather than embedding similarity.
@@ -22,15 +24,17 @@ Source code
 
 ## MCP Tools (exactly 2)
 
-**`get_relevant_context`** — call this first for any code task.
-- Input: `task_description`, `mentioned_entities` (list or null), `current_file` (path or null), `top_k` (0 = default 15), `token_budget` (0 = default 6000)
-- Output: JSON with `summary.result_count`, `summary.visualizer_url`, and `results[]` (entity_name, entity_type, file_path, lines, relevance_score, source_code)
+**`get_relevant_context`** — PPR-ranked code for tasks and bug reports.
+- Input: `task_description`, `mentioned_entities` (list or null), `top_k` (0 = default 30), `token_budget` (0 = default 6000), `include_explanations` (default **true**). `current_file` is ignored.
+- Output: JSON with `summary`, `seeds[]`, `results[]` (entity, file, lines, score, source_code; optional `explanation` per result)
 - Empty graph returns `hint: "run codegraph rebuild"`
 - Pipeline errors return `error` + `hint: "run codegraph doctor"`
 
-**`query_dependencies`** — use after `get_relevant_context` to trace relationships.
-- Input: `entity_name`, `direction` (upstream/downstream/both), `depth` (1 or 2)
-- Output: JSON with `results[]` (qualified_name, name, label, file_path, relationship_type)
+**`query_dependencies`** — fast structural lookups (also symbol search and class hierarchy).
+- Input: `entity_name`, `direction` (upstream/downstream/both), `depth` (1 or 2), `mode` (`dependencies` | `symbol_search` | `class_hierarchy`)
+- `symbol_search`: `entity_name` is a substring pattern; ignores depth
+- `class_hierarchy`: inheritance ancestors (upstream) or subclasses (downstream)
+- Output: JSON with `mode`, `result_count`, `results[]`
 
 There are **no other MCP tools**. `get_graph_stats`, `find_dead_code`, `execute_cypher_query` exist only as CLI commands.
 
@@ -40,14 +44,18 @@ There are **no other MCP tools**. `get_graph_stats`, `find_dead_code`, `execute_
 |------|---------|
 | `src/codegraph/core/parser/python_parser.py` | tree-sitter entity extraction |
 | `src/codegraph/core/graph/graph_builder.py` | UNWIND+MERGE Neo4j writes |
+| `src/codegraph/core/graph/resolution.py` | CALLS/IMPORTS resolution (ambiguous → no edge) |
 | `src/codegraph/core/graph/ppr.py` | PPRConfig, run_ppr_from_node_ids |
-| `src/codegraph/core/retrieval/seed_selection.py` | 3-signal seed scoring |
+| `src/codegraph/core/retrieval/seed_selection.py` | entity + BM25 + issue path hint seeds |
 | `src/codegraph/core/retrieval/post_processing.py` | IDF weighting, token budget |
-| `src/codegraph/core/retrieval/pipeline.py` | run_retrieval_pipeline |
+| `src/codegraph/core/retrieval/pipeline.py` | run_core_retrieval |
 | `src/codegraph/mcp/server.py` | FastMCP lifespan, ServerState |
 | `src/codegraph/mcp/tools.py` | get_relevant_context_impl, query_dependencies_impl |
-| `src/codegraph/cli/main.py` | Typer CLI commands |
-| `src/codegraph/cli/cli_helpers.py` | All CLI helper implementations |
+| `src/codegraph/visualizer/routes.py` | Visualizer REST/WS API |
+| `src/codegraph/watcher/incremental.py` | Per-file graph updates |
+| `evaluation/swe_bench_runner.py` | SWE-bench Lite harness |
+| `DECISIONS.md` | Binding design decisions |
+| `docs/README.md` | Full documentation index |
 
 ## PPR Defaults (iter-2 tuned — do not change without benchmarking)
 
@@ -75,6 +83,7 @@ codegraph stats                             # Node/edge counts table
 codegraph doctor                            # Health checks with fix hints
 codegraph query "task" --entity EntityName  # Run retrieval pipeline
 codegraph explain "task"                    # Show seeds + PPR reasoning paths
+codegraph find <pattern>                    # Fast symbol/path search
 codegraph visualize                         # D3 force graph in browser (port 8474)
 codegraph analyze deps <Name>               # Dependency traversal
 codegraph analyze dead-code                 # Unreachable entities

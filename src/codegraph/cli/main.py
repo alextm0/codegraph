@@ -64,12 +64,15 @@ def rebuild(ctx: typer.Context):
 
 
 @app.command()
-def init(ctx: typer.Context):
+def init(
+    ctx: typer.Context,
+    target: str = typer.Argument(None, help="Local path or GitHub URL to index"),
+):
     """
     Initialize a new CodeGraph project with an interactive wizard.
     """
     config_path = get_config_path(ctx)
-    init_helper(config_path)
+    init_helper(config_path, target)
 
 
 @app.command()
@@ -143,9 +146,6 @@ def query(
     entities: list[str] | None = typer.Option(
         None, "--entity", "-e", help="Specific entity names to include as seeds"
     ),
-    file: str | None = typer.Option(
-        None, "--file", "-f", help="Current file path (used as a low-weight seed hint)"
-    ),
     top_k: int = typer.Option(
         0, "--top-k", help="Max results (0 = use config default)"
     ),
@@ -160,6 +160,9 @@ def query(
     ),
     compact: bool = typer.Option(
         False, "--compact", help="Compact output: file paths and scores only"
+    ),
+    trace: bool = typer.Option(
+        False, "--trace", help="Emit structured retrieval trace as JSON"
     ),
 ):
     """
@@ -178,11 +181,11 @@ def query(
         config_path,
         task,
         entities,
-        file,
         top_k,
         budget,
         json_out=json_out,
         compact=compact,
+        trace=trace,
     )
 
     if viz:
@@ -194,6 +197,9 @@ def explain(
     ctx: typer.Context,
     task: str = typer.Argument(..., help="Task description to explain retrieval for"),
     top_k: int = typer.Option(10, "--top-k", "-k", help="Number of files to explain"),
+    trace: bool = typer.Option(
+        False, "--trace", help="Emit structured retrieval trace as JSON"
+    ),
 ) -> None:
     """
     Explain why PPR returned specific files for a task — shows seeds and reasoning paths.
@@ -207,7 +213,7 @@ def explain(
             "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
         )
         raise typer.Exit(1)
-    explain_helper(config_path, task, top_k)
+    explain_helper(config_path, task, top_k, trace=trace)
 
 
 @app.command()
@@ -251,6 +257,80 @@ def serve(
     from codegraph.mcp.server import main as serve_main
 
     serve_main()
+
+
+@app.command("find")
+def find_symbol(
+    ctx: typer.Context,
+    pattern: str = typer.Argument(..., help="Symbol or path substring to search"),
+    limit: int = typer.Option(50, "--limit", "-l", help="Maximum results"),
+    label: str | None = typer.Option(
+        None, "--type", "-t", help="Filter by node label (Function, Class, Method, File)"
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Search indexed symbols and files by name or path (fast graph lookup)."""
+    config_path = get_config_path(ctx)
+    try:
+        db_manager = _initialize_db(config_path)
+    except ValueError as e:
+        console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        console.print(
+            "[dim]Fix: run [bold]codegraph init[/bold] or set NEO4J_PASSWORD in .env[/dim]"
+        )
+        raise typer.Exit(1)
+
+    from codegraph.core.graph.queries import search_symbols
+    from codegraph.utils.config import load_raw_config, resolve_project_root
+    from codegraph.utils.paths import graph_file_path_scope, make_relative_path
+    import json as json_mod
+    import rich.box as box
+    from rich.table import Table
+
+    raw = load_raw_config(config_path)
+    project_root = str(resolve_project_root(raw, config_path))
+    scope = graph_file_path_scope(project_root)
+
+    try:
+        results = search_symbols(
+            db_manager.get_driver(),
+            pattern=pattern,
+            limit=limit,
+            label=label,
+            project_scope=scope,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Search failed:[/bold red] {e}")
+        raise typer.Exit(1)
+
+    if json_out:
+        payload = [
+            {
+                "qualified_name": r.qualified_name,
+                "name": r.name,
+                "label": r.label,
+                "file_path": make_relative_path(r.file_path, project_root),
+            }
+            for r in results
+        ]
+        console.print(json_mod.dumps({"result_count": len(payload), "results": payload}, indent=2))
+        return
+
+    if not results:
+        console.print(f"[yellow]No symbols matching '{pattern}'[/yellow]")
+        return
+
+    table = Table(title=f"Symbols matching '{pattern}'", box=box.ROUNDED)
+    table.add_column("Qualified Name", style="cyan")
+    table.add_column("Type", style="magenta")
+    table.add_column("File Path", style="blue")
+    for res in results:
+        table.add_row(
+            res.qualified_name,
+            res.label,
+            make_relative_path(res.file_path, project_root),
+        )
+    console.print(table)
 
 
 # Analyze command group

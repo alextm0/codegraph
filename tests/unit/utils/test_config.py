@@ -1,7 +1,6 @@
 from pathlib import Path
 import os
 import yaml
-import pytest
 from codegraph.utils.config import load_raw_config, resolve_project_root
 
 def test_load_raw_config_nonexistent():
