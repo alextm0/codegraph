@@ -73,25 +73,24 @@ def test_fetch_node_file_paths_returns_distinct_paths() -> None:
     assert paths == ["a.py", "b.py"]
 
 
-@patch("evaluation.swe_bench_runner.run_ppr_from_node_ids")
-@patch("evaluation.swe_bench_runner.extract_seeds")
-@patch("evaluation.swe_bench_runner.extract_entity_names", return_value=[])
+@patch("evaluation.swe_bench_runner.run_core_retrieval")
 @patch(
     "evaluation.swe_bench_runner.extract_gold_files",
     return_value=["gold.py"],
 )
 def test_run_instance_query_ppr_computes_metrics(
     _mock_gold: MagicMock,
-    mock_entities: MagicMock,
-    mock_seeds: MagicMock,
-    mock_ppr: MagicMock,
+    mock_core: MagicMock,
 ) -> None:
-    mock_seeds.return_value = MagicMock(seeds={1: 1.0})
-    mock_ppr.return_value = [
-        MagicMock(file_path="gold.py"),
-        MagicMock(file_path="other.py"),
-        MagicMock(file_path="gold.py"),
-    ]
+    from codegraph.core.graph.ppr import PPRResult
+
+    mock_core.return_value = MagicMock(
+        seeds=MagicMock(seeds={1: 1.0}),
+        ppr_results=[
+            PPRResult("a::f", "f", "Function", "gold.py", 1.0),
+            PPRResult("b::g", "g", "Function", "other.py", 0.5),
+        ],
+    )
 
     session = MagicMock()
     session.run.return_value = [{"file_path": "seed.py"}]
@@ -107,15 +106,13 @@ def test_run_instance_query_ppr_computes_metrics(
     assert result["recall_at_10"] == 1.0
     assert result["predicted_files"] == ["gold.py", "other.py"]
     assert result["n_seeds"] == 1
+    mock_core.assert_called_once()
+    call_kwargs = mock_core.call_args.kwargs
+    assert call_kwargs["graph_ready"] is True
 
 
-@patch("evaluation.swe_bench_runner.extract_seeds")
-@patch("evaluation.swe_bench_runner.extract_entity_names", return_value=[])
-def test_run_instance_query_no_seeds_returns_zero(
-    mock_entities: MagicMock,
-    mock_seeds: MagicMock,
-) -> None:
-    mock_seeds.return_value = MagicMock(seeds={})
+@patch("evaluation.swe_bench_runner.run_core_retrieval", return_value=None)
+def test_run_instance_query_no_seeds_returns_zero(mock_core: MagicMock) -> None:
     driver = MagicMock()
     instance = make_instance("owner/r", "abc", "inst-1")
 

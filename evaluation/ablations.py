@@ -101,3 +101,23 @@ ABLATIONS: list[AblationConfig] = [
         ppr_config=PPRConfig(retrieval_mode="uniform", top_k=30),
     ),
 ]
+
+# Named presets for evaluation/run_ablation_sweep.py (sequential tuning runs).
+PRESETS: dict[str, list[str]] = {
+    # Fast sanity: uniform vs weighted on same harness.
+    "quick": ["baseline", "ppr_weighted"],
+    # All registered ablations (long — use for exhaustive studies only).
+    "full": [a.name for a in ABLATIONS],
+}
+
+
+def preset_names() -> list[str]:
+    """Return valid preset keys for the ablation sweep CLI."""
+    return sorted(PRESETS.keys())
+
+
+def resolve_preset(name: str) -> list[str]:
+    """Return ablation names for a preset, raising KeyError if unknown."""
+    if name not in PRESETS:
+        raise KeyError(name)
+    return list(PRESETS[name])

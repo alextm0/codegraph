@@ -2,6 +2,7 @@
 
 import logging
 import subprocess
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,16 @@ def clone_or_cache(repo_url: str, cache_dir: str) -> str:
 
     logger.info("Cloning %s → %s", repo_url, repo_path)
     repo_path.parent.mkdir(parents=True, exist_ok=True)
-    _run(["git", "clone", "--quiet", repo_url, str(repo_path)])
+    print(
+        f"[bench] Cloning {repo_url} → {repo_path} "
+        "(first clone can take several minutes; git progress below)",
+        file=sys.stderr,
+        flush=True,
+    )
+    _run(
+        ["git", "clone", "--progress", repo_url, str(repo_path)],
+        stream_stderr=True,
+    )
     return str(repo_path)
 
 
@@ -46,7 +56,15 @@ def checkout_commit(repo_path: str, commit_sha: str) -> None:
     logger.info("Checking out %s in %s", commit_sha[:12], repo_path)
     if not _commit_exists_locally(repo_path, commit_sha):
         logger.info("Fetching origin (commit not in local cache)")
-        _run(["git", "-C", repo_path, "fetch", "--quiet", "origin"])
+        print(
+            f"[bench] Fetching {commit_sha[:12]} for {repo_path} …",
+            file=sys.stderr,
+            flush=True,
+        )
+        _run(
+            ["git", "-C", repo_path, "fetch", "--progress", "origin"],
+            stream_stderr=True,
+        )
     _run(["git", "-C", repo_path, "reset", "--hard", commit_sha])
     _run(["git", "-C", repo_path, "clean", "-fdx", "--quiet"])
 
@@ -73,8 +91,14 @@ def _repo_name_from_url(repo_url: str) -> str:
     return parts[-1]
 
 
-def _run(cmd: list[str]) -> None:
+def _run(cmd: list[str], *, stream_stderr: bool = False) -> None:
     """Run a subprocess command, raising on non-zero exit."""
+    if stream_stderr:
+        result = subprocess.run(cmd, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"Command failed (exit {result.returncode}): {' '.join(cmd)}")
+        return
+
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(

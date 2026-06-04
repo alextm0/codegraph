@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import TextIO
 
-from evaluation.metrics import aggregate_metrics
+from evaluation.metrics import aggregate_metrics, per_repo_recall_at_10
 
 
 def flush_ordered(
@@ -102,12 +102,23 @@ class ReportWriter:
         ablation_name: str,
         retriever: str,
         grouping: dict,
+        git_commit: str | None = None,
+        *,
+        subset_name: str | None = None,
+        compare_baseline: dict | None = None,
     ) -> dict:
         """Write summary.json and return the summary dict."""
         summary = aggregate_metrics(all_results)
         summary["ablation"] = ablation_name
         summary["retriever"] = retriever
         summary["grouping"] = grouping
+        summary["per_repo"] = per_repo_recall_at_10(all_results)
+        if subset_name:
+            summary["subset_name"] = subset_name
+        if compare_baseline:
+            summary["compare_baseline"] = compare_baseline
+        if git_commit:
+            summary["git_commit"] = git_commit
         self.summary_path.write_text(
             json.dumps(summary, indent=2),
             encoding="utf-8",

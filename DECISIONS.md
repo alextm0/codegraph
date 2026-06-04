@@ -7,8 +7,8 @@ Technical decisions with **Status: ACTIVE** are binding. Do not override without
 ## DEC-001: PPR defaults (iter-2 tuned)
 
 **Status:** ACTIVE  
-**Date:** 2025  
-**Context:** SWE-bench Lite tuning showed lower damping and uniform restart improve recall.
+**Date:** 2025 (updated 2026-06-04)  
+**Context:** SWE-bench Lite tuning showed lower damping and uniform restart improve recall. Iteration-4/5 experiments (α sweeps, seed caps) did not beat the thesis benchmark; artifacts removed. **Canonical numbers:** `evaluation/results/iteration_2_top_30/summary.json` — 74.0% R@10, 78 zero-recall.
 
 **Decision:**
 - `damping_factor`: **0.70** (not 0.85)
@@ -60,13 +60,14 @@ Technical decisions with **Status: ACTIVE** are binding. Do not override without
 ## DEC-006: Seed signal weights
 
 **Status:** ACTIVE  
-**Context:** Personalization vector combines two signals (configurable in `config.yaml`). Active-file hints were removed because the currently open file is not a reliable relevance signal.
+**Context:** Personalization vector combines lexical signals (configurable in `config.yaml`). Active-file hints were removed because the currently open file is not a reliable relevance signal.
 
 **Decision:** Default weights:
 - `entity_match`: 0.6
 - `bm25`: 0.3
+- `issue_hint`: 0.2 (file/path hints extracted from issue text)
 
-Store provenance in `PersonalizationVector.metadata[nid]["source"]`.
+Store provenance in `PersonalizationVector.metadata[nid]["source"]`. Precedence for display: entity_match > issue_hint > bm25.
 
 ---
 

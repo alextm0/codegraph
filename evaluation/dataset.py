@@ -56,9 +56,39 @@ class DatasetManager:
 
     def load_limited(self, split: str = "test", limit: int = 0) -> list[dict]:
         """Load instances, optionally truncating to the first ``limit`` rows."""
+        return self.load_filtered(
+            split=split,
+            limit=limit,
+            instance_ids=None,
+            repo_prefix=None,
+        )
+
+    def load_filtered(
+        self,
+        split: str = "test",
+        limit: int = 0,
+        instance_ids: set[str] | None = None,
+        repo_prefix: str | None = None,
+    ) -> list[dict]:
+        """Load instances with optional ID or repo filters, then optional head limit.
+
+        Preserves dataset order. When ``instance_ids`` is set, only matching rows
+        are returned. ``repo_prefix`` matches ``repo`` field prefix (e.g.
+        ``sympy/sympy`` or ``pytest-dev``).
+        """
         instances = self.load(split=split)
+        if instance_ids is not None:
+            instances = [i for i in instances if i["instance_id"] in instance_ids]
+        if repo_prefix:
+            prefix = repo_prefix.rstrip("/")
+            instances = [
+                i
+                for i in instances
+                if i.get("repo", "").startswith(prefix)
+                or prefix in i.get("repo", "")
+            ]
         if limit > 0:
-            return instances[:limit]
+            instances = instances[:limit]
         return instances
 
     @staticmethod

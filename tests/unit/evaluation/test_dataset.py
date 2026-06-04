@@ -115,6 +115,32 @@ def test_dataset_manager_load_limited_truncates(monkeypatch: pytest.MonkeyPatch)
     assert result[0]["i"] == 0
 
 
+def test_dataset_manager_load_filtered_by_instance_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = [
+        {"instance_id": "a", "repo": "org/a"},
+        {"instance_id": "b", "repo": "org/b"},
+        {"instance_id": "c", "repo": "org/c"},
+    ]
+    _install_mock_datasets(monkeypatch, rows)
+    result = DatasetManager().load_filtered(instance_ids={"a", "c"})
+    assert [r["instance_id"] for r in result] == ["a", "c"]
+
+
+def test_dataset_manager_load_filtered_by_repo_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = [
+        {"instance_id": "1", "repo": "sympy/sympy"},
+        {"instance_id": "2", "repo": "django/django"},
+    ]
+    _install_mock_datasets(monkeypatch, rows)
+    result = DatasetManager().load_filtered(repo_prefix="sympy")
+    assert len(result) == 1
+    assert result[0]["instance_id"] == "1"
+
+
 def test_dataset_manager_load_wraps_missing_datasets(monkeypatch) -> None:
     """Missing HuggingFace datasets package yields a helpful ImportError."""
     broken = types.ModuleType("datasets")
