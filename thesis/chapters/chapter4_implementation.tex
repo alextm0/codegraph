@@ -128,7 +128,7 @@ Real-world edge cases support this decoupled approach. The system handles circul
 \label{sec:the-database}
 % =============================================================================
 
-After parsing the code and resolving connections, we persist the data into a structural graph. CodeGraph uses Neo4j, a property graph database optimized for relationship-centric storage. This architectural choice allows multi-hop traversals to execute in milliseconds, providing a performance advantage over the recursive joins required by traditional relational databases.
+After parsing the code and resolving connections, we persist the data into a structural graph using Neo4j. Translating independent files into a connected graph introduces a sequencing challenge: forward references. The reader will learn how CodeGraph uses a two-pass loading mechanism to resolve order dependence and why we execute all writes as idempotent merges.
 
 \subsection{Schema and Constraints}
 
