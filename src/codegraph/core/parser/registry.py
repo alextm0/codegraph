@@ -33,3 +33,5 @@ _registry = LanguageRegistry()
 
 def get_registry() -> LanguageRegistry:
     return _registry
+
+# Removed hardcoded registration to maintain separation of concerns
