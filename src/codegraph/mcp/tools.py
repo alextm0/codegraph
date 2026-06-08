@@ -73,7 +73,7 @@ def _start_background_index(state: ServerState) -> None:
             from codegraph.utils.ignore import load_ignore_patterns
             from codegraph.utils.config import load_raw_config
             from codegraph.core.graph import clear_database, build_graph
-            from codegraph.core.parser import create_parser, parse_directory
+            from codegraph.core.parser import parse_directory
 
             raw_config = load_raw_config(state.config_path)
             exclude = raw_config.get("parser", {}).get("exclude_patterns", [])
@@ -85,9 +85,8 @@ def _start_background_index(state: ServerState) -> None:
             if ignore_file.exists():
                 exclude.extend(load_ignore_patterns(ignore_file))
 
-            parser = create_parser()
             all_entities = parse_directory(
-                state.project_root, parser, exclude_patterns=exclude
+                str(state.project_root), exclude_patterns=exclude
             )
             clear_database(state.driver)
             counts = build_graph(state.driver, all_entities)

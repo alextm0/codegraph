@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 from neo4j import Driver
-from codegraph.core.parser import create_parser, parse_file
+from codegraph.core.parser import parse_file
 from codegraph.core.graph import delete_file_entities, build_graph
 from codegraph.core.graph.utils import normalize_path
 
@@ -26,10 +26,9 @@ def update_file_in_graph(driver: Driver, project_root: str, file_path: str) -> d
         logger.info("File %s deleted, removing from graph.", rel_path)
         return {"deleted": deleted, "created": 0}
 
-    parser = create_parser()
     try:
         source = abs_path.read_bytes()
-        entities = parse_file(source, rel_path, parser)
+        entities = parse_file(source, rel_path)
     except Exception as e:
         logger.error("Failed to parse %s: %s", rel_path, e)
         return {"deleted": deleted, "error": str(e)}

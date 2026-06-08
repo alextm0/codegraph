@@ -17,7 +17,7 @@ from rich.progress import (
 )
 
 from codegraph.core.graph import build_graph, clear_database
-from codegraph.core.parser import create_parser, parse_directory
+from codegraph.core.parser import parse_directory
 from codegraph.utils.config import load_raw_config, resolve_project_root
 from codegraph.utils.ignore import load_ignore_patterns
 from codegraph.utils.logging import setup_logging
@@ -84,8 +84,6 @@ def rebuild_helper(
             exclude.extend(load_ignore_patterns(ignore_file))
 
         console.print(f"Parsing: [bold cyan]{project_root}[/bold cyan]")
-        parser = create_parser()
-
         all_entities = []
         with Progress(
             SpinnerColumn(),
@@ -115,7 +113,6 @@ def rebuild_helper(
 
             all_entities = parse_directory(
                 str(project_root),
-                parser,
                 exclude_patterns=exclude,
                 progress_callback=parse_progress,
             )

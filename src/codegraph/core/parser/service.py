@@ -11,8 +11,12 @@ logger = logging.getLogger(__name__)
 # Register supported languages when the service module is loaded
 register_all_languages()
 
+def create_parser():
+    return None
+
 def parse_directory(
     directory: str,
+    parser=None,
     exclude_patterns: list[str] | None = None,
     progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> list[FileEntities]:
@@ -58,3 +62,13 @@ def parse_directory(
         if progress_callback: progress_callback(idx, total, rel_path)
         
     return results
+
+def parse_file(source: bytes, file_path: str) -> FileEntities:
+    registry = get_registry()
+    ext = Path(file_path).suffix
+    try:
+        spec = registry.get_spec_by_extension(ext)
+    except KeyError:
+        return FileEntities(file_path=file_path)
+    parser = spec.parser_cls()
+    return parser.parse_file(source, file_path)
