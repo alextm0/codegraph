@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.core.parser.python_parser import create_parser, parse_directory
+from codegraph.core.parser import create_parser, parse_directory
 from codegraph.core.graph.graph_builder import build_graph, clear_database
 from codegraph.core.graph.ppr import (
     PPRConfig,

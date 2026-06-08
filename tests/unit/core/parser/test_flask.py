@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.core.parser.python_parser import create_parser, parse_directory, parse_file
+from codegraph.core.parser import create_parser, parse_directory, parse_file
 
 # Reorganized path: tests/unit/core/parser/test_flask.py
 # Fixtures are at: tests/fixtures/

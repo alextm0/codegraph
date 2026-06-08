@@ -10,7 +10,7 @@ from codegraph.core.retrieval.seed_selection import (
     PersonalizationVector,
     _resolve_signal_weights,
 )
-from codegraph.core.parser.python_parser import create_parser, parse_directory
+from codegraph.core.parser import create_parser, parse_directory
 from tests.conftest import neo4j_required
 
 

@@ -24,7 +24,7 @@ from typing import Any, TextIO
 from codegraph.core.graph.graph_builder import build_graph, clear_database
 from codegraph.core.graph.ppr import create_gds_client, drop_projection
 from codegraph.core.graph.connection import create_driver, load_config
-from codegraph.core.parser.python_parser import create_parser, parse_directory
+from codegraph.core.parser import parse_directory
 from codegraph.core.retrieval.pipeline import (
     ensure_graph_ready,
     file_paths_from_ppr_results,
@@ -679,8 +679,7 @@ def main() -> None:
     signal_weights, exclude_seed_paths = _load_benchmark_seed_config(args.config)
     driver = create_driver(neo4j_config)
     gds = create_gds_client(driver)
-    file_parser = create_parser()
-
+    file_
     instance_ids: set[str] | None = None
     subset_name = args.subset_name
     if args.instance_ids_file:

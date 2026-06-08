@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.core.parser.python_parser import create_parser, parse_directory
+from codegraph.core.parser import create_parser, parse_directory
 from codegraph.core.graph.graph_builder import build_graph, clear_database, EDGE_WEIGHTS
 from codegraph.core.graph.queries import count_nodes_by_label, count_edges_by_type
 from tests.conftest import neo4j_required
