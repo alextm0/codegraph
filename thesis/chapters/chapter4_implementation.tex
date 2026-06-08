@@ -240,7 +240,7 @@ Standard Cypher queries operate on the transactional database. However, executin
 \label{sec:the-engine}
 % =============================================================================
 
-When an AI agent requests context, the implementation invokes the retrieval orchestrator \texttt{run\_core\_retrieval}. The reader will learn how seeds are extracted, how edge weights are adjusted, and how the pipeline hands ranked entities to post-processing.
+When an agent requests context, the system invokes \texttt{run\_core\_retrieval}, the single execution orchestrator for the entire ranking pipeline. The reader will learn how this orchestrator extracts seeds, dynamically reweights edges, and invokes Personalized PageRank to bridge the semantic gap between a natural-language query and structural code.
 
 \noindent The orchestrator executes the following steps on every query:
 \begin{enumerate}
@@ -295,10 +295,10 @@ With the personalization vector constructed and the weighted GDS graph projected
 
 % =============================================================================
 \section{Post-Processing and Context Packaging}
-\label{sec:post-processing}
+\label{sec:implementation-post-processing}
 % =============================================================================
 
-Once Personalized PageRank identifies the highest-ranked entities, we transform these abstract graph nodes into a formatted text package. A strict, token-aware greedy algorithm governs this construction process in the post-processing module. The reader will learn how the system respects a fixed token budget while maximizing information density.
+Once Personalized PageRank identifies the highest-ranked entities, we must transform these abstract nodes into a dense, token-bounded text package. The reader will learn how the post-processing module uses a greedy BPE-aware algorithm to maximize information density while strictly adhering to an agent's token limit.
 
 We use a local Byte Pair Encoding (BPE) tokenizer to calculate the token count of every candidate code snippet in real time. The construction loop iterates through the ranked results, reading raw source code from the filesystem based on the line boundaries stored in the graph. \noindent To maximize the information density of the final package, we apply two primary filters:
 \begin{itemize}
@@ -313,192 +313,19 @@ When explanation mode is enabled (the MCP default), the \texttt{explanations} mo
 \label{sec:the-interface}
 % =============================================================================
 
-We expose the retrieval pipeline through three distinct interfaces, each tailored to a different operational workflow: an agent-facing Model Context Protocol server, a command-line interface for local queries and scripting, and an interactive visualizer for topological debugging. While each interface serves a different environment, they all route their queries through \texttt{run\_core\_retrieval}.
+The system exposes the retrieval pipeline through three thin interfaces: a Model Context Protocol (MCP) server, a command-line interface (CLI), and an interactive visualizer. Rather than reimplementing ranking logic, each interface delegates all context requests to \texttt{run\_core\_retrieval}. 
 
 \subsection{Model Context Protocol Server}
 \label{subsec:mcp-server}
-
-We implement the server using the FastMCP Python framework, which provides a high-level abstraction over the JSON-RPC 2.0 communication layer. By default, the server communicates with the host application via Standard Input/Output (stdio). This transport layer ensures that the server can run as a lightweight subprocess, minimizing the resource footprint on the developer's machine.
-
-The implementation exposes exactly two tools, matching the MCP contract described in \cref{sec:tool-interface}. The primary tool runs the retrieval pipeline and returns ranked source snippets. The second tool performs targeted structural lookup for known entities, including dependency traversal, symbol search, and class hierarchy queries. FastMCP registers both tools through Python decorators and derives the JSON-RPC schemas from their type annotations.
-
-To sustain sub-250\,ms query latencies, the server must avoid the overhead of re-establishing database connections for every reasoning step. We initialize a persistent Neo4j driver and GDS client through a FastMCP lifespan context manager. The server maintains this state throughout its lifecycle. When an agent invokes a tool, the engine reuses the connection pool but drops and recreates the GDS projection on every query to incorporate query-time IDF weights, as shown in Listing~\ref{lst:mcp-server-impl}.
-
-\begin{cglistingfigure}
-\begin{cgpython}{MCP server registration (server.py, simplified)}
-from contextlib import asynccontextmanager
-from mcp.server.fastmcp import Context, FastMCP
-from codegraph.mcp.tools import (
-    get_relevant_context_impl,
-    query_dependencies_impl,
-)
-
-@asynccontextmanager
-async def _lifespan(server: FastMCP):
-    state = ServerStateFactory().create()
-    try:
-        yield state
-    finally:
-        ServerStateFactory.shutdown()
-
-mcp = FastMCP("codegraph", lifespan=_lifespan)
-
-@mcp.tool()
-def get_relevant_context(
-    task_description: str,
-    mentioned_entities: list[str] | None,
-    top_k: int,
-    token_budget: int,
-    ctx: Context,
-) -> str:
-    state = ctx.request_context.lifespan_context
-    return get_relevant_context_impl(
-        task_description,
-        mentioned_entities,
-        None,
-        top_k,
-        token_budget,
-        state,
-    )
-\end{cgpython}
-\captionof{lstlisting}{FastMCP lifespan and tool registration. Tool bodies delegate to \texttt{tools.py}, which calls \texttt{run\_core\_retrieval}.}
-\label{lst:mcp-server-impl}
-\end{cglistingfigure}
-
-\begin{figure}[htbp]
-    \centering
-    \cgincludegraphics{assets/mcp_tool_invocation.png}
-    \par\vspace{0.6em}
-    \cgincludegraphics{assets/mcp_tool_response.png}
-    \caption[Model Context Protocol agent workflow]{CodeGraph MCP integration in a host agent session for the task ``How is seed extraction implemented in this project?'' Upper panel: the agent calls \texttt{get\_relevant\_context}, then requests \texttt{query\_dependencies} in \texttt{symbol\_search} mode for the entity \texttt{seed}. Lower panel: the agent synthesizes an answer from the returned context, citing \texttt{seed\_selection.py} and \texttt{ppr.py}.}
-    \label{fig:mcp-screenshot}
-\end{figure}
-
-\Cref{fig:mcp-screenshot} shows a typical multi-step agent workflow rather than a single tool invocation. The agent first retrieves ranked context, then follows up with a structural lookup to confirm symbol definitions before writing its answer. Listing~\ref{lst:mcp-response} shows the JSON shape returned on a successful \texttt{get\_relevant\_context} call. Each result includes the entity name, file path, line range, PPR score, token count, and full source text.
-
-\begin{cglistingfigure}
-\begin{cgjson}{MCP retrieval response (fields abbreviated)}
-{
-  "summary": {
-    "result_count": 12,
-    "total_tokens": 4500,
-    "token_budget": 6000,
-    "visualizer_url": "http://localhost:8474"
-  },
-  "seeds": [
-    {
-      "qualified_name": "src/auth.py::AuthService",
-      "source": "entity_match",
-      "weight": 0.15
-    }
-  ],
-  "results": [
-    {
-      "entity_name": "AuthService",
-      "entity_type": "Class",
-      "file_path": "src/auth.py",
-      "lines": [10, 85],
-      "relevance_score": 0.0421,
-      "token_count": 320,
-      "source_code": "..."
-    }
-  ]
-}
-\end{cgjson}
-\captionof{lstlisting}{Shape of a successful MCP retrieval response (source snippets omitted).}
-\label{lst:mcp-response}
-\end{cglistingfigure}
-
-\subsection{Error Handling and Feedback Loops}
-\label{subsec:error-handling}
-
-The implementation returns explicit error payloads instead of silent empty context. If the graph is empty, the response includes a rebuild hint and may trigger a background re-index. If Neo4j or GDS is unreachable, the response points the user to \texttt{codegraph doctor}. If no relevant result is found after retrieval, the agent still receives structured metadata with \texttt{result\_count: 0} and can retry with more specific \texttt{mentioned\_entities}. This design keeps retrieval failures diagnosable without replaying an LLM sample, which matters both for interactive use and for reproducible evaluation.
+The primary agent interface is a FastMCP server running over Standard Input/Output. To sustain sub-250\,ms query latencies, the server avoids re-establishing database connections per query by initializing a persistent Neo4j driver and GDS client through a lifespan context manager. It registers exactly two tools: one for retrieving ranked context and one for targeted structural lookups. Both tools translate JSON-RPC requests directly into \texttt{run\_core\_retrieval} arguments.
 
 \subsection{Command-Line Interface}
 \label{subsec:cli-interface}
-
-We provide a command-line interface (CLI) built with Typer. \Cref{tab:cli-commands} lists the primary commands grouped by purpose. The \texttt{codegraph query} command runs the same \texttt{run\_core\_retrieval} path as the MCP server and prints ranked entities with scores, token counts, line ranges, and inline source snippets.
-
-\begin{table}[H]
-    \centering
-    \scriptsize
-    \caption[CLI command groups]{Primary CLI commands grouped by purpose. All retrieval commands call \texttt{run\_core\_retrieval}.}
-    \label{tab:cli-commands}
-    \renewcommand{\arraystretch}{1.2}
-    \begin{adjustbox}{max width=\textwidth}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.2cm}
-                                  >{\raggedright\arraybackslash}X}
-        \toprule
-        \rowcolor{black!6}
-        \textbf{Group} & \textbf{Commands} \\
-        \midrule
-        Lifecycle & \texttt{init}, \texttt{install}, \texttt{rebuild}, \texttt{status}, \texttt{doctor}, \texttt{watch}, \texttt{serve} \\
-        Retrieval & \texttt{query}, \texttt{explain}, \texttt{find} \\
-        Analysis & \texttt{analyze deps}, \texttt{analyze dead-code}, \texttt{stats} \\
-        Debugging & \texttt{visualize}, \texttt{query --trace}, \texttt{query --json} \\
-        \bottomrule
-    \end{tabularx}
-    \end{adjustbox}
-\end{table}
-
-Callers can pass \texttt{--json} for machine-readable output or \texttt{--trace} to emit a structured retrieval trace with seed provenance and score metadata. Listing~\ref{lst:cli-trace} shows the seed section of a trace output; the full JSON also includes ranked results and timing fields.
-
-\begin{cglistingfigure}
-\begin{cgshell}{Terminal}
-$ codegraph query \
-  "Fix auth timeout in TokenExpiredError" \
-  --entity TokenExpiredError --trace
-
-{
-  "task": "Fix auth timeout in TokenExpiredError",
-  "ppr_config": {
-    "damping_factor": 0.7,
-    "top_k": 30,
-    "retrieval_mode": "uniform"
-  },
-  "seeds": [
-    {
-      "qualified_name":
-        "auth/exceptions.py::TokenExpiredError",
-      "source": "entity_match",
-      "weight": 0.42
-    }
-  ],
-  "top_results": [
-    "... ranked entities with explanations ..."
-  ]
-}
-\end{cgshell}
-\captionof{lstlisting}{Structured trace output from \texttt{codegraph query --trace}, showing PPR configuration, seed provenance, and ranked results.}
-\label{lst:cli-trace}
-\end{cglistingfigure}
-
-\begin{figure}[htbp]
-    \centering
-    \cgincludegraphics{assets/cli_query_retrieval.png}
-    \caption[Command-line interface retrieval output]{Output of \texttt{codegraph query "What are the available MCP server tools?"} on the CodeGraph repository itself. The CLI returns 22 context items; the top-ranked entities include \texttt{ServerStateFactory} (score 0.5641), the \texttt{\_lifespan} context manager (0.4425), and \texttt{McpRuntimeSettings} (0.4002), each followed by the corresponding source excerpt. BM25 seeds the MCP package from the query text, and PPR propagation surfaces the lifecycle and configuration code that registers the agent-facing tools.}
-    \label{fig:cli-screenshot}
-\end{figure}
-
-\Cref{fig:cli-screenshot} shows the default human-readable format. Each result block lists the qualified entity name, Personalized PageRank score, token count, file line range, and the raw snippet read from disk. This layout makes it straightforward to inspect ranking quality without starting the MCP server or the visualizer.
+The CLI, built with Typer, provides local evaluation and scripting access. The \texttt{codegraph query} command executes the standard retrieval path and prints ranked entities with their token counts and inline source snippets. Callers can request machine-readable JSON or append \texttt{--trace} to emit a structured provenance trace detailing seed selection weights and PPR propagation paths.
 
 \subsection{Interactive Visualizer}
 \label{subsec:visualizer}
-
-The interactive visualizer offers a graphical environment for debugging and inspecting graph topologies. The visualizer is not a separate retrieval algorithm; it is a debugging and demonstration interface over the same graph and retrieval pipeline used by the CLI and MCP tools.
-
-The primary visualization pane renders the repository structure as a force-directed graph served on port 8474 by default. Nodes represent parsed entities and edges represent relationships such as \textsc{contains}, \textsc{calls}, and \textsc{imports}. The left sidebar supports both file browsing and natural-language queries; the right panel switches between source code, inspector metadata, ranked results, and seed explanations. The Explain panel mirrors \texttt{codegraph explain}: it shows which seeds were selected and how PPR propagated relevance through the graph. These views are useful when diagnosing why a query succeeded or failed, but they remain supporting tools rather than part of the retrieval algorithm itself.
-
-\begin{figure}[htbp]
-    \centering
-    \cgincludegraphics{assets/visualizer_file_code.png}
-    \par\vspace{0.6em}
-    \cgincludegraphics{assets/visualizer_query_results.png}
-    \caption[Interactive visualizer web interface]{CodeGraph visualizer over the indexed CodeGraph repository. Upper panel: file selection on \texttt{server.py} with local neighborhood and inline source. Lower panel: the MCP-tools query from \cref{fig:cli-screenshot} with \texttt{top\_k=10}; the Results panel ranks \texttt{server.py} first (PPR score 0.7038).}
-    \label{fig:visualizer-screenshot}
-\end{figure}
-
-\Cref{fig:visualizer-screenshot} contrasts two debugging modes on the same indexed graph. File selection exposes static structure and inline source, while a natural-language query reuses the production ranking path and highlights how PPR reorders BM25 seeds around the MCP package. Successful MCP calls include a \texttt{visualizer\_url} in the response summary so agents can point users to the UI for further exploration.
+The visualizer offers a graphical environment for topological debugging, served locally via FastAPI and React. It is not a separate retrieval algorithm; it executes natural-language queries through the same production ranking path used by the MCP tools. The visualizer maps the resulting graph nodes into a force-directed layout, allowing developers to inspect how relevance mass distributed from seeds across dependencies.
 
 % =============================================================================
 \section{Summary}
