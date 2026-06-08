@@ -21,5 +21,9 @@ class LanguageResolver(ABC):
         ...
 
     @abstractmethod
+    def resolve_import_to_file_path(self, module_path: str, all_file_paths: list[str]) -> Optional[str]:
+        ...
+
+    @abstractmethod
     def get_builtins(self) -> frozenset[str]:
         ...
