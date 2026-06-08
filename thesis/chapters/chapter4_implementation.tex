@@ -332,4 +332,4 @@ The visualizer offers a graphical environment for topological debugging, served 
 \label{sec:summary}
 % =============================================================================
 
-This chapter described how CodeGraph turns the design from \cref{ch:design} into a working system. The implementation centers on Tree-sitter extraction, conservative static resolution, two-pass Neo4j construction, shared retrieval orchestration through \texttt{run\_core\_retrieval}, token-aware post-processing, and delivery through CLI, MCP, and visualizer interfaces. The next chapter evaluates how well this implementation retrieves target files on SWE-bench Lite.
+This chapter described how CodeGraph translates its pipeline design into a working system. By enforcing a single shared execution path—from Tree-sitter byte parsing and two-pass graph construction to dynamic seed extraction and greedy token packaging—the implementation guarantees that all interfaces behave identically. The next chapter evaluates how effectively this implementation retrieves necessary context on the SWE-bench Lite benchmark.
