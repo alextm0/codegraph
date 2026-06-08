@@ -46,7 +46,7 @@ We follow a conservative engineering policy throughout: prefer deterministic ext
 \label{sec:the-parser}
 % =============================================================================
 
-The foundational stage of CodeGraph is the ingestion pipeline. We transform raw source files into structured entity records that later stages use to build the graph and rank results. The reader will learn what information the parser extracts, how those records are shaped in code, and why those specific fields are the right inputs for graph construction and seed selection.
+The foundational stage of CodeGraph is the ingestion pipeline, which must extract structured entity records from code that is actively being edited. The reader will learn why we use Tree-sitter's byte-level mapping to tolerate syntax errors and preserve original formatting, and how these extracted entities feed graph construction and seed selection.
 
 We use Tree-sitter, an incremental parser accessed through its Python bindings, for extraction. Tree-sitter produces a Concrete Syntax Tree (CST) that maps directly to source byte offsets. This byte-level mapping lets the parser preserve formatting and tolerate syntax errors, which matters in development environments where code is often in an intermediate state.
 
