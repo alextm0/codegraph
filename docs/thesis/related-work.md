@@ -30,9 +30,9 @@ CodeGraph does **not** use code embeddings for ranking (by design).
 | Bundles / portable graphs | `.cgc` bundles | Not implemented |
 | Retrieval for agents | Multiple tools | `get_relevant_context` optimized for SWE-bench |
 
-**When to borrow from CGC:** multi-language parser layout, deployment patterns, test ideas — always re-document in this repo and add DEC-XXX if binding.
+**When to borrow from CGC:** multi-language parser layout, deployment patterns, test ideas — always re-document in this repo.
 
-**When not to copy:** MCP surface explosion, features we explicitly excluded (DEC-007).
+**When not to copy:** MCP surface explosion, features we explicitly excluded.
 
 ---
 

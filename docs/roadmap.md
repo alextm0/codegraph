@@ -13,7 +13,7 @@ Planned work derived from `TODO.md` and architectural gaps vs CodeGraphContext. 
 
 ## Features
 
-- [ ] **Multi-language parsing** — Java, TypeScript/JavaScript (CGC has patterns; needs DEC-003 extension or new decision)
+- [ ] **Multi-language parsing** — Java, TypeScript/JavaScript (CGC has patterns; needs extension or new decision for node labels)
 - [ ] **Spring Boot** — framework-specific nodes/edges (CGC has SpringBean/SpringEndpoint; would be new schema decision)
 - [ ] **Incremental indexing** — stronger than current `watch` (hash-based skip at scale)
 
@@ -21,7 +21,7 @@ Planned work derived from `TODO.md` and architectural gaps vs CodeGraphContext. 
 
 ## Non-goals (unless decision changes)
 
-- Large MCP tool suite (DEC-007)
+- Large MCP tool suite
 - Portable `.cgc` bundles (unless explicitly designed)
 - Embedding-based ranking as default
 - Cypher execution from MCP

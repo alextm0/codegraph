@@ -14,9 +14,9 @@
 
 ## What we are not accepting without discussion
 
-- Third MCP tool (DEC-007)
-- Password in `config.yaml` (DEC-010)
-- PPR default changes without evaluation numbers (DEC-001)
+- Third MCP tool
+- Password in `config.yaml`
+- PPR default changes without evaluation numbers
 
 ## Reference project
 

@@ -116,4 +116,4 @@ Integration tests skip when DB is down — expected on laptops without Neo4j. CI
 |---------|--------|
 | Password in `config.yaml` | Ignored / doctor warning — use `.env` |
 | Wrong `project_root` | Empty or foreign graph |
-| Old PPR values (0.85, top_k 20) | Suboptimal recall — use DEC-001 defaults |
+| Old PPR values (0.85, top_k 20) | Suboptimal recall — use current defaults |

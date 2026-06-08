@@ -4,29 +4,32 @@ This file helps AI agents understand the CodeGraph system's mental model and cur
 
 **Full documentation:** [`docs/README.md`](docs/README.md) — concepts, CLI/MCP reference, guides, thesis alignment. Prefer that tree as source of truth over this short summary.
 
-## System Philosophy
+## The Mental Model
 
-Code is treated as a **structural graph**, not a text blob. Relevance is determined by graph connectivity (Personalized PageRank) rather than embedding similarity.
+CodeGraph is conceptualized as two distinct functional flows:
+
+- **Indexing Path (Offline)**: From Python source code to a structural Neo4j graph of calls, imports, and inheritance.
+- **Retrieval Path (Online)**: From a natural-language task to ranked context via Personalized PageRank.
+
+## Trust & Transparency
+
+CodeGraph provides three core trust signals:
+1. **Seed Provenance**: Identify which seeds (entities or text matches) triggered a result via `seeds[]`.
+2. **Traceable Paths**: Explain *why* code was retrieved via the `explain` interface.
+3. **Shared Retrieval Core**: Identical ranking logic across CLI, MCP, and visualizer.
 
 ## The Pipeline
 
 ```
-Source code
-  → tree-sitter parsing       (src/codegraph/core/parser)
-  → entity/edge extraction    (Functions, Classes, Methods, Files;
-                                CALLS, IMPORTS, CONTAINS, INHERITS_FROM edges)
-  → Neo4j graph build         (src/codegraph/core/graph)
-  → PPR seed selection        (src/codegraph/core/retrieval/seed_selection.py)
-  → Personalized PageRank     (src/codegraph/core/graph/ppr.py)
-  → IDF post-processing       (src/codegraph/core/retrieval/post_processing.py)
-  → MCP server response       (src/codegraph/mcp)
+Indexing Path: Source code → tree-sitter parse → entity/edge extraction → Neo4j graph build
+Retrieval Path: User Task → seed selection (entity + BM25) → IDF reweighting → PPR (GDS) → token-budget formatting → MCP / CLI / Visualizer
 ```
 
 ## MCP Tools (exactly 2)
 
 **`get_relevant_context`** — PPR-ranked code for tasks and bug reports.
 - Input: `task_description`, `mentioned_entities` (list or null), `top_k` (0 = default 30), `token_budget` (0 = default 6000), `include_explanations` (default **true**). `current_file` is ignored.
-- Output: JSON with `summary`, `seeds[]`, `results[]` (entity, file, lines, score, source_code; optional `explanation` per result)
+- Output: JSON with `summary` (includes `last_indexed`), `seeds[]`, `results[]` (entity, file, lines, score, source_code; optional `explanation` per result)
 - Empty graph returns `hint: "run codegraph rebuild"`
 - Pipeline errors return `error` + `hint: "run codegraph doctor"`
 
@@ -37,6 +40,12 @@ Source code
 - Output: JSON with `mode`, `result_count`, `results[]`
 
 There are **no other MCP tools**. `get_graph_stats`, `find_dead_code`, `execute_cypher_query` exist only as CLI commands.
+
+## PPR Defaults (iter-2 tuned)
+
+- `damping_factor`: 0.70
+- `top_k`: 30
+- `retrieval_mode`: "uniform"
 
 ## Key Files
 
@@ -54,14 +63,7 @@ There are **no other MCP tools**. `get_graph_stats`, `find_dead_code`, `execute_
 | `src/codegraph/visualizer/routes.py` | Visualizer REST/WS API |
 | `src/codegraph/watcher/incremental.py` | Per-file graph updates |
 | `evaluation/swe_bench_runner.py` | SWE-bench Lite harness |
-| `DECISIONS.md` | Binding design decisions |
 | `docs/README.md` | Full documentation index |
-
-## PPR Defaults (iter-2 tuned — do not change without benchmarking)
-
-- `damping_factor`: 0.70
-- `top_k`: 30
-- `retrieval_mode`: "uniform"
 
 ## Architecture Patterns
 

@@ -156,4 +156,3 @@ React UI — see [../guides/visualization.md](../guides/visualization.md).
 |------|------|
 | `docs/README.md` | Hub |
 | `AGENTS.md` | Short MCP contract |
-| `DECISIONS.md` | DEC-XXX log |

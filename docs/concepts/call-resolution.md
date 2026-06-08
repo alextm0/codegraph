@@ -2,7 +2,7 @@
 
 Static linking from parse-time `CallEntity` / `ImportEntity` to graph edges. **Pure Python** — no Neo4j in this layer (`resolution.py`).
 
-**Binding rule (DEC-004):** ambiguous callee → **no `CALLS` edge**.
+**Binding rule:** ambiguous callee → **no `CALLS` edge**.
 
 ---
 
@@ -65,7 +65,7 @@ Resolves base class names to Class nodes; creates `INHERITS_FROM` when unambiguo
 
 **Pass 2:** `CALLS`, `IMPORTS`, `INHERITS_FROM` — requires full lookup table.
 
-Edge weights written as `1.0`; IDF applied later at retrieval (DEC-005).
+Edge weights written as `1.0`; IDF applied later at retrieval.
 
 ---
 

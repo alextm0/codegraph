@@ -103,7 +103,7 @@ See `evaluation/ablations.py`:
 - Damping sweeps (`alpha_*`, `uniform_alpha_070`)
 - top-k sweeps
 
-Production config = **baseline** + `config.yaml` PPR defaults (DEC-001: α=0.70, top_k=30, uniform).
+Production config = **baseline** + `config.yaml` PPR defaults (α=0.70, top_k=30, uniform).
 
 ---
 

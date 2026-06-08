@@ -26,7 +26,7 @@ task_description + mentioned_entities
 - `mentioned_entities` — explicit names from user/agent
 - Auto-extracted identifiers from task text (`extract_entity_names`)
 
-**Signals (DEC-006):**
+**Signals:**
 
 | Config key | Default | Role |
 |------------|---------|------|
@@ -39,11 +39,12 @@ Provenance stored in `PersonalizationVector.metadata[nid]["source"]`.
 
 **Excluded paths:** `seed_selection.exclude_seed_paths` — nodes under these paths are not used as BM25/entity seeds (e.g. `tests/`).
 
-**Restart mode (DEC-001):** `ppr.retrieval_mode: uniform` — equal mass per seed node so one bad seed cannot dominate.
+**Restart mode:** `ppr.retrieval_mode: uniform`
+ — equal mass per seed node so one bad seed cannot dominate.
 
 ---
 
-## IDF reweighting (DEC-005)
+## IDF reweighting
 
 Before projection, in-degree IDF down-weights hub nodes (`logger`, helpers):
 
@@ -55,7 +56,7 @@ Applied in `apply_idf_weights()`; base weights restored via `reset_base_weights(
 
 ---
 
-## PPR (DEC-001)
+## PPR
 
 | Parameter | Default | Config path |
 |-----------|---------|-------------|

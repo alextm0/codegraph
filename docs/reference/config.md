@@ -2,7 +2,7 @@
 
 Primary file: **`config.yaml`** at project root (path passed via `--config` or `CODEGRAPH_CONFIG`).
 
-Password: **`NEO4J_PASSWORD`** in `.env` only (DEC-010).
+Password: **`NEO4J_PASSWORD`** in `.env` only.
 
 ---
 
@@ -17,6 +17,7 @@ exclude_patterns:
   - .git
   - "*.pyc"
   - .pytest_cache
+  - .codegraph_cache/
 
 neo4j:
   uri: neo4j://localhost:7687
@@ -74,7 +75,7 @@ Glob/path segments skipped during **indexing**.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `damping_factor` | 0.70 | PageRank damping (DEC-001) |
+| `damping_factor` | 0.70 | PageRank damping |
 | `max_iterations` | 20 | GDS iteration cap |
 | `tolerance` | 1e-7 | Convergence tolerance |
 | `top_k` | 30 | Max ranked nodes |

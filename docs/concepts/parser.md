@@ -1,6 +1,6 @@
 # Parser and entity extraction
 
-CodeGraph ingests **Python only** via **tree-sitter**. All parsed values are **frozen dataclasses** (DEC-002).
+CodeGraph ingests **Python only** via **tree-sitter**. All parsed values are **frozen dataclasses**.
 
 **Code:** `src/codegraph/core/parser/`
 
@@ -84,7 +84,7 @@ Would require:
 
 1. New tree-sitter grammar + extractors
 2. New resolution module (imports/calls differ per language)
-3. DEC-003 update or new decision for node labels
+3. Update or new decision for node labels
 4. Graph builder edge creators
 
 Do not copy CGC multi-language docs as implemented behavior. See [../roadmap.md](../roadmap.md).
