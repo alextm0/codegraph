@@ -25,6 +25,7 @@ exclude_patterns:
   - __pycache__
   - .venv
   - .git
+  - .codegraph_cache/
   - tests/fixtures/
 ```
 

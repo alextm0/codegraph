@@ -3,55 +3,51 @@
 \ProvidesPackage{cg-visuals}[2026/06/03 CodeGraph thesis visuals]
 
 \RequirePackage{tcolorbox}
+\RequirePackage{adjustbox}
 \tcbuselibrary{listings,skins,breakable}
 
 % ---------------------------------------------------------------------------
 % Listing styles (require colors from main.tex)
 % ---------------------------------------------------------------------------
-\lstdefinestyle{cgpython}{
-    style=pythonstyle,
-    basicstyle=\ttfamily\small,
+\lstdefinestyle{cgbase}{
+    basicstyle=\ttfamily\footnotesize,
     numbers=none,
     frame=none,
     backgroundcolor=\color{backcolour},
     xleftmargin=0pt,
     xrightmargin=0pt,
-    aboveskip=4pt,
-    belowskip=4pt,
+    aboveskip=3pt,
+    belowskip=3pt,
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=false,
+    showstringspaces=false,
+    tabsize=2,
+}
+
+\lstdefinestyle{cgpython}{
+    style=cgbase,
+    commentstyle=\color{codegreen}\itshape,
+    keywordstyle=\color{codeblue}\bfseries,
+    stringstyle=\color{codepurple},
 }
 
 \lstdefinestyle{cgjson}{
-    style=pseudostyle,
-    basicstyle=\ttfamily\small,
-    numbers=none,
-    frame=none,
-    backgroundcolor=\color{backcolour},
-    xleftmargin=0pt,
-    xrightmargin=0pt,
+    style=cgbase,
+    language=json,
 }
 
 \lstdefinestyle{cgshell}{
-    basicstyle=\ttfamily\small,
-    backgroundcolor=\color{backcolour},
+    style=cgbase,
     keywordstyle=\color{latticeblue}\bfseries,
     commentstyle=\color{codegreen}\itshape,
-    numbers=none,
-    frame=none,
-    breaklines=true,
-    showstringspaces=false,
-    xleftmargin=0pt,
-    xrightmargin=0pt,
 }
 
 \lstdefinestyle{cgcypher}{
-    style=pseudostyle,
-    basicstyle=\ttfamily\small,
-    numbers=none,
-    frame=none,
+    style=cgbase,
     commentstyle=\color{codegreen}\itshape,
     keywordstyle=\color{latticeblue}\bfseries,
-    xleftmargin=0pt,
-    xrightmargin=0pt,
 }
 
 % ---------------------------------------------------------------------------
@@ -64,10 +60,12 @@
         boxrule=0.55pt,
         colframe=latticegray!45,
         colback=backcolour,
-        left=6pt,
-        right=6pt,
+        left=5pt,
+        right=5pt,
         top=5pt,
         bottom=5pt,
+        width=\linewidth,
+        boxsep=0pt,
         fonttitle=\bfseries\small,
         coltitle=black!85,
         titlerule=0.35pt,
@@ -84,36 +82,43 @@
             colframe=latticegray!40,
         },
     },
+    cglisting/.style={
+        cgbox,
+        listing only,
+        breakable,
+        listing options={
+            breaklines=true,
+            breakatwhitespace=true,
+            columns=fullflexible,
+            keepspaces=false,
+        },
+    },
 }
 
 \newtcblisting{cgpython}[2][]{
-    cgbox,
+    cglisting,
     title={#2},
-    listing only,
     listing options={style=cgpython},
     #1
 }
 
 \newtcblisting{cgjson}[2][]{
-    cgbox,
+    cglisting,
     title={#2},
-    listing only,
     listing options={style=cgjson,language=json},
     #1
 }
 
 \newtcblisting{cgshell}[2][]{
-    cgbox,
+    cglisting,
     title={#2},
-    listing only,
     listing options={style=cgshell},
     #1
 }
 
 \newtcblisting{cgcypher}[2][]{
-    cgbox,
+    cglisting,
     title={#2},
-    listing only,
     listing options={style=cgcypher},
     #1
 }
@@ -129,7 +134,7 @@
 }
 
 \newcommand{\cgcodesplitpanel}[2]{%
-    \begin{minipage}[t]{0.48\textwidth}%
+    \begin{minipage}[t]{0.475\linewidth}%
     \begin{cgpython}[#1]{#2}%
 }
 
@@ -345,4 +350,26 @@
     \begin{minipage}[t]{\linewidth}%
         \raggedright\ttfamily\footnotesize #1%
     \end{minipage}%
+}
+
+% Constrain screenshots and wide figures to the text block.
+\newcommand{\cgincludegraphics}[2][]{%
+    \includegraphics[width=0.95\linewidth,keepaspectratio,#1]{#2}%
+}
+
+% Scale a TikZ picture to fit the text width when coordinates exceed \textwidth.
+\newcommand{\cgtikzfit}[1]{%
+    \begin{adjustbox}{max width=\linewidth,center}%
+        #1%
+    \end{adjustbox}%
+}
+
+% Wrap a full-width listing + caption inside a figure so content stays within \linewidth.
+\newenvironment{cglistingfigure}{%
+    \begin{figure}[htbp]%
+    \centering%
+    \begin{minipage}{\linewidth}%
+}{%
+    \end{minipage}%
+    \end{figure}%
 }

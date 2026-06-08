@@ -14,6 +14,12 @@ def test_is_visualizer_excluded_fixture_paths() -> None:
     assert is_visualizer_excluded("src/codegraph/mcp/server.py") is False
 
 
+def test_is_visualizer_excluded_codegraph_cache() -> None:
+    assert is_visualizer_excluded(
+        ".codegraph_cache/repos/django/django/db/models.py"
+    ) is True
+
+
 def test_is_visualizer_excluded_internal_paths() -> None:
     assert is_visualizer_excluded(".gemini/skills/foo/SKILL.md") is True
     assert is_visualizer_excluded("thesis/scripts/build.py") is True

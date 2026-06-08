@@ -8,6 +8,7 @@ from codegraph.utils.ignore import is_ignored
 
 # Paths hidden from the visualizer project tree and graph (not core app source).
 VISUALIZER_EXCLUDE_PATTERNS: tuple[str, ...] = (
+    ".codegraph_cache/",
     "tests/fixtures/",
     ".gemini/",
     ".agents/",

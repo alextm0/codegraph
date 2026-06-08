@@ -5,12 +5,13 @@ exclude_patterns:
 - .git
 - '*.pyc'
 - .pytest_cache
+- .codegraph_cache/
 - tests/fixtures/
 neo4j:
   uri: neo4j://localhost:7687
   username: neo4j
 ppr:
-  damping_factor: 0.70
+  damping_factor: 0.7
   max_iterations: 20
   tolerance: 1.0e-07
   top_k: 30
