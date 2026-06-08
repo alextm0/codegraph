@@ -10,14 +10,21 @@
 \label{sec:system-architecture}
 % =============================================================================
 
-Chapter~3 established the design of CodeGraph's retrieval pipeline. CodeGraph's implementation is governed by a strict system contract: every interface surface must route through a single, deterministic ranking core. The reader will see how the pipeline, from byte-level parsing through graph construction, retrieval, and context delivery, preserves this single path across the CLI, the MCP server, and the interactive visualizer.
+Chapter~3 established the design of CodeGraph's retrieval pipeline. CodeGraph's implementation is governed by a strict system contract: every interface surface must route through a single, deterministic ranking core. We conceptualize the system as two distinct functional flows: the \textbf{indexing path}, which builds the structural model from source code, and the \textbf{retrieval path}, which traverses that model to select context for a specific task.
 
-We separate stable core logic from user-facing interfaces. Parser and graph modules build the Neo4j representation; retrieval modules select seeds, run PPR, and format context; CLI, MCP, and visualizer modules call the same retrieval pipeline rather than reimplementing ranking logic. \Cref{tab:implementation-modules} summarizes these boundaries.
+The implementation prioritizes \textbf{trust and transparency} by providing three explicit signals to the user:
+\begin{enumerate}
+    \item \textbf{Seed Provenance:} Every retrieved entity explicitly identifies the "seeds" (entity names or text matches) that triggered its selection.
+    \item \textbf{Traceable Paths:} The system exposes the structural relationship between the task description and the retrieved code via the \texttt{explain} interface.
+    \item \textbf{Shared Retrieval Core:} All interfaces---CLI, MCP, and visualizer---route through the same ranking logic, ensuring identical behavior across tools.
+\end{enumerate}
+
+We separate stable core logic from user-facing interfaces. Parser and graph modules manage the indexing path; retrieval modules manage the retrieval path by selecting seeds, running PPR, and formatting context. \Cref{tab:implementation-modules} summarizes these boundaries.
 
 \begin{table}[H]
     \centering
     \scriptsize
-    \caption[Implementation module boundaries]{Primary implementation modules and their responsibilities. The same core retrieval path is shared by CLI, MCP, and visualizer entry points.}
+    \caption[Implementation module boundaries]{Primary implementation modules and their responsibilities. The same core \textbf{retrieval path} is shared by CLI, MCP, and visualizer entry points.}
     \label{tab:implementation-modules}
     \renewcommand{\arraystretch}{1.25}
     \begin{adjustbox}{max width=\textwidth}
@@ -39,14 +46,14 @@ We separate stable core logic from user-facing interfaces. Parser and graph modu
     \end{adjustbox}
 \end{table}
 
-We follow a conservative engineering policy throughout: prefer deterministic extraction over heuristic guessing, skip ambiguous edges rather than risk false connections, and route every interface through the same retrieval core. Project-wide settings live in \texttt{config.yaml} at the repository root; the Neo4j password is read from \texttt{NEO4J\_PASSWORD} in \texttt{.env} and never stored in the config file. File discovery respects both \texttt{exclude\_patterns} in the config and an optional \texttt{.cgignore} file parsed with the same pathspec rules as \texttt{.gitignore}. The following sections describe each component in the order they execute during indexing and retrieval.
+The implementation adheres to a deliberately narrow scope: CodeGraph is a \textbf{Python-first, agent-oriented} retrieval system. We focus on providing structurally precise context for a single repository, intentionally deferring complex features like multi-repo support or enterprise permission models to future work. This focus allows the system to prioritize deterministic extraction over heuristic guessing. Project-wide settings live in \texttt{config.yaml} at the repository root; the Neo4j password is read from \texttt{NEO4J\_PASSWORD} in \texttt{.env} and never stored in the config file. File discovery respects both \texttt{exclude\_patterns} in the config and an optional \texttt{.cgignore} file parsed with the same pathspec rules as \texttt{.gitignore}. The following sections describe each component in the order they execute during indexing and retrieval.
 
 % =============================================================================
 \section{The Parser: Extracting Structure from Code}
 \label{sec:the-parser}
 % =============================================================================
 
-The foundational stage of CodeGraph is the ingestion pipeline, which must extract structured entity records from code that is actively being edited. The reader will learn why we use Tree-sitter's byte-level mapping to tolerate syntax errors and preserve original formatting, and how these extracted entities feed graph construction and seed selection.
+The foundational stage of CodeGraph is the \textbf{indexing path}, which must extract structured entity records from code that is actively being edited. The reader will learn why we use Tree-sitter's byte-level mapping to tolerate syntax errors and preserve original formatting, and how these extracted entities feed graph construction and seed selection.
 
 We use Tree-sitter, an incremental parser accessed through its Python bindings, for extraction. Tree-sitter produces a Concrete Syntax Tree (CST) that maps directly to source byte offsets. This byte-level mapping lets the parser preserve formatting and tolerate syntax errors, which matters in development environments where code is often in an intermediate state.
 
@@ -240,7 +247,7 @@ Standard Cypher queries operate on the transactional database. However, executin
 \label{sec:the-engine}
 % =============================================================================
 
-When an agent requests context, the system invokes \texttt{run\_core\_retrieval}, the single execution orchestrator for the entire ranking pipeline. The reader will learn how this orchestrator extracts seeds, dynamically reweights edges, and invokes Personalized PageRank to bridge the semantic gap between a natural-language query and structural code.
+When an agent requests context, the system invokes \texttt{run\_core\_retrieval}, the single execution orchestrator for the entire \textbf{retrieval path}. The reader will learn how this orchestrator extracts seeds, dynamically reweights edges, and invokes Personalized PageRank to bridge the semantic gap between a natural-language query and structural code.
 
 \noindent The orchestrator executes the following steps on every query:
 \begin{enumerate}
@@ -321,15 +328,16 @@ The primary agent interface is a FastMCP server running over Standard Input/Outp
 
 \subsection{Command-Line Interface}
 \label{subsec:cli-interface}
-The CLI, built with Typer, provides local evaluation and scripting access. The \texttt{codegraph query} command executes the standard retrieval path and prints ranked entities with their token counts and inline source snippets. Callers can request machine-readable JSON or append \texttt{--trace} to emit a structured provenance trace detailing seed selection weights and PPR propagation paths.
+The CLI, built with Typer, provides local evaluation and scripting access. The \texttt{codegraph query} command executes the standard \textbf{retrieval path} and prints ranked entities with their token counts and inline source snippets. Callers can request machine-readable JSON or append \texttt{--trace} to emit a structured provenance trace detailing seed selection weights and PPR propagation paths. The \texttt{codegraph explain} command further enhances transparency by providing a human-readable summary of why specific code was retrieved.
 
 \subsection{Interactive Visualizer}
 \label{subsec:visualizer}
-The visualizer offers a graphical environment for topological debugging, served locally via FastAPI and React. It is not a separate retrieval algorithm; it executes natural-language queries through the same production ranking path used by the MCP tools. The visualizer maps the resulting graph nodes into a force-directed layout, allowing developers to inspect how relevance mass distributed from seeds across dependencies.
+The visualizer offers a graphical environment for topological debugging, served locally via FastAPI and React. It is not a separate retrieval algorithm; it executes natural-language queries through the same production \textbf{retrieval path} used by the MCP tools. The visualizer maps the resulting graph nodes into a force-directed layout, allowing developers to inspect how relevance mass distributed from seeds across dependencies. This provides a visual trust signal, confirming that the retrieved context is structurally connected to the task's entry points.
 
 % =============================================================================
 \section{Summary}
 \label{sec:summary}
 % =============================================================================
 
-This chapter described how CodeGraph translates its pipeline design into a working system. By enforcing a single shared execution path—from Tree-sitter byte parsing and two-pass graph construction to dynamic seed extraction and greedy token packaging—the implementation guarantees that all interfaces behave identically. The next chapter evaluates how effectively this implementation retrieves necessary context on the SWE-bench Lite benchmark.
+This chapter described how CodeGraph translates its pipeline design into a working system. By enforcing a single shared execution path---from the \textbf{indexing path's} Tree-sitter byte parsing and two-pass graph construction to the \textbf{retrieval path's} dynamic seed extraction and greedy token packaging---the implementation guarantees that all interfaces behave identically. The following chapter evaluates how effectively this implementation retrieves necessary context on the SWE-bench Lite benchmark.
+
