@@ -34,9 +34,9 @@ def _write_build_timestamp(config_path: Path) -> None:
     )
 
 
-def _read_build_timestamp(config_path: Path) -> str | None:
+def _read_build_timestamp(config_path: Path | str) -> str | None:
     """Return ISO timestamp string of last rebuild, or None if not found."""
-    ts_file = config_path.parent / _TIMESTAMP_FILE_NAME
+    ts_file = Path(config_path).parent / _TIMESTAMP_FILE_NAME
     if ts_file.exists():
         return ts_file.read_text(encoding="utf-8").strip()
     return None

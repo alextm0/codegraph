@@ -36,8 +36,10 @@ def query_helper(
     project_root_str = str(resolve_project_root(raw_config, config_path))
 
     from codegraph.core.graph.ppr import PPRConfig, create_gds_client
-    from codegraph.core.retrieval.pipeline import run_core_retrieval, run_retrieval_pipeline
+    from codegraph.core.retrieval.pipeline import run_core_retrieval
+    from codegraph.core.retrieval.post_processing import format_context
     from codegraph.core.retrieval.trace import build_retrieval_trace
+    from codegraph.utils.graph_helpers import fetch_seed_names
 
     db_manager = get_database_manager()
     driver = db_manager.get_driver()
@@ -72,11 +74,9 @@ def query_helper(
 
         if not trace:
             console.print(f"Running retrieval for: [bold cyan]{task!r}[/bold cyan]")
-            if entities:
-                console.print(f"  Seed entities: [yellow]{entities}[/yellow]")
             console.print()
 
-        def _run_trace() -> None:
+        def _run_core() -> tuple[Any, Any]:
             core = run_core_retrieval(
                 driver=driver,
                 gds=gds,
@@ -86,6 +86,10 @@ def query_helper(
                 signal_weights=signal_weights or None,
                 exclude_seed_paths=exclude_seed_paths or None,
             )
+            return core
+
+        if trace:
+            core = _run_core()
             if not core:
                 _emit_trace_error(
                     task,
@@ -96,23 +100,16 @@ def query_helper(
                 driver, core, ppr_config, task, top_k=ppr_config.top_k
             )
             sys.stdout.write(json.dumps(trace_data, indent=2) + "\n")
-
-        if trace:
-            _run_trace()
             return
 
-        with console.status("[bold green]Executing retrieval pipeline..."):
-            results = run_retrieval_pipeline(
-                driver=driver,
-                gds=gds,
-                task_description=task,
-                project_root=project_root_str,
-                mentioned_entities=entities,
-                ppr_config=ppr_config,
-                signal_weights=signal_weights or None,
-                token_budget=effective_budget,
-                exclude_seed_paths=exclude_seed_paths or None,
-            )
+        with console.status("[bold green]Executing retrieval path..."):
+            core_result = _run_core()
+            if core_result:
+                results = format_context(
+                    core_result.ppr_results, project_root_str, effective_budget
+                )
+            else:
+                results = []
 
         if not results:
             if json_out:
@@ -122,6 +119,19 @@ def query_helper(
                     "[yellow]No results found. Is the graph built? Run: codegraph rebuild[/yellow]"
                 )
             return
+
+        # Show top seeds if not in silent/machine modes
+        if not json_out and not compact and core_result:
+            seed_ids = list(core_result.seeds.seeds.keys())
+            seed_names = fetch_seed_names(driver, seed_ids)
+            top_seeds = sorted(core_result.seeds.seeds.items(), key=lambda x: -x[1])[:5]
+            
+            console.print("[dim]Top seeds identified:[/dim]")
+            for nid, weight in top_seeds:
+                name = seed_names.get(nid, str(nid))
+                source = core_result.seeds.metadata.get(nid, {}).get("source", "unknown")
+                console.print(f"  [cyan]• {name}[/cyan] [dim]({source}, weight={weight:.2f})[/dim]")
+            console.print()
 
         if json_out:
             output = {

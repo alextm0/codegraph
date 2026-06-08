@@ -23,6 +23,7 @@ from codegraph.core.graph.queries import (
 )
 from codegraph.core.retrieval.pipeline import run_core_retrieval
 from codegraph.core.retrieval.post_processing import format_context
+from codegraph.cli.commands._shared import _read_build_timestamp
 from codegraph.utils.paths import (
     graph_file_path_scope,
     make_relative_path,
@@ -229,6 +230,7 @@ def get_relevant_context_impl(
             "result_count": len(results),
             "total_tokens": total_tokens,
             "token_budget": effective_budget,
+            "last_indexed": _read_build_timestamp(state.config_path),
             "visualizer_url": "http://localhost:8474",
         },
         "seeds": [
