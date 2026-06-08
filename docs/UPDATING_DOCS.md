@@ -16,7 +16,9 @@ docs/
 ├── getting-started/
 ├── concepts/
 ├── guides/
-├── reference/
+│   ├── onboarding.md         # New mental model & quickstart
+│   ├── indexing.md
+│   ├── ...
 ├── concepts/          # architecture, parser, resolution, neo4j, retrieval, explainability
 ├── guides/            # indexing, agents, viz, eval harness, cookbook, demo
 ├── reference/         # cli, mcp, config, api, testing, ci, data-models, tech-stack
@@ -27,7 +29,7 @@ docs/
 └── CodeGraphContext-Docs-From-Github/   # reference only — do not edit for CodeGraph
 ```
 
-Repo root companions: `AGENTS.md`, `CLAUDE.md`, `DECISIONS.md`.
+Repo root companions: `AGENTS.md`, `CLAUDE.md`.
 
 ---
 
@@ -38,10 +40,9 @@ Repo root companions: `AGENTS.md`, `CLAUDE.md`, `DECISIONS.md`.
 | CLI command / flag (e.g. `find`) | `reference/cli.md`, `QUICK_REFERENCE.md`, `guides/cookbook.md` |
 | MCP parameters / JSON | `reference/mcp.md`, `MCP_TOOLS.md`, `AGENTS.md` |
 | config.yaml keys | `reference/config.md` |
-| Algorithm / defaults | `DECISIONS.md`, `concepts/retrieval-pipeline.md`, `reference/decisions.md` |
+| Algorithm / defaults | `concepts/retrieval-pipeline.md` |
 | New module | `reference/module-map.md` |
 | Evaluation metrics | `thesis/evaluation.md`, `thesis/chapters/chapter5_*.tex`; benchmark claims require `evaluation/results/iteration_2_top_30/summary.json` or a new full-run `summary.json` |
-| New binding choice | `DECISIONS.md` + row in `reference/decisions.md` |
 
 ---
 

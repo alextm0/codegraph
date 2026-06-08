@@ -15,7 +15,7 @@ CodeGraph exposes **exactly two** MCP tools. There is no graph stats, dead-code,
 | `token_budget` | int | `0` = default 6000 |
 | `include_explanations` | bool | Default **true**; per-result reasoning paths |
 
-**Returns:** JSON with `summary`, `seeds[]`, `results[]` (entity, file, lines, score, `source_code`, optional `explanation`).
+**Returns:** JSON with `summary` (includes `last_indexed` freshness), `seeds[]` (provenance signal), `results[]` (entity, file, lines, score, `source_code`, optional `explanation`).
 
 **Empty graph:** Auto-starts background index; retry after ~15–30s or run `codegraph rebuild`.
 

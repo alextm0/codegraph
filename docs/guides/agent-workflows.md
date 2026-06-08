@@ -1,6 +1,16 @@
 # AI agent workflows
 
-How coding agents should use CodeGraph. Repo root **[AGENTS.md](../../AGENTS.md)** duplicates the MCP contract; this guide adds workflows and anti-patterns.
+How coding agents should use CodeGraph. CodeGraph utilizes a **structural retrieval path** to find context that lexical search misses. Repo root **[AGENTS.md](../../AGENTS.md)** duplicates the MCP contract; this guide adds workflows and anti-patterns.
+
+---
+
+## Trust & Transparency: Verifying Results
+
+Agents and developers should use CodeGraph's trust signals to verify the quality and relevance of retrieved context:
+
+1.  **Inspect `seeds[]`**: The `get_relevant_context` tool returns a `seeds` array. Check this to ensure CodeGraph correctly identified the key entities from your task.
+2.  **Use `include_explanations`**: By default, CodeGraph provides reasoning paths for every result. If a file's relevance is unclear, read its `explanation` to see its structural connection to your seeds.
+3.  **Check `last_indexed`**: The `summary` contains a `last_indexed` timestamp. If you've made significant structural changes, remind the user to run `codegraph rebuild`.
 
 ---
 

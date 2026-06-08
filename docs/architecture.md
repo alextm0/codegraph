@@ -1,6 +1,6 @@
 # Architecture (summary)
 
-Graph-based context selection: Python → tree-sitter → Neo4j → seeds + PPR → MCP/CLI/visualizer.
+Structural context retrieval for AI coding agents.
 
 **Full detail:** [concepts/architecture.md](concepts/architecture.md)  
 **Doc hub:** [README.md](README.md)  
@@ -8,15 +8,28 @@ Graph-based context selection: Python → tree-sitter → Neo4j → seeds + PPR 
 
 ---
 
+## The Mental Model
+
+CodeGraph is conceptualized as two distinct functional flows:
+
+- **Indexing Path (Offline)**: Parses Python source code into a structural Neo4j graph of calls, imports, and inheritance.
+- **Retrieval Path (Online)**: Traverses the graph from task-specific seeds using Personalized PageRank to find relevant context.
+
 ## Pipeline
 
 ```
-Source code → tree-sitter parse → entity/edge extraction → Neo4j graph
-→ seed selection (entity + BM25) → IDF edge reweighting → PPR (GDS)
-→ token-budget formatting → MCP / CLI / Visualizer
+Indexing Path: Source code → tree-sitter parse → entity/edge extraction → Neo4j graph
+Retrieval Path: User Task → seed selection (entity + BM25) → IDF edge reweighting → PPR (GDS) → token-budget formatting → MCP / CLI / Visualizer
 ```
 
-## Defaults (DEC-001)
+## Trust & Transparency
+
+CodeGraph provides three core trust signals:
+1. **Seed Provenance**: Explicitly identifying which "seeds" triggered a result.
+2. **Traceable Paths**: Explaining *why* code was retrieved via the `explain` interface.
+3. **Shared Retrieval Core**: Identical ranking logic across CLI, MCP, and visualizer.
+
+## Defaults
 
 - `damping_factor`: 0.70
 - `top_k`: 30

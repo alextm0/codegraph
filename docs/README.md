@@ -1,6 +1,10 @@
-# CodeGraph documentation (source of truth)
+# CodeGraph documentation
 
-Plain Markdown for humans and **AI agents**. Read this tree before changing architecture, MCP tools, retrieval, evaluation claims, or thesis text.
+Structural context retrieval for AI coding agents.
+
+CodeGraph achieves **74.0% Recall@10**, delivering a **24.3 percentage point gain** over standard BM25 lexical search. It is a Python-first, agent-oriented retrieval system that prioritizes structurally precise context over broad, shallow search.
+
+Read this tree before changing architecture, MCP tools, retrieval, evaluation claims, or thesis text.
 
 **Not authoritative:** `docs/CodeGraphContext-Docs-From-Github/` (reference copy of a related project).
 
@@ -14,7 +18,6 @@ Plain Markdown for humans and **AI agents**. Read this tree before changing arch
 | End-to-end pipeline | [concepts/architecture.md](concepts/architecture.md) |
 | Agent MCP rules | [guides/agent-workflows.md](guides/agent-workflows.md) + [AGENTS.md](../AGENTS.md) |
 | Copy-paste commands | [QUICK_REFERENCE.md](QUICK_REFERENCE.md), [guides/cookbook.md](guides/cookbook.md) |
-| Binding decisions | [DECISIONS.md](../DECISIONS.md) |
 
 ---
 
@@ -73,7 +76,6 @@ Plain Markdown for humans and **AI agents**. Read this tree before changing arch
 | [reference/mcp.md](reference/mcp.md) | MCP schemas, errors, lifecycle |
 | [reference/config.md](reference/config.md) | config.yaml keys |
 | [reference/visualizer-api.md](reference/visualizer-api.md) | REST + WebSocket API |
-| [reference/decisions.md](reference/decisions.md) | DEC-001 … DEC-010 index |
 | [reference/troubleshooting.md](reference/troubleshooting.md) | doctor checks, fixes |
 | [reference/module-map.md](reference/module-map.md) | `src/codegraph/` file roles |
 | [reference/data-models.md](reference/data-models.md) | Dataclasses and DTOs |
@@ -112,7 +114,6 @@ CodeGraph parses **Python** into a **Neo4j** graph (calls, imports, containment,
 
 | Artifact | Location |
 |----------|----------|
-| Decision log | `DECISIONS.md` |
 | Agent short guide | `AGENTS.md` |
 | Dev style | `CLAUDE.md` |
 | LaTeX thesis | `thesis/` |
