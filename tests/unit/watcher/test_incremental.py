@@ -18,14 +18,12 @@ class TestUpdateFileInGraph:
 
         with (
             patch("codegraph.watcher.incremental.delete_file_entities", return_value=3) as mock_delete,
-            patch("codegraph.watcher.incremental.create_parser") as mock_create_parser,
             patch("codegraph.watcher.incremental.parse_file", return_value=mock_entities) as mock_parse,
             patch("codegraph.watcher.incremental.build_graph", return_value=mock_counts) as mock_build,
         ):
             result = update_file_in_graph(mock_driver, str(tmp_path), str(py_file))
 
         mock_delete.assert_called_once()
-        mock_create_parser.assert_called_once()
         mock_parse.assert_called_once()
         mock_build.assert_called_once_with(mock_driver, [mock_entities])
 
@@ -40,13 +38,11 @@ class TestUpdateFileInGraph:
 
         with (
             patch("codegraph.watcher.incremental.delete_file_entities", return_value=2) as mock_delete,
-            patch("codegraph.watcher.incremental.create_parser") as mock_create_parser,
             patch("codegraph.watcher.incremental.build_graph") as mock_build,
         ):
             result = update_file_in_graph(mock_driver, str(tmp_path), str(py_file))
 
         mock_delete.assert_called_once()
-        mock_create_parser.assert_not_called()  # parser is created after the existence check
         mock_build.assert_not_called()
 
         assert result["deleted"] == 2
@@ -60,7 +56,6 @@ class TestUpdateFileInGraph:
 
         with (
             patch("codegraph.watcher.incremental.delete_file_entities", return_value=1),
-            patch("codegraph.watcher.incremental.create_parser"),
             patch("codegraph.watcher.incremental.parse_file", side_effect=ValueError("parse error")),
             patch("codegraph.watcher.incremental.build_graph") as mock_build,
         ):
@@ -81,7 +76,6 @@ class TestUpdateFileInGraph:
 
         with (
             patch("codegraph.watcher.incremental.delete_file_entities", return_value=0),
-            patch("codegraph.watcher.incremental.create_parser"),
             patch("codegraph.watcher.incremental.parse_file", return_value=mock_entities),
             patch("codegraph.watcher.incremental.build_graph", return_value={}),
         ):

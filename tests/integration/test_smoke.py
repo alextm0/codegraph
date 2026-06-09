@@ -77,6 +77,7 @@ seed_selection:
         exclude_seed_paths=raw.get("seed_selection", {}).get("exclude_seed_paths") or [],
         default_token_budget=2000,
         default_top_k=5,
+        default_include_explanations=True,
     )
     out = get_relevant_context_impl(
         "routing blueprint", None, None, 5, 2000, state, include_explanations=True

@@ -55,7 +55,7 @@ def read(relative_path: str) -> bytes:
 
 def test_known_top_level_functions_are_extracted(parser):
     """helpers.py defines well-known Flask public functions that must be found."""
-    entities = parse_file(read("helpers.py"), "helpers.py", parser)
+    entities = parse_file(read("helpers.py"), "helpers.py")
 
     names = {f.name for f in entities.functions}
     # Core Flask public API — if any of these are missing, the extractor broke
@@ -72,7 +72,7 @@ def test_no_methods_leak_into_top_level_functions(parser):
     helpers.py defines _CollectErrors with instance methods — none should
     appear in the functions list.
     """
-    entities = parse_file(read("helpers.py"), "helpers.py", parser)
+    entities = parse_file(read("helpers.py"), "helpers.py")
 
     # _CollectErrors is the only class; its methods are 'push' and 'blueprint'
     method_names = {m.name for m in entities.methods}
@@ -92,7 +92,7 @@ def test_overloaded_function_yields_multiple_entries(parser):
     producing three function_definition nodes at module level. This tests that
     decorated top-level functions are not silently dropped.
     """
-    entities = parse_file(read("helpers.py"), "helpers.py", parser)
+    entities = parse_file(read("helpers.py"), "helpers.py")
 
     overloads = [f for f in entities.functions if f.name == "stream_with_context"]
     assert len(overloads) == 3, (
@@ -107,7 +107,7 @@ def test_overloaded_entries_have_distinct_signatures(parser):
     If the parser conflates overloads they would share a signature, which would
     make it impossible to distinguish them in the graph later.
     """
-    entities = parse_file(read("helpers.py"), "helpers.py", parser)
+    entities = parse_file(read("helpers.py"), "helpers.py")
 
     sigs = [f.signature for f in entities.functions if f.name == "stream_with_context"]
     assert len(set(sigs)) == len(sigs), "Duplicate signatures across overloads"
@@ -120,7 +120,7 @@ def test_overloaded_entries_have_distinct_signatures(parser):
 
 def test_all_session_classes_are_extracted_in_order(parser):
     """sessions.py defines exactly 5 classes in source order."""
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     names = [c.name for c in entities.classes]
     assert names == [
@@ -138,7 +138,7 @@ def test_multi_inheritance_bases_are_captured(parser):
     Multi-inheritance is a common Python pattern. Both bases must appear in the
     tuple — order matters because Python's MRO depends on it.
     """
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     cls = next(c for c in entities.classes if c.name == "SecureCookieSession")
     # Both bases must be present; we don't test exact string form because
@@ -150,7 +150,7 @@ def test_multi_inheritance_bases_are_captured(parser):
 
 def test_single_inheritance_base_is_captured(parser):
     """NullSession inherits from exactly one class: SecureCookieSession."""
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     cls = next(c for c in entities.classes if c.name == "NullSession")
     assert len(cls.bases) == 1
@@ -159,7 +159,7 @@ def test_single_inheritance_base_is_captured(parser):
 
 def test_class_with_no_bases_has_empty_tuple(parser):
     """SessionInterface has no explicit bases — its bases tuple must be empty."""
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     cls = next(c for c in entities.classes if c.name == "SessionInterface")
     assert cls.bases == ()
@@ -171,7 +171,7 @@ def test_class_inheriting_from_builtin_is_captured(parser):
     This tests that a base expressed as a plain identifier (not a dotted name)
     is still recorded correctly.
     """
-    entities = parse_file(read("config.py"), "config.py", parser)
+    entities = parse_file(read("config.py"), "config.py")
 
     cls = next(c for c in entities.classes if c.name == "Config")
     assert "dict" in cls.bases
@@ -184,7 +184,7 @@ def test_class_inheriting_from_builtin_is_captured(parser):
 
 def test_all_session_interface_methods_are_extracted(parser):
     """SessionInterface declares 13 well-known methods."""
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     si_methods = {m.name for m in entities.methods if m.class_name == "SessionInterface"}
     expected = {
@@ -211,7 +211,7 @@ def test_methods_are_attributed_to_correct_class(parser):
     views.py has two classes (View, MethodView); no method should be assigned
     to the wrong class.
     """
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     view_methods = {m.name for m in entities.methods if m.class_name == "View"}
     mv_methods = {m.name for m in entities.methods if m.class_name == "MethodView"}
@@ -226,7 +226,7 @@ def test_nested_function_inside_method_is_not_extracted_as_top_level(parser):
     Nested functions must NOT appear as top-level functions or as independent
     methods. If they do, the graph will have phantom nodes.
     """
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     all_function_names = {f.name for f in entities.functions}
     all_method_names = {m.name for m in entities.methods}
@@ -242,7 +242,7 @@ def test_property_decorated_method_is_extracted(parser):
     sessions.py has SessionMixin.permanent as a @property. It must still be
     extracted even though it sits inside a decorated_definition.
     """
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     prop_names = {m.name for m in entities.methods if m.class_name == "SessionMixin"}
     assert "permanent" in prop_names
@@ -250,7 +250,7 @@ def test_property_decorated_method_is_extracted(parser):
 
 def test_method_line_numbers_are_one_based(parser):
     """All extracted method line numbers must be >= 1 (1-based, not 0-based)."""
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     for m in entities.methods:
         assert m.line_number >= 1, f"{m.class_name}.{m.name} has line_number=0"
@@ -261,7 +261,7 @@ def test_method_line_numbers_are_one_based(parser):
 
 def test_method_docstring_is_extracted(parser):
     """SessionInterface.make_null_session has a well-documented docstring."""
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     method = next(
         m
@@ -279,7 +279,7 @@ def test_method_docstring_is_extracted(parser):
 
 def test_relative_imports_are_marked_relative(parser):
     """views.py uses 'from .globals import ...' — is_relative must be True."""
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     relative = [i for i in entities.imports if i.is_relative]
     assert len(relative) >= 1, "Expected at least one relative import in views.py"
@@ -290,7 +290,7 @@ def test_relative_imports_are_marked_relative(parser):
 
 def test_relative_import_module_path_and_names(parser):
     """views.py imports current_app and request from .globals."""
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     globals_imports = [i for i in entities.imports if i.module_path == "globals"]
     assert len(globals_imports) >= 1
@@ -302,7 +302,7 @@ def test_relative_import_module_path_and_names(parser):
 
 def test_third_party_imports_are_captured(parser):
     """helpers.py imports from werkzeug (third-party, non-stdlib) — must appear."""
-    entities = parse_file(read("helpers.py"), "helpers.py", parser)
+    entities = parse_file(read("helpers.py"), "helpers.py")
 
     module_paths = {i.module_path for i in entities.imports}
     # werkzeug is Flask's primary dependency — if these are missing the graph
@@ -314,7 +314,7 @@ def test_third_party_imports_are_captured(parser):
 
 def test_werkzeug_imported_names_are_recorded(parser):
     """helpers.py imports `abort` from werkzeug.exceptions — name must be captured."""
-    entities = parse_file(read("helpers.py"), "helpers.py", parser)
+    entities = parse_file(read("helpers.py"), "helpers.py")
 
     exceptions_import = next(
         (i for i in entities.imports if i.module_path == "werkzeug.exceptions"), None
@@ -328,7 +328,7 @@ def test_stdlib_imports_are_excluded(parser):
 
     Only werkzeug, click, and intra-Flask imports should survive.
     """
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     stdlib_names = {"typing", "os", "sys", "re", "collections", "functools"}
     for imp in entities.imports:
@@ -339,7 +339,7 @@ def test_stdlib_imports_are_excluded(parser):
 
 def test_absolute_imports_are_not_marked_relative(parser):
     """helpers.py uses absolute imports from werkzeug — is_relative must be False."""
-    entities = parse_file(read("helpers.py"), "helpers.py", parser)
+    entities = parse_file(read("helpers.py"), "helpers.py")
 
     for imp in entities.imports:
         if imp.module_path.startswith("werkzeug"):
@@ -356,7 +356,7 @@ def test_dispatch_request_raises_not_implemented_error(parser):
 
     This ensures that calls to built-ins (raise X) inside methods are tracked.
     """
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     dispatch_calls = {
         c.callee_name
@@ -372,7 +372,7 @@ def test_method_dispatch_calls_are_scoped_to_qualified_name(parser):
     The caller scope must be class-qualified (not just 'dispatch_request') so
     the graph can distinguish overridden methods from different classes.
     """
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     mv_dispatch_callees = {
         c.callee_name
@@ -387,7 +387,7 @@ def test_module_level_call_is_attributed_to_module_scope(parser):
 
     views.py calls frozenset() and t.TypeVar() at module level.
     """
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     module_callees = {
         c.callee_name for c in entities.calls if c.caller_name == "<module>"
@@ -397,7 +397,7 @@ def test_module_level_call_is_attributed_to_module_scope(parser):
 
 def test_call_line_numbers_are_positive(parser):
     """Every call entity must have a line number >= 1."""
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     for call in entities.calls:
         assert call.line_number >= 1, (
@@ -415,7 +415,7 @@ def test_file_with_only_classes_has_empty_functions_list(parser):
 
     The functions list must be empty — class methods must not bleed through.
     """
-    entities = parse_file(read("views.py"), "views.py", parser)
+    entities = parse_file(read("views.py"), "views.py")
 
     assert entities.functions == [], (
         f"Expected no functions in views.py, got: {[f.name for f in entities.functions]}"
@@ -429,7 +429,7 @@ def test_classes_are_empty_list_when_no_classes_in_file(parser):
     pick up helpers' class. This test verifies the parser doesn't over-extract.
     """
     # helpers.py does define exactly one class
-    entities = parse_file(read("helpers.py"), "helpers.py", parser)
+    entities = parse_file(read("helpers.py"), "helpers.py")
     class_names = [c.name for c in entities.classes]
     assert class_names == ["_CollectErrors"], (
         f"Expected only _CollectErrors, got: {class_names}"
@@ -442,7 +442,7 @@ def test_generic_base_class_string_is_preserved(parser):
     The base must be preserved as-is (including the type parameter) so downstream
     graph code can distinguish it from a plain 'MutableMapping'.
     """
-    entities = parse_file(read("sessions.py"), "sessions.py", parser)
+    entities = parse_file(read("sessions.py"), "sessions.py")
 
     mixin = next(c for c in entities.classes if c.name == "SessionMixin")
     assert len(mixin.bases) == 1
