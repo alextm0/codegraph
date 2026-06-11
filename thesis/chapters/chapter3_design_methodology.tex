@@ -121,6 +121,15 @@ This naming scheme is important because later stages rely on it to create graph 
 \end{table}
 \cgtablenote{Qualified names use \texttt{::} as the repository-wide node key. Two symbols with the same short name in different files remain distinct, e.g.\ \texttt{models/user.py::process} vs.\ \texttt{utils/http.py::process}.}
 
+\Cref{fig:ast-to-graph} summarizes the parsing-stage transformation from source text to typed entities and structural relations.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{assets/ast_to_graph.png}
+    \caption[From source text to dependency graph]{From source text to dependency graph. Tree-sitter parses each Python file into a syntax tree, from which typed entities and structural relations are extracted for graph construction.}
+    \label{fig:ast-to-graph}
+\end{figure}
+
 \subsection{Import Resolution}
 \label{sec:import-resolution}
 
@@ -363,6 +372,8 @@ where $w_i$ is seed $i$'s normalized weight. The combination is mathematically e
 
 This finding reflects a general principle in seed-based graph retrieval: when seed quality is imperfect, seed diversity matters more than seed confidence. Trusting the graph to identify structural consistency is more robust than trusting the seed weighting to identify correctness.
 
+\Cref{fig:visualizer-query-results} demonstrates this behaviour on a concrete query (\cref{subsec:visualizer}). The left panel lists the seeds extracted from the task description: entity matches for known symbol names, BM25 results for partial matches, and any path hints present in the text. The graph visualization shows how PPR distributes relevance mass through the dependency structure starting from these seeds. The ranked output on the right confirms that structurally supported entities receive higher scores than isolated matches, consistent with the uniform restart analysis in \Cref{tab:restart-modes}.
+
 \subsection{Damping Factor}
 \label{sec:damping-factor}
 
@@ -595,6 +606,15 @@ The agent may optionally call \texttt{query\_dependencies} for fast structural l
         The primary path (\texttt{get\_relevant\_context}) runs seed selection and response formatting in the MCP server, structural ranking in Neo4j/GDS, and source-span reads from the file system.
         The shaded region shows the optional \texttt{query\_dependencies} lookup.}
     \label{fig:agent-workflow}
+\end{figure}
+
+\Cref{fig:mcp-tool-invocation} shows this interaction as it appears in practice. The agent calls \texttt{get\_relevant\_context} first, then follows up with \texttt{query\_dependencies} when additional structural information is needed.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{assets/mcp_tool_invocation.png}
+    \caption[Agent MCP tool invocation]{Agent-side view of CodeGraph MCP tool invocation. The agent calls \texttt{get\_relevant\_context} and \texttt{query\_dependencies} in response to a user question about seed extraction. The framework requests user confirmation before executing the tool.}
+    \label{fig:mcp-tool-invocation}
 \end{figure}
 
 This workflow integrates naturally into existing agent frameworks that support MCP, including Claude Code, Cursor, and VS~Code Copilot. The agent requires no knowledge of graph algorithms or code parsing; it calls a tool with a task description and receives relevant source code in return.

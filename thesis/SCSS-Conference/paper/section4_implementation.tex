@@ -5,7 +5,7 @@ CodeGraph is implemented in Python and centers around a deterministic execution 
 
 \subsection{Tree-sitter Parsing}
 
-To parse source code safely without relying on a full compiler, CodeGraph utilizes the Tree-sitter parser generator. This produces a Concrete Syntax Tree (CST) that maps directly to source byte offsets. Unlike standard ASTs, Tree-sitter's byte-level mapping preserves formatting and tolerates syntax errors---an essential feature for development environments where code is frequently in an intermediate, non-compiling state. 
+To parse source code safely without relying on a full compiler, CodeGraph utilizes the Tree-sitter parser generator. This produces a Concrete Syntax Tree (CST) that maps directly to source byte offsets. Unlike standard ASTs, Tree-sitter's byte-level mapping preserves formatting and tolerates syntax errors: an essential feature for development environments where code is frequently in an intermediate, non-compiling state. 
 
 During indexing, the parser executes a robust extraction pass:
 \begin{enumerate}

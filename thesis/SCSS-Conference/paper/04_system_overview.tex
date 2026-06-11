@@ -1,7 +1,7 @@
 \section{System Overview}
 \label{sec:system}
 
-CodeGraph formulates repository retrieval as a staged transformation from raw source code to ranked context. The pipeline comprises parsing, graph construction, seed selection, PPR-based ranking, and context delivery. \Cref{fig:pipeline-architecture} illustrates this workflow. By separating graph construction (offline) from retrieval (online), the system guarantees deterministic, low-latency responses suitable for agent integration.
+CodeGraph formulates repository retrieval as a staged transformation from raw source code to ranked context. The pipeline comprises parsing, graph construction, seed selection, PPR-based ranking, and context delivery. \Cref{fig:pipeline-architecture} illustrates this workflow. By separating graph construction (offline) from retrieval (online), the system provides deterministic, low-latency responses suitable for agent integration.
 
 \begin{figure}[htbp]
     \centering
@@ -14,7 +14,7 @@ CodeGraph formulates repository retrieval as a staged transformation from raw so
 
 Graph-based retrieval requires an explicit structural representation of the repository. CodeGraph uses Tree-sitter \cite{treesitter} to extract a four-entity model: files, classes, functions, and methods. This granularity captures the units through which Python code is typically referenced while preserving a graph size that remains efficient for matrix operations.
 
-CodeGraph stores these entities as a property graph in Neo4j \cite{neo4j2024docs}, using four edge types (\texttt{CONTAINS}, \texttt{CALLS}, \texttt{IMPORTS}, and \texttt{INHERITS\_FROM}) to capture the main structural patterns of a Python codebase (\Cref{fig:graph-schema}). Call resolution favors precision over recall by omitting ambiguous call sites, ensuring that graph pathways reflect genuine structural dependencies rather than false positive links.
+CodeGraph stores these entities as a property graph in Neo4j \cite{neo4j2024docs}, using four edge types (\texttt{CONTAINS}, \texttt{CALLS}, \texttt{IMPORTS}, and \texttt{INHERITS\_FROM}) to capture the main structural patterns of a Python codebase (\Cref{fig:graph-schema}). Call resolution favors precision over recall by omitting ambiguous call sites, ensuring that graph pathways reflect genuine structural dependencies rather than false positive links. To handle forward references during indexing, the graph is built in a two-pass sequence: the first pass creates all entity nodes and local containment edges, and the second pass establishes cross-file dependency edges once all target nodes are present in the database.
 
 \begin{figure}[htbp]
     \centering
@@ -23,8 +23,16 @@ CodeGraph stores these entities as a property graph in Neo4j \cite{neo4j2024docs
     \label{fig:graph-schema}
 \end{figure}
 
-\subsection{Context Delivery}
+\subsection{Context Delivery and Interfaces}
 
-Once the PPR algorithm ranks the graph, the result must be packaged into a fixed context budget. CodeGraph post-processes the ranked nodes by deduplicating entities from the same file, dropping parent \texttt{File} nodes if specific sub-entities (like a method) are already highly ranked, and extracting the corresponding source text. 
+Once the PPR algorithm ranks the graph, the result is packaged into a fixed context budget. CodeGraph post-processes the ranked nodes by deduplicating entities from the same file, dropping parent \texttt{File} nodes if specific sub-entities (such as methods) are already highly ranked, and extracting the corresponding source text from disk.
 
-The entire retrieval pipeline is wrapped into a Model Context Protocol (MCP) server. This exposes a single \texttt{get\_relevant\_context} tool, allowing AI agents to programmatically fetch ranked, budget-constrained source snippets deterministically, avoiding the latency and instability of LLM-generated graph queries inside the retrieval loop.
+To support both autonomous agents and developer inspection, CodeGraph exposes two primary interface surfaces that route directly through the same ranking core:
+
+\textbf{Model Context Protocol (MCP) Server:} The primary integration for AI coding agents is a stdio-based MCP server. It exposes exactly two tools:
+\begin{itemize}
+    \item \texttt{get\_relevant\_context}: Executes the full retrieval pipeline (lexical seed extraction $\to$ PPR propagation $\to$ post-processing) and returns ranked, token-budgeted source code snippets along with seed provenance metadata.
+    \item \texttt{query\_dependencies}: Performs targeted structural lookups, allowing agents to retrieve subclass/superclass hierarchies, symbol matching, and upstream/downstream dependency neighbors.
+\end{itemize}
+
+\textbf{Interactive Visualizer:} For transparency and debugging, a browser-based React and D3.js visualizer (running locally on port \texttt{8474}) renders the codebase's structural topology. It operates in two modes: a \emph{browse-and-inspect} view showing local dependency neighborhoods, and a \emph{query-and-analysis} view showing the seed propagation subgraph and comparing structural ranking outcomes against the lexical baseline.

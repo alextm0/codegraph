@@ -57,10 +57,10 @@ A language model could preprocess issue descriptions to suggest likely module na
 \subsection{Closing Connectivity Gaps}
 \label{sec:future-connectivity}
 
-Connectivity Gaps account for 40 of the 78 zero-recall failures. These occur when seeds land in the correct part of the codebase but no explicit CALLS or IMPORTS edge connects them to the target file. Two strategies could reduce this gap without introducing the Probability Dilution observed in the co-location edge experiment (\cref{sec:eval-ablation-structural}):
+Connectivity Gaps account for 40 of the 78 zero-recall failures. These occur when seeds land in the correct part of the codebase but no explicit CALLS or IMPORTS edge connects them to the target file. Two strategies could reduce this gap without introducing Probability Dilution:
 
 \paragraph{Selective structural features.}
-The ablation in \cref{sec:eval-ablation-structural} showed that naive co-location edges across entire directories harm retrieval quality. A more targeted approach would add co-location edges only within small, cohesive directories (fewer than 10 files), or gate such edges on co-change evidence from version control. Files that are frequently modified together are likely to be functionally related even when they share no explicit import or call.
+Instead of adding naive proximity edges across entire directories—which can harm retrieval quality by diluting probability mass—a more targeted approach would add sibling linkages only within small, cohesive directories (fewer than 10 files), or gate such connections on co-change evidence from version control. Files that are frequently modified together are likely to be functionally related even when they share no explicit import or call.
 
 \paragraph{Type-informed call resolution.}
 The current parser omits ambiguous calls to preserve graph precision. With lightweight type inference, either from type annotations (increasingly common in modern Python) or from simple heuristics like attribute-chain analysis, some currently ambiguous calls could be resolved with higher confidence. This would add edges to the graph without requiring full runtime type information.

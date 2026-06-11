@@ -228,16 +228,6 @@ We sweep over the candidate budget $k$ and the PPR damping factor $\alpha$ to ch
     \item \textbf{Damping Factor ($\alpha$):} We test values from 0.10 to 0.85. The system is robust across a wide range, with performance stable between $\alpha=0.55$ and $\alpha=0.80$. The chosen value of $\alpha=0.70$ performs consistently across all 12 repositories. Lower values cause over-spreading: probability mass diffuses too broadly and the ranking loses discrimination. Higher values confine the random walk to the immediate neighbourhood of the seeds, which limits PPR's ability to reach structurally adjacent modules.
 \end{itemize}
 
-% ------------------------------------------------------------
-\subsection{Graph Schema: Validation via Co-location Edges}
-\label{sec:eval-ablation-structural}
-% ------------------------------------------------------------
-
-To test the limits of the graph schema, we explore augmenting the existing edge types (CALLS, IMPORTS, CONTAINS, INHERITS\_FROM) with \texttt{CO\_LOCATED} edges that connect all sibling files within the same directory. The intuition is that files sharing a directory often collaborate, and adding these edges might allow PPR to propagate relevance within a directory without requiring an explicit import.
-
-The result is a regression of 1.0 percentage point. In large, functionally heterogeneous directories such as \texttt{django/\allowbreak db/\allowbreak models/}, the new edges create a dense subgraph connecting unrelated files. PPR probability mass spreads across this subgraph indiscriminately (Probability Dilution), and the original ranked files are displaced by irrelevant neighbours.
-
-This experiment validates the final schema. CodeGraph's precision derives from dependency-based edges that encode real structural relationships, not from proximity-based heuristics. Artificial graph expansion introduces noise that the ranking function cannot distinguish from genuine structural evidence, and the optimal configuration therefore prioritizes high-fidelity Seed Extraction over structural density.
 
 % ============================================================
 \section{Qualitative Synthesis and Structural Limits}

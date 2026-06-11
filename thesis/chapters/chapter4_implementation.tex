@@ -171,10 +171,18 @@ When an agent requests context, the system invokes \texttt{run\_core\_retrieval}
 All CLI, MCP, and visualizer entry points call this function; no interface reimplements seed selection or PPR locally.
 
 \subsection{Seed Extraction and Personalization Vector}
+\label{subsec:seed-extraction}
 
 Seed extraction translates a natural-language task description into starting points in the code graph. The design of the three seed signals (entity match, BM25, and path hints) and their combination into a personalization vector is established in \cref{sec:seed-selection}. The implementation contributes two mechanisms that matter for retrieval quality.
 
-First, the implementation stores both the seed weight and its provenance source with each seed node. This metadata allows the \texttt{explain} interface to report whether a result was triggered by an entity match, a path hint, or BM25, supporting the transparency guarantee from \cref{sec:system-architecture}.
+First, the implementation stores both the seed weight and its provenance source with each seed node. This metadata allows the \texttt{explain} interface to report whether a result was triggered by an entity match, a path hint, or BM25, supporting the transparency guarantee from \cref{sec:system-architecture}. \Cref{fig:mcp-seed-extraction} shows a representative MCP tool response where the agent receives not only the ranked results but also a trace of how each seed was extracted, from entity matching through BM25 to vector construction.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{assets/mcp_tool_response.png}
+    \caption[MCP seed extraction trace]{MCP tool response detailing the seed extraction process for a query about seed extraction implementation. The structured output shows the three extraction phases, the normalization step, and how the personalization vector is consumed by PPR.}
+    \label{fig:mcp-seed-extraction}
+\end{figure}
 
 Second, compound tokenization is the key lexical mechanism that connects issue text to code identifiers. Camel-case and snake-case identifiers are split before BM25 indexing, which allows a query mentioning ``compiler'' to match an entity named \texttt{SQLCompiler}.
 
@@ -214,11 +222,41 @@ The primary agent interface is a FastMCP server running over Standard Input/Outp
 
 \subsection{Command-Line Interface}
 \label{subsec:cli-interface}
-The CLI, built with Typer, provides local evaluation and scripting access. The \texttt{codegraph query} command executes the standard \textbf{retrieval path} and prints ranked entities with their token counts and inline source snippets. Callers can request machine-readable JSON or append \texttt{--trace} to emit a structured provenance trace detailing seed selection weights and PPR propagation paths. The \texttt{codegraph explain} command further enhances transparency by providing a human-readable summary of why specific code was retrieved.
+The CLI, built with Typer, provides local evaluation and scripting access. The \texttt{codegraph query} command executes the standard \textbf{retrieval path} and prints ranked entities with their qualified names, line ranges, token counts, and inline source snippets. \Cref{fig:cli-query} shows a representative query. Callers can request machine-readable JSON or append \texttt{--trace} to emit a structured provenance trace detailing seed selection weights and PPR propagation paths. The \texttt{codegraph explain} command further enhances transparency by providing a human-readable summary of why specific code was retrieved.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{assets/cli_query_retrieval.png}
+    \caption[CLI query output]{CLI output of \texttt{codegraph query} showing ranked retrieval results. Each item displays the entity's qualified name, file path, and the extracted source snippet with syntax highlighting.}
+    \label{fig:cli-query}
+\end{figure}
 
 \subsection{Interactive Visualizer}
 \label{subsec:visualizer}
-The visualizer offers a graphical environment for topological debugging, served locally via FastAPI and React. It is not a separate retrieval algorithm; it executes natural-language queries through the same production \textbf{retrieval path} used by the MCP tools. The visualizer maps the resulting graph nodes into a force-directed layout, allowing developers to inspect how relevance mass distributed from seeds across dependencies. This provides a visual trust signal, confirming that the retrieved context is structurally connected to the task's entry points.
+
+The interactive visualizer is the most inspection-oriented interface in CodeGraph. Whereas the MCP server and CLI primarily return ranked context, the visualizer exposes the retrieval process itself as an interactive workspace for exploration, debugging, and explanation. We implement it as a browser-based React frontend with D3.js-based graph rendering, but it does not introduce a separate retrieval path. Like the other interfaces, it delegates all context requests to \texttt{run\_core\_retrieval}, so every graph view, seed list, and ranked result corresponds to the same production \textbf{retrieval path} described earlier in this chapter.
+
+The interface supports two closely related workflows. In browse-and-inspect mode (\Cref{fig:visualizer-interface}), the left panel presents a searchable repository file tree together with summary counts for indexed files and entities, while the center panel renders the local structural neighbourhood of the selected file. This view allows us to inspect the topology of a module, identify its nearby entities, and navigate the repository visually rather than only through paths or terminal output. The graph view also includes zoom controls and a legend, which make the visual encoding readable even when the visible neighbourhood contains several node and edge types.
+
+In query-and-analysis mode (\Cref{fig:visualizer-query-results}), the same interface becomes a retrieval-analysis surface. The query panel accepts a natural-language task description and exposes retrieval controls such as the result budget, token budget, and the extracted seed list with per-seed scores. After a query is executed, the center panel shows the propagated subgraph reached from those seeds, and the right panel presents ranked entities together with their PPR scores. The retrieval-comparison panel further distinguishes structural, lexical, and delta views, which allows us to compare the final graph-based ranking against its lexical baseline rather than treating the PPR output as an opaque score list.
+
+This design makes the visualizer valuable for transparency. The interface shows not only what was retrieved, but also why it was retrieved. Seed nodes are listed explicitly, the propagated subgraph reveals the region through which relevance mass flowed, and the ranked-results panel reports each entity's structural score together with baseline lexical information. In practice, this supports three kinds of diagnosis: we can see when retrieval succeeds because structurally connected entities reinforce one another; we can identify cases where lexical seeds exist but the graph does not provide a strong path to the target region; and we can detect when a result is present mainly because of lexical matching rather than structural support. The visualizer therefore operationalizes the system contract from \cref{sec:system-architecture} by turning seed provenance, structural paths, and ranking outcomes into inspectable interface elements rather than hidden intermediate state.
+
+Although the visualizer is not intended to be a full graph-database client, it still needs to remain responsive on repository graphs that are too large to inspect as raw node tables. D3.js manages layout, zooming, and node positioning at the interaction layer, while the frontend keeps the visual encoding deliberately compact: node appearance communicates entity type, edge styling communicates structural role, and non-essential details are pushed into side panels rather than rendered directly into the graph. Because the visualizer attaches to the same retrieval core as the other interfaces, it also serves as a research instrument for validating interpretability and trustworthiness. We use it to debug seed selection failures, diagnose missing structural edges, and identify cases where probability mass concentrates in an unhelpful region of the graph.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{assets/visualizer_file_code.png}
+    \caption[Visualizer file-and-graph view]{Visualizer file tree (left) and structural graph for \texttt{parser.py}.}
+    \label{fig:visualizer-interface}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{assets/visualizer_query_results.png}
+    \caption[Visualizer query output]{Visualizer retrieval output for ``What are the available MCP server tools?'': seeds (left), PPR-propagated subgraph (center), and ranked results (right).}
+    \label{fig:visualizer-query-results}
+\end{figure}
 
 % =============================================================================
 \section{Summary}

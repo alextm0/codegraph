@@ -5,7 +5,7 @@ CodeGraph treats code retrieval as a two-stage process: lexical signals prioriti
 
 \subsection{Seed Selection}
 
-Personalized PageRank requires a set of starting nodes. Seed selection translates the natural-language task description into a personalization vector---a probability distribution determining where the random walk restarts.
+Personalized PageRank requires a set of starting nodes. Seed selection translates the natural-language task description into a personalization vector: a probability distribution determining where the random walk restarts.
 
 CodeGraph constructs this vector from three complementary signals:
 \begin{enumerate}
@@ -20,7 +20,12 @@ These signals are merged to form a robust starting distribution that does not re
 
 Uniform graph traversal assumes every structural connection contributes equally to relevance. In practice, however, some connections point to highly specific domain logic, while others point to generic utility nodes (e.g., global loggers or base classes) reused across large parts of the repository.
 
-To attenuate the influence of generic hubs, CodeGraph assigns each edge a weight inversely proportional to the in-degree of its target node: $w(e) = 1 / \log_2(\operatorname{in\_degree}(v) + 2)$. This logarithmic penalty steers probability mass away from ubiquitous hubs, ensuring that relevance is propagated primarily along domain-specific pathways. \Cref{fig:idf-reweighting} illustrates this intuition.
+To attenuate the influence of generic hubs, CodeGraph assigns each edge a weight inversely proportional to the in-degree of its target node: 
+\begin{equation}
+    w(e) = \frac{1}{\log_2(\operatorname{in\_degree}(v) + 2)}
+    \label{eq:idf-weight}
+\end{equation}
+This logarithmic penalty steers probability mass away from ubiquitous hubs, ensuring that relevance is propagated primarily along domain-specific pathways. \Cref{fig:idf-reweighting} illustrates this intuition.
 
 \begin{figure}[htbp]
     \centering
@@ -29,14 +34,28 @@ To attenuate the influence of generic hubs, CodeGraph assigns each edge a weight
     \label{fig:idf-reweighting}
 \end{figure}
 
+\subsection{Personalized PageRank Propagation}
+
+With the seed personalization vector $\vec{s}$ and the edge weights $w(e)$ defined, relevance is propagated through the graph using Personalized PageRank (PPR) \cite{jeh2003ppr}. The stationary relevance vector $\vec{r}$ is computed as the solution to:
+\begin{equation}
+    \vec{r} = (1 - d) \vec{s} + d P^T \vec{r}
+    \label{eq:ppr}
+\end{equation}
+where $d \in (0,1)$ is the damping factor (set to $0.70$), and $P$ is the transition probability matrix. The transition probability from node $u$ to node $v$ is normalized over outgoing edges using the IDF-reweighted values:
+\begin{equation}
+    P_{uv} = \frac{w(u, v)}{\sum_{(u, k) \in E} w(u, k)}
+    \label{eq:transition}
+\end{equation}
+Personalized PageRank is computed over an undirected projection of the property graph, allowing relevance mass to diffuse both upstream (from callees to callers) and downstream (from callers to callees). The resulting vector $\vec{r}$ provides a topologically anchored relevance score for every code entity in the repository.
+
 \subsection{Design Rationale for Structural Retrieval}
 
-The methodology is governed by several strict design choices that prioritize robust structural semantics over raw data density or empirical heuristics.
+The methodology is governed by design choices that prioritize structural semantics over syntactic density.
 
 \textbf{Coarse-Grained Entity Granularity:} The graph schema restricts nodes strictly to files, classes, functions, and methods. CodeGraph explicitly avoids line-level resolution or full Abstract Syntax Tree (AST) ingestion. While ASTs capture complete syntactic correctness, their overwhelming density dilutes retrieval probability mass. The chosen four-entity model provides the exact abstraction layer through which developers typically organize, modularize, and reference code, maintaining a graph size that is efficient for matrix operations.
 
 \textbf{Precision Over Noisy Connectivity:} During graph construction, call resolution is performed conservatively. If a function call site is ambiguous and cannot be resolved to a definitive definition within the codebase, CodeGraph omits the edge entirely. This choice favors precision over recall in the graph topology itself: it is safer to miss an implicit connection than to inject false structural pathways that would misdirect the PageRank random walk. 
 
-\textbf{Explicit Dependencies Over Proximity Heuristics:} We restrict edges strictly to syntactic dependencies (\texttt{CALLS}, \texttt{IMPORTS}, \texttt{CONTAINS}, \texttt{INHERITS\_FROM}). We do not use directory-proximity heuristics (e.g., connecting all files in the same folder). As our ablation studies confirm, adding proximity edges creates dense subgraphs that indiscriminately diffuse relevance. CodeGraph's retrieval fidelity is built on the premise that execution paths matter more than file system locality.
+\textbf{Explicit Dependencies Over Proximity Heuristics:} We restrict edges strictly to syntactic dependencies (\texttt{CALLS}, \texttt{IMPORTS}, \texttt{CONTAINS}, \texttt{INHERITS\_FROM}). We do not use directory-proximity heuristics (e.g., connecting all files in the same folder), as adding proximity edges creates dense subgraphs that indiscriminately diffuse relevance. CodeGraph's retrieval fidelity is built on the premise that execution paths matter more than file system locality.
 
 \textbf{Uniform Restart as a Robustness Mechanism:} A critical algorithmic decision is the use of a uniform restart distribution over the selected seeds, rather than weighting restarts by lexical confidence scores. In software repositories, a highly confident lexical match is often an ambiguous, common identifier (e.g., a generic \texttt{Manager} class). Weighting by confidence amplifies these false positives. Uniform restart is a robustness decision under noisy seed conditions: by giving every extracted seed an equal share of the initial mass, CodeGraph allows the graph topology to arbitrate. Correct seeds that share structural paths compound their mass cooperatively, while isolated incorrect seeds dissipate their relevance into uncoordinated neighbourhoods.

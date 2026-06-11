@@ -40,7 +40,6 @@ The improvement breaks down into three sequential interventions:
     \item \textbf{Budget Adjustment (+1.7pp):} Increasing the output threshold from 20 to 30 files recovered instances where the target was correctly identified but ranked just outside the initial cutoff.
 \end{enumerate}
 
-To test the schema's reliance on explicit dependencies, we conducted an ablation that augmented the graph with \texttt{CO\_LOCATED} proximity edges between sibling files. This caused a 1.0pp regression: artificial density dilutes relevance across unrelated files, proving that CodeGraph's precision derives strictly from high-fidelity dependency links rather than structural heuristics.
 
 \subsection{The Reachability Bottleneck}
 
