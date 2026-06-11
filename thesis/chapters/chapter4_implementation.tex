@@ -5,28 +5,28 @@
 \chapter{Implementation}
 \label{ch:implementation}
 
+This chapter shows how the design established in \cref{ch:design} is realized as a working system. The implementation is organized around two functional flows: the \textbf{indexing path}, which builds the structural model from source code, and the \textbf{retrieval path}, which traverses that model to select context for a specific task. A strict system contract enforces that every interface surface, whether CLI, MCP server, or visualizer, routes through a single, deterministic ranking core. The following sections describe each component in the order it executes, from source parsing through context delivery.
+
 % =============================================================================
 \section{System Architecture}
 \label{sec:system-architecture}
 % =============================================================================
 
-Chapter~3 established the design of CodeGraph's retrieval pipeline. CodeGraph's implementation is governed by a strict system contract: every interface surface must route through a single, deterministic ranking core. We conceptualize the system as two distinct functional flows: the \textbf{indexing path}, which builds the structural model from source code, and the \textbf{retrieval path}, which traverses that model to select context for a specific task.
-
-The implementation prioritizes \textbf{trust and transparency} by providing three explicit signals to the user:
+The implementation is governed by a single contract: every interface must route through the same ranking core. This contract has three concrete manifestations that together provide trust and transparency:
 \begin{enumerate}
-    \item \textbf{Seed Provenance:} Every retrieved entity explicitly identifies the "seeds" (entity names or text matches) that triggered its selection.
+    \item \textbf{Seed Provenance:} Every retrieved entity identifies which seeds (entity names or text matches) triggered its selection.
     \item \textbf{Traceable Paths:} The system exposes the structural relationship between the task description and the retrieved code via the \texttt{explain} interface.
-    \item \textbf{Shared Retrieval Core:} All interfaces---CLI, MCP, and visualizer---route through the same ranking logic, ensuring identical behavior across tools.
+    \item \textbf{Shared Retrieval Core:} All interfaces route through the same ranking logic, ensuring identical behavior across tools.
 \end{enumerate}
 
 We separate stable core logic from user-facing interfaces. Parser and graph modules manage the indexing path; retrieval modules manage the retrieval path by selecting seeds, running PPR, and formatting context. \Cref{tab:implementation-modules} summarizes these boundaries.
 
 \begin{table}[H]
     \centering
-    \scriptsize
+    \small
     \caption[Implementation module boundaries]{Primary implementation modules and their responsibilities. The same core \textbf{retrieval path} is shared by CLI, MCP, and visualizer entry points.}
     \label{tab:implementation-modules}
-    \renewcommand{\arraystretch}{1.25}
+    \cgtablerows
     \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.4cm}
                                   >{\raggedright\arraybackslash}X
@@ -46,14 +46,14 @@ We separate stable core logic from user-facing interfaces. Parser and graph modu
     \end{adjustbox}
 \end{table}
 
-The implementation adheres to a deliberately narrow scope: CodeGraph is a \textbf{Python-first, agent-oriented} retrieval system. We focus on providing structurally precise context for a single repository, intentionally deferring complex features like multi-repo support or enterprise permission models to future work. This focus allows the system to prioritize deterministic extraction over heuristic guessing. Project-wide settings live in \texttt{config.yaml} at the repository root; the Neo4j password is read from \texttt{NEO4J\_PASSWORD} in \texttt{.env} and never stored in the config file. File discovery respects both \texttt{exclude\_patterns} in the config and an optional \texttt{.cgignore} file parsed with the same pathspec rules as \texttt{.gitignore}. The following sections describe each component in the order they execute during indexing and retrieval.
+The implementation adheres to a deliberately narrow scope: CodeGraph is a \textbf{Python-first, agent-oriented} retrieval system that provides structurally precise context for a single repository. This focus allows the system to prioritize deterministic extraction over heuristic guessing.
 
 % =============================================================================
 \section{The Parser: Extracting Structure from Code}
 \label{sec:the-parser}
 % =============================================================================
 
-The foundational stage of CodeGraph is the \textbf{indexing path}, which must extract structured entity records from code that is actively being edited. The reader will learn why we use Tree-sitter's byte-level mapping to tolerate syntax errors and preserve original formatting, and how these extracted entities feed graph construction and seed selection.
+The indexing path begins with entity extraction. The implementation challenge is producing structured records from code that may be syntactically incomplete, since files under active development often contain errors that would halt a traditional compiler-based parser.
 
 We use Tree-sitter, an incremental parser accessed through its Python bindings, for extraction. Tree-sitter produces a Concrete Syntax Tree (CST) that maps directly to source byte offsets. This byte-level mapping lets the parser preserve formatting and tolerate syntax errors, which matters in development environments where code is often in an intermediate state.
 
@@ -74,29 +74,7 @@ Rather than indexing every variable assignment or loop, the extractors identify 
 
 \begin{figure}[htbp]
     \centering
-    \begin{minipage}[t]{0.475\linewidth}
-        \begin{cgpython}{Source file}
-def login(user, pwd):
-    """Authenticate a user."""
-    entry = db.get_user(user)
-    if entry.check_pwd(pwd):
-        return Token(entry.id)
-    return None
-        \end{cgpython}
-    \end{minipage}\hfill
-    \begin{minipage}[t]{0.475\linewidth}
-        \begin{cgjson}{Extracted entity}
-{
-  "type": "Function",
-  "name": "login",
-  "qualified_name": "auth.py::login",
-  "line_number": 1,
-  "end_line": 6,
-  "signature": "(user, pwd)",
-  "docstring": "Authenticate a user."
-}
-        \end{cgjson}
-    \end{minipage}
+    \includegraphics[width=\textwidth]{assets/parsing_example.png}
     \caption[Parsing output example]{Side-by-side comparison of a raw Python function and the corresponding structural entity extracted by the parser.}
     \label{fig:parsing-example}
 \end{figure}
@@ -108,59 +86,32 @@ def login(user, pwd):
 \label{sec:the-resolver}
 % =============================================================================
 
-Entity extraction produces a set of independent records per file. The resolver converts raw string references into concrete graph edges so that Personalized PageRank can propagate relevance along dependencies. The reader will learn how import and call resolution work, and why we prefer precision over recall when linking entities.
+Entity extraction produces independent records per file, but Personalized PageRank requires a connected graph. The resolver converts raw string references into concrete graph edges by determining which definition each import statement and call expression refers to.
+
+The design rationale for the resolution strategy is established in \cref{sec:import-resolution,sec:call-resolution}: import strings are mapped to filesystem paths, calls are resolved through a three-level protocol (explicit imports, local scope, global scope), and ambiguous references are omitted to preserve graph precision. This section describes how the implementation realizes that strategy.
 
 \subsection{Import Resolution}
 
-Import statements declare cross-file dependencies. Our implementation maps Python import strings into physical filesystem paths. For absolute imports, such as \texttt{import core.utils}, the resolver maps the dotted path relative to the project root. For relative imports, such as \texttt{from ..models import User}, it resolves parent directories before mapping. We identify external packages and standard library imports via dependency manifests and intentionally omit them to avoid creating dangling nodes that point outside the repository scope.
+Import statements declare cross-file dependencies. The resolver maps Python import strings to physical filesystem paths. For absolute imports, such as \texttt{import core.utils}, it maps the dotted path relative to the project root. For relative imports, such as \texttt{from ..models import User}, it resolves parent directories before mapping. External packages and standard-library imports are identified via dependency manifests and omitted to avoid creating dangling nodes that point outside the repository.
 
-\subsection{Call Resolution: The Fallback Protocol}
+\subsection{Call Resolution}
 
-Linking a function call expression, such as \texttt{verify()}, to the correct definition node in a dynamically typed language like Python requires a conservative strategy. \noindent We use a three-level resolution protocol, executed in descending order of confidence:
-
-\begin{enumerate}
-    \item \textbf{Explicit Imports:} We first check the file's import statements. If the called name matches a name imported from another module, we link the call to the corresponding entity in that module.
-    \item \textbf{Local Scope:} If no import matches, we search for a function or method defined within the same file. This handles intra-file calls and class-level method invocations.
-    \item \textbf{Global Scope:} As a final resort, we query the entire repository index for any entity with a matching name. This broad search captures calls where the import logic is too complex for static analysis.
-\end{enumerate}
-
-\subsection{Precision over Recall}
-
-Across all resolution logic, we prefer precision over recall. If a global search finds multiple candidates due to ambiguous naming, such as multiple \texttt{update} methods, the resolver skips the connection. Dropping these ambiguous connections prevents false edges from routing relevance mass into unrelated subgraphs, but it also reduces structural recall. Because Personalized PageRank propagates relevance along every active edge, a single false link can cause severe probability leakage. Dropping ambiguous connections preserves the integrity of the structural traversal at the expense of completeness.
-
-Real-world edge cases support this decoupled approach. The system handles circular imports without recursive loops because it analyzes files independently. Runtime \texttt{importlib} calls, plugin loaders, and dynamically registered modules cannot be resolved statically without execution tracing, so the resolver skips them. This limitation appears in evaluation as well: repositories with plugin-driven architectures, such as pylint-dev/pylint, show higher zero-recall rates because the graph lacks edges to dynamically loaded modules (\cref{sec:eval-synthesis}).
+Linking a function call expression to the correct definition node in a dynamically typed language requires the conservative three-level protocol from \cref{sec:call-resolution}. When the global scope search yields multiple candidates due to ambiguous naming, the resolver drops the connection rather than guessing. This precision-first policy means some duck-typed calls and ambiguous references remain absent from the graph, but it prevents false edges from misdirecting PPR probability mass. Parser-specific edge cases such as dynamic module loading are discussed in \cref{sec:parser-limitations}; broader design limitations are summarized in \cref{sec:design-limitations}.
 
 % =============================================================================
 \section{The Database: Storing the Graph}
 \label{sec:the-database}
 % =============================================================================
 
-After parsing the code and resolving connections, we persist the data into a structural graph using Neo4j. Translating independent files into a connected graph introduces a sequencing challenge: forward references. The reader will learn how CodeGraph uses a two-pass loading mechanism to resolve order dependence and why we execute all writes as idempotent merges.
+With entities extracted and references resolved, the graph must be persisted to Neo4j. The core implementation challenge is ordering: a function in one file may call a definition in another, and if that target node does not yet exist, the relationship write fails.
 
 \subsection{Schema and Constraints}
 
-We designed the graph schema to reflect our four-entity model (\texttt{File}, \texttt{Class}, \texttt{Function}, \texttt{Method}). We connect these nodes using four relationship types, as shown in \cref{fig:database-schema}. We use a visual hierarchy where containers (\texttt{File} and \texttt{Class}) are structurally prominent, while functional units (\texttt{Function} and \texttt{Method}) represent the leaf nodes of the hierarchy.
+The graph schema reflects the four-entity model from \cref{sec:graph-schema}: \texttt{File}, \texttt{Class}, \texttt{Function}, and \texttt{Method} nodes connected by four relationship types. \Cref{fig:database-schema} shows the schema as implemented.
 
 \begin{figure}[htbp]
     \centering
-    \begin{tikzpicture}[
-        node distance=1.6cm and 2.4cm,
-        el/.style={font=\scriptsize\ttfamily, fill=white, inner sep=1pt},
-    ]
-        \node[cgnodefile, minimum width=2.2cm] (file) {File};
-        \node[cgnodeclass, minimum width=2.2cm, right=of file] (class) {Class};
-        \node[cgnodefunc, minimum width=2.2cm, below=1.1cm of file] (func) {Function};
-        \node[cgnodefunc, minimum width=2.2cm, below=1.1cm of class] (method) {Method};
-
-        \draw[lattice_gray_arrow] (file) -- node[el, above=2pt] {CONTAINS} (class);
-        \draw[lattice_gray_arrow] (file) -- node[el, left=2pt] {CONTAINS} (func);
-        \draw[lattice_gray_arrow] (class) -- node[el, right=2pt] {CONTAINS} (method);
-        \draw[lattice_arrow] (func) -- node[el, above=2pt] {CALLS} (method);
-        \draw[lattice_gray_arrow, bend left=35] (file.west) to
-            node[el, left=2pt] {IMPORTS} (file.east);
-        \draw[lattice_gray_arrow, bend left=25] (class.east) to
-            node[el, right=2pt] {INHERITS\_FROM} (class.west);
-    \end{tikzpicture}
+    \includegraphics[width=\textwidth]{assets/database_schema.png}
     \caption[Graph database schema]{Neo4j schema used in CodeGraph. Files and classes are containers; functions and methods are leaves. Structural edges (\textsc{contains}, \textsc{imports}, \textsc{inherits\_from}) and behavioral \textsc{calls} edges are stored separately.}
     \label{fig:database-schema}
 \end{figure}
@@ -169,7 +120,7 @@ Database constraints enforce the identity rules from \cref{ch:design}. A uniquen
 
 \subsection{Two-Pass Construction: Handling Forward References}
 
-We load the graph in two sequential passes to resolve forward references. We face a sequencing challenge when loading source code into a graph: a function in \texttt{main.py} may call a utility defined in \texttt{utils.py}, but if we process \texttt{main.py} first, the target node does not yet exist and the relationship creation fails.
+We load the graph in two sequential passes to resolve forward references. A function in \texttt{main.py} may call a utility defined in \texttt{utils.py}, but if we process \texttt{main.py} first, the target node does not yet exist and the relationship creation fails.
 
 \noindent We resolve this with a two-pass loading mechanism:
 \begin{enumerate}
@@ -179,60 +130,19 @@ We load the graph in two sequential passes to resolve forward references. We fac
 
 \begin{figure}[htbp]
     \centering
-    \cgtikzfit{%
-    \begin{tikzpicture}[
-        node distance=0.55cm and 1.4cm,
-        fn/.style={cgnodefunc, minimum width=1.6cm, font=\scriptsize\ttfamily},
-        fl/.style={cgnodefile, minimum width=1.6cm, font=\scriptsize\ttfamily},
-    ]
-        \node[cgpanel, minimum width=5.8cm, minimum height=3.6cm] (p1) at (0,0) {};
-        \node[anchor=north, font=\small\bfseries, yshift=-6pt] at (p1.north) {Pass 1: create nodes};
-        \node[fl] at ([yshift=-0.15cm]p1.center) [xshift=-1.2cm] (f1a) {main.py};
-        \node[fn, below=of f1a] (fn1a) {parse()};
-        \node[fl, right=2.4cm of f1a] (f2a) {utils.py};
-        \node[fn, below=of f2a] (fn2a) {tokenize()};
-        \draw[lattice_gray_arrow] (f1a) -- (fn1a);
-        \draw[lattice_gray_arrow] (f2a) -- (fn2a);
-
-        \node[cgpanel, minimum width=5.8cm, minimum height=3.6cm, right=3.6cm of p1] (p2) {};
-        \node[anchor=north, font=\small\bfseries, yshift=-6pt] at (p2.north) {Pass 2: link cross-file edges};
-        \node[fl] at ([yshift=-0.15cm]p2.center) [xshift=-1.2cm] (f1b) {main.py};
-        \node[fn, below=of f1b] (fn1b) {parse()};
-        \node[fl, right=2.4cm of f1b] (f2b) {utils.py};
-        \node[fn, below=of f2b] (fn2b) {tokenize()};
-        \draw[lattice_gray_arrow] (f1b) -- (fn1b);
-        \draw[lattice_gray_arrow] (f2b) -- (fn2b);
-        \draw[lattice_arrow, bend left=28]
-            (fn1b.north east) to node[font=\scriptsize\bfseries, fill=white, inner sep=1pt, above=1pt]
-            {CALLS} (fn2b.north west);
-
-        \draw[cgarr, line width=1.3pt] (p1.east) -- node[font=\footnotesize\bfseries, fill=white, inner sep=2pt, above=2pt] {2} (p2.west);
-    \end{tikzpicture}%
-    }
+    \includegraphics[width=\textwidth]{assets/two_pass_sequence.png}
     \caption[Two-pass graph construction sequence]{Two-pass Neo4j loading. Pass~1 creates all entity nodes and intra-file \textsc{contains} edges. Pass~2 adds cross-file \textsc{imports}, \textsc{calls}, and \textsc{inherits\_from} edges once every target node exists.}
     \label{fig:two-pass-sequence}
 \end{figure}
 
 We execute all database writes using parameterized Cypher queries with batched \texttt{UNWIND} and \texttt{MERGE} clauses. This approach ensures idempotency: if we re-process a file, the system updates existing properties rather than creating duplicate nodes. Listing~\ref{lst:cypher-merge} demonstrates the MERGE pattern for both node and relationship creation.
 
-\begin{cglistingfigure}
-\begin{cgcypher}{Neo4j write pattern}
-// Pass 1: nodes (idempotent)
-UNWIND $nodes AS node
-MERGE (n:Function
-  {qualified_name: node.qn})
-  ON CREATE SET n.file_path = node.path
-  ON MATCH  SET n.file_path = node.path
-
-// Pass 2: relationships
-UNWIND $edges AS rel
-MATCH (a {qualified_name: rel.source}),
-      (b {qualified_name: rel.target})
-MERGE (a)-[:CALLS]->(b)
-\end{cgcypher}
-\captionof{lstlisting}{Cypher pattern for idempotent two-pass construction using MERGE.}
-\label{lst:cypher-merge}
-\end{cglistingfigure}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{assets/cypher_merge.png}
+    \captionof{lstlisting}{Cypher pattern for idempotent two-pass construction using MERGE.}
+    \label{lst:cypher-merge}
+\end{figure}
 
 \subsection{Incremental Updates}
 
@@ -247,7 +157,7 @@ Standard Cypher queries operate on the transactional database. However, executin
 \label{sec:the-engine}
 % =============================================================================
 
-When an agent requests context, the system invokes \texttt{run\_core\_retrieval}, the single execution orchestrator for the entire \textbf{retrieval path}. The reader will learn how this orchestrator extracts seeds, dynamically reweights edges, and invokes Personalized PageRank to bridge the semantic gap between a natural-language query and structural code.
+When an agent requests context, the system invokes \texttt{run\_core\_retrieval}, the single orchestrator for the retrieval path. This function guarantees that every interface executes the same seed-selection, IDF-reweighting, and PPR ranking logic.
 
 \noindent The orchestrator executes the following steps on every query:
 \begin{enumerate}
@@ -262,50 +172,26 @@ All CLI, MCP, and visualizer entry points call this function; no interface reimp
 
 \subsection{Seed Extraction and Personalization Vector}
 
-The ranking process begins with seed extraction, which bridges the semantic gap between natural language task descriptions and the structured code graph. We identify initial entry points (seeds) and construct a personalization vector by combining three complementary signals defined in \texttt{seed\_selection.py}:
-\begin{itemize}
-    \item \textbf{Entity Match:} Regex extraction identifies code identifiers, such as \texttt{AuthError}, in the prompt, matching them directly to graph nodes.
-    \item \textbf{BM25 Search:} The engine executes a keyword search against an expanded corpus of entity names, file paths, signatures, and docstrings.
-    \item \textbf{Issue Path Hint:} File paths or directory fragments mentioned in the task add weak location evidence.
-\end{itemize}
+Seed extraction translates a natural-language task description into starting points in the code graph. The design of the three seed signals (entity match, BM25, and path hints) and their combination into a personalization vector is established in \cref{sec:seed-selection}. The implementation contributes two mechanisms that matter for retrieval quality.
 
-These signals are summed using configurable weights from \texttt{config.yaml} (defaults: entity match 0.6, BM25 0.3, issue hint 0.2) and normalized into a probability distribution that sums to 1.0. The implementation stores both the seed weight and its source, allowing later explanations to report whether a result came from an entity match, a path hint, or BM25. The MCP surface still accepts \texttt{current\_file} for compatibility, but the retrieval pipeline ignores it because the active editor location was not a reliable relevance signal.
+First, the implementation stores both the seed weight and its provenance source with each seed node. This metadata allows the \texttt{explain} interface to report whether a result was triggered by an entity match, a path hint, or BM25, supporting the transparency guarantee from \cref{sec:system-architecture}.
 
-Compound tokenization is the key lexical mechanism that connects issue text to code identifiers. Listing~\ref{lst:compound-tokenize} shows how camel-case and snake-case identifiers are split before BM25 indexing, which allows a query mentioning ``compiler'' to match an entity named \texttt{SQLCompiler}.
-
-\begin{cglistingfigure}
-\begin{cgpython}{Compound tokenization (seed\_selection.py)}
-def tokenize(text: str) -> list[str]:
-    # Split CamelCase: "SQLCompiler" -> "sql compiler"
-    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
-    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
-    tokens = re.split(r"[^a-z0-9]+", text.lower())
-    return [tok for tok in tokens if len(tok) > 1]
-\end{cgpython}
-\captionof{lstlisting}{BM25 tokenization with compound identifier splitting.}
-\label{lst:compound-tokenize}
-\end{cglistingfigure}
+Second, compound tokenization is the key lexical mechanism that connects issue text to code identifiers. Camel-case and snake-case identifiers are split before BM25 indexing, which allows a query mentioning ``compiler'' to match an entity named \texttt{SQLCompiler}.
 
 \subsection{Query-Time IDF Reweighting}
 
-Before running the traversal, we must mitigate the influence of hub nodes: highly connected helper functions that absorb excessive relevance mass during the random walk and obscure domain-specific logic.
-
-To address this challenge, we implement a query-time Inverse Document Frequency (IDF) reweighting step. Prior to building the GDS projection, a Cypher update calculates the in-degree for every target node. We adjust the weight of an incoming edge $(i, j)$ using an inverse-logarithmic formula:
-\begin{equation}
-    w_{ij} = \frac{1}{\log_2(\text{in-degree}_j + 2)}
-\end{equation}
-Consequently, highly connected utility nodes receive lower edge weights than specialized domain methods. A logging helper such as \texttt{logger.info} is penalized more heavily than a domain-specific method. This attenuation prevents relevance mass from pooling in generic nodes and concentrates it on task-specific code.
+IDF-based edge reweighting (\cref{sec:idf-reweighting}) attenuates edges toward highly connected hub nodes so that PPR probability concentrates on task-specific code rather than generic utilities. The implementation realizes this as a Cypher update executed before each GDS projection: for every edge $(i, j)$, the weight is set to $1/\log_2(\text{in-degree}_j + 2)$. Because this update runs at query time, the weights always reflect the current state of the graph, including any incremental changes since the last full rebuild.
 
 \subsection{PPR Execution}
 
 With the personalization vector constructed and the weighted GDS graph projected, the engine invokes Personalized PageRank through Neo4j GDS. The production configuration uses uniform restart, damping factor $0.70$, and \texttt{top\_k = 30}. The final output is a list of code entities ranked by their relevance score, which post-processing turns into source snippets for the caller.
 
 % =============================================================================
-\section{Post-Processing and Context Packaging}
+\section{Post-Processing and Context Delivery}
 \label{sec:implementation-post-processing}
 % =============================================================================
 
-Once Personalized PageRank identifies the highest-ranked entities, we must transform these abstract nodes into a dense, token-bounded text package. The reader will learn how the post-processing module uses a greedy BPE-aware algorithm to maximize information density while strictly adhering to an agent's token limit.
+PPR returns a ranked list of graph nodes, but an agent needs source code, not node identifiers. Post-processing bridges this gap by reading code from disk, enforcing a token budget, and packaging the result as structured JSON.
 
 We use a local Byte Pair Encoding (BPE) tokenizer to calculate the token count of every candidate code snippet in real time. The construction loop iterates through the ranked results, reading raw source code from the filesystem based on the line boundaries stored in the graph. \noindent To maximize the information density of the final package, we apply two primary filters:
 \begin{itemize}
@@ -313,7 +199,7 @@ We use a local Byte Pair Encoding (BPE) tokenizer to calculate the token count o
     \item \textbf{Dynamic Budgeting:} We maintain a running sum of tokens during package construction. If adding the next ranked entity would exceed the token budget (default $6{,}000$ tokens for MCP calls), we skip that entity and finalize the context package.
 \end{itemize}
 
-When explanation mode is enabled (the MCP default), the \texttt{explanations} module attaches a seed provenance trace and a short structural reasoning path to each result. The CLI exposes the same metadata through \texttt{codegraph explain} and \texttt{codegraph query --trace}.
+When explanation mode is enabled (the MCP default), the \texttt{explanations} module attaches a seed provenance trace and a short structural reasoning path to each result. This trace identifies which seeds triggered the result and through which graph edges the relevance propagated. The CLI exposes the same metadata through \texttt{codegraph explain} and \texttt{codegraph query --trace}.
 
 % =============================================================================
 \section{User and Agent Interfaces}
@@ -339,5 +225,6 @@ The visualizer offers a graphical environment for topological debugging, served 
 \label{sec:summary}
 % =============================================================================
 
-This chapter described how CodeGraph translates its pipeline design into a working system. By enforcing a single shared execution path---from the \textbf{indexing path's} Tree-sitter byte parsing and two-pass graph construction to the \textbf{retrieval path's} dynamic seed extraction and greedy token packaging---the implementation guarantees that all interfaces behave identically. The following chapter evaluates how effectively this implementation retrieves necessary context on the SWE-bench Lite benchmark.
+This chapter described how CodeGraph translates its pipeline design into a working system. The indexing path uses Tree-sitter's byte-level parsing and two-pass graph construction to build a structural model that tolerates syntax errors and handles forward references through idempotent MERGE writes. The retrieval path uses dynamic seed extraction, query-time IDF reweighting, and Personalized PageRank to rank code entities, then packages the results within a token budget for agent consumption.
 
+A single shared execution function (\texttt{run\_core\_retrieval}) guarantees that all three interfaces produce identical results. This is the implementation's central contribution: the system contract from \cref{sec:system-architecture} is enforced in code, not just in documentation. \Cref{ch:evaluation} evaluates how effectively this implementation retrieves the correct files on the SWE-bench Lite benchmark.

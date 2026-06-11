@@ -1,0 +1,57 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{adjustbox}
+\usepackage{float}
+\usepackage{ragged2e}
+\usepackage[capitalise]{cleveref}
+
+\begin{document}
+
+\title{CodeGraph: Repository-Level Structural Retrieval for AI Coding Agents via Personalized PageRank}
+
+\author{\IEEEauthorblockN{Alexandru-Mihai Toma}
+\IEEEauthorblockA{\textit{Computer Science Department} \\
+\textit{Babes-Bolyai University}\\
+Cluj-Napoca, Romania \\
+alexandru.toma@stud.ubbcluj.ro}
+\and
+\IEEEauthorblockN{Arthur Molnar}
+\IEEEauthorblockA{\textit{Computer Science Department} \\
+\textit{Babes-Bolyai University}\\
+Cluj-Napoca, Romania \\
+arthur.molnar@ubbcluj.ro}
+}
+
+\maketitle
+
+\begin{abstract}
+LLM-based coding agents can inspect files, propose patches, and run tests, but their success depends heavily on retrieving the right code context. Traditional keyword search and dense retrieval treat code mostly as text, often missing relationships expressed through imports, calls, containment, and inheritance. This paper introduces CodeGraph, a hybrid retrieval system for AI coding agents that combines lexical seeding with Personalized PageRank over a repository-level dependency graph. Evaluated on SWE-bench Lite, CodeGraph achieves 74.0\% Recall@10, a 24.3 percentage point improvement over a strong BM25-only baseline. Our empirical analysis shows that repository retrieval for AI agents improves when lexical matching is used only to place starting points, while structural propagation determines which connected code entities truly matter. The main empirical finding is that seed reachability, not ranking sophistication, sets the performance ceiling.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Code Retrieval, AI Agents, Graph Databases, Personalized PageRank, Static Analysis
+\end{IEEEkeywords}
+
+\input{01_intro}
+\input{02_related_work}
+\input{03_method}
+\input{04_system_overview}
+\input{05_experimental_setup}
+\input{06_results}
+\input{07_limitations}
+\input{08_conclusion}
+
+\nocite{*}
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

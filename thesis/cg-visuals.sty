@@ -146,176 +146,99 @@
 % ---------------------------------------------------------------------------
 % TikZ diagram styles (call after \usepackage{tikz})
 % ---------------------------------------------------------------------------
+\newcommand{\cgfonttitle}{\fontsize{10}{12}\selectfont\bfseries}
+\newcommand{\cgfontinner}{\fontsize{8}{10}\selectfont}
+\newcommand{\cgfontcaption}{\fontsize{9}{11}\selectfont}
+
 \newcommand{\cgdiagramsetup}{%
     \tikzset{
+        % Core Node Style
+        cgnode/.style={
+            draw=cgslate,
+            line width=0.8pt,
+            rounded corners=2pt,
+            fill=cgsoftgray,
+            font=\cgfontinner,
+            inner sep=0.25cm,
+            align=center,
+        },
+        % Semantic variants
+        cgseed/.style={cgnode, fill=cgorange},
+        cgintermediate/.style={cgnode, fill=cgblue},
+        cgtarget/.style={cgnode, fill=cggreen, double, double distance=1pt},
+        % Pipeline stages
         cgstage/.style={
-            lattice_stage,
+            cgnode,
             minimum width=2.6cm,
             minimum height=1.35cm,
-            font=\small\bfseries,
+            font=\cgfonttitle,
             text width=2.4cm,
         },
-        cgstage/parse/.style={cgstage, draw=latticeblue, fill=white},
-        cgstage/graph/.style={cgstage, draw=latticegreen, fill=white},
-        cgstage/online/.style={cgstage, draw=latticeorange, fill=white},
-        cgstage/deliver/.style={cgstage, draw=latticeblue!70!black, fill=white},
-        cgbadge/.style={
-            lattice_badge,
-            minimum size=18pt,
-            font=\scriptsize\bfseries,
+        cgstage/parse/.style={cgstage, fill=cgblue},
+        cgstage/graph/.style={cgstage, fill=cggreen},
+        cgstage/online/.style={cgstage, fill=cgorange},
+        cgstage/deliver/.style={cgstage, fill=cgblue},
+        % Bounding boxes
+        cgpanel/.style={
+            draw=cgslate,
+            line width=1.0pt,
+            dash pattern=on 4pt off 4pt,
+            fill=cgpannelgray,
+            rounded corners=2pt,
+            inner sep=0.5cm,
         },
-        cgarr/.style={lattice_arrow},
+        % Arrows
+        cgarr/.style={
+            -{stealth},
+            line width=1.0pt,
+            draw=cgslate,
+        },
         cgarrthin/.style={
-            -{Stealth[length=6pt,width=4pt]},
-            line width=1pt,
-            latticegray,
+            -{stealth},
+            line width=0.8pt,
+            draw=cglightgray,
+        },
+        % Edge labels
+        cgedgelabel/.style={
+            font=\cgfontinner,
+            fill=white,
+            inner sep=2pt,
+            text=cgslate,
+        },
+        % Legacy and specific entity nodes
+        cgnodefile/.style={cgnode, font=\cgfontinner\ttfamily},
+        cgnodeclass/.style={cgnode, fill=cgblue, font=\cgfontinner\ttfamily},
+        cgnodefunc/.style={cgnode, fill=cgorange, font=\cgfontinner\ttfamily},
+        % Badges and labels
+        cgbadge/.style={
+            draw=cgslate,
+            circle,
+            line width=0.8pt,
+            fill=white,
+            minimum size=18pt,
+            font=\cgfontinner\bfseries,
+            inner sep=0pt,
         },
         cglabel/.style={
-            font=\scriptsize\itshape,
-            text=latticegray,
+            font=\cgfontinner\itshape,
+            text=cgslate,
             align=center,
         },
         cgactor/.style={
-            draw=latticegray!80,
-            rounded corners=6pt,
+            cgnode,
+            font=\cgfonttitle,
             minimum width=2.4cm,
-            minimum height=0.9cm,
-            font=\small\bfseries,
-            align=center,
-            fill=white,
-            line width=0.8pt,
-        },
-        cglifeline/.style={
-            dashed,
-            line width=0.8pt,
-            draw=latticegray!40,
-        },
-        cgdecision/.style={
-            draw=latticegray!60,
-            rounded corners=5pt,
-            minimum width=4.2cm,
-            minimum height=0.75cm,
-            text width=4cm,
-            align=center,
-            font=\small,
-            fill=white,
-            inner sep=5pt,
-        },
-        cgoutcome/.style={
-            draw=latticegreen!70!black,
-            rounded corners=5pt,
-            minimum width=2.6cm,
-            minimum height=0.75cm,
-            text width=2.4cm,
-            align=center,
-            font=\small\bfseries,
-            fill=white,
-            inner sep=5pt,
-        },
-        cgdrop/.style={
-            draw=latticered!70!black,
-            rounded corners=5pt,
-            minimum width=4.2cm,
-            minimum height=0.75cm,
-            text width=4cm,
-            align=center,
-            font=\small\bfseries,
-            fill=white,
-            inner sep=5pt,
-        },
-        cgnodefile/.style={
-            draw=latticeblue,
-            rounded corners=6pt,
-            fill=white,
-            font=\small\ttfamily,
-            align=center,
-            inner sep=6pt,
-            line width=0.8pt,
-        },
-        cgnodeclass/.style={
-            draw=latticegreen,
-            rounded corners=6pt,
-            fill=white,
-            font=\small\ttfamily,
-            align=center,
-            inner sep=6pt,
-            line width=0.8pt,
-        },
-        cgnodefunc/.style={
-            draw=latticeorange,
-            rounded corners=6pt,
-            fill=white,
-            font=\small\ttfamily,
-            align=center,
-            inner sep=6pt,
-            line width=0.8pt,
-        },
-        cgtypesub/.style={font=\tiny, text=latticegray},
-        cgpanel/.style={
-            draw=latticegray!35,
-            rounded corners=8pt,
-            fill=black!2,
-            inner sep=12pt,
-        },
-        cgstructpanel/.style={
-            draw=latticegray!45,
-            rounded corners=6pt,
-            inner sep=10pt,
-            fill=white,
-        },
-        cgstructarr/.style={
-            -{Stealth[length=2.2mm, width=1.8mm]},
-            line width=0.85pt,
-            draw=latticeblue!75!black,
-        },
-        cgstructarrred/.style={
-            -{Stealth[length=2.2mm, width=1.8mm]},
-            line width=0.9pt,
-            draw=latticered!75!black,
-            dashed,
-        },
-        cgstructarrgray/.style={
-            -{Stealth[length=2.2mm, width=1.8mm]},
-            line width=0.85pt,
-            draw=latticegray,
-            dashed,
-        },
-        cgstructnote/.style={
-            font=\footnotesize,
-            text=black!65,
-            align=center,
-        },
-        cgedgelabel/.style={
-            font=\scriptsize\ttfamily,
-            fill=white,
-            inner sep=2pt,
-            text=black!80,
-            rounded corners=1pt,
-        },
-        cglegendbox/.style={
-            draw=latticegray!40,
-            rounded corners=4pt,
-            inner sep=6pt,
-            font=\footnotesize,
-            align=left,
-            text width=3.6cm,
-        },
-        cgswimlane/.style={
-            cgpanel,
-            minimum width=2.15cm,
-            minimum height=6.8cm,
-        },
-        cgmsg/.style={
-            font=\footnotesize,
-            fill=white,
-            inner sep=2.5pt,
-            text width=2.8cm,
-            align=center,
+            minimum height=1.0cm,
         },
         cgseqactor/.style={
             cgactor,
             minimum width=2.15cm,
             minimum height=0.85cm,
+        },
+        cglifeline/.style={
+            dash pattern=on 4pt off 4pt,
+            line width=0.8pt,
+            draw=cgslate!40,
         },
     }%
 }
@@ -342,7 +265,7 @@
 
 % Consistent row spacing for Chapter 3 tables.
 \newcommand{\cgtablerows}{%
-    \renewcommand{\arraystretch}{1.35}%
+    \renewcommand{\arraystretch}{1.2}%
 }
 
 % Monospace MCP/CLI name inside a fixed table column (prevents overflow into neighbors).

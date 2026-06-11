@@ -1,0 +1,20 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Large Language Models (LLMs) have made AI coding agents useful for more than isolated code completion. Agents can now inspect files, propose patches, and run tests, but their success still depends on a simple prerequisite: they must see the right code. Repository-scale tasks make this difficult. A bug report may describe a symptom in natural language, while the relevant implementation is spread across imports, calls, and inheritance relationships that are not visible to text search alone. 
+
+Current approaches to code retrieval typically rely on lexical keyword matching or dense vector embeddings. These methods are useful for finding textually similar files, but software changes often follow structure rather than vocabulary. A bug described in a view, parser, or public API may require a change in a helper, compiler, or base class several edges away from the named component. This mismatch between natural language symptoms and source-code structure creates a ``Semantic Gap'' that purely lexical systems struggle to cross.
+
+This paper introduces CodeGraph, a hybrid retrieval system for repository-level code navigation. CodeGraph parses Python repositories into a dependency graph, selects seed entities from a task description, and uses Personalized PageRank (PPR) to rank structurally related code. The central claim is not that graph structure replaces lexical search, but that lexical and structural signals solve different parts of the retrieval problem. Lexical signals identify where the search can begin; graph propagation identifies which connected code entities are likely to matter.
+
+The primary bottleneck in such a system is Seed Extraction: translating an ambiguous task description into useful starting points inside the code graph. If no seed lands near the relevant subsystem, even a strong ranking algorithm has little useful signal to propagate. If the seed set contains a mix of correct and noisy matches, graph structure can still help by amplifying the region where independent signals converge. CodeGraph is designed around this division of labor.
+
+The main contributions of this work are:
+\begin{enumerate}
+    \item A structural representation of Python source code that captures calls, imports, containment, and inheritance without the noise of indexing every AST node.
+    \item A hybrid retrieval pipeline combining lexical anchoring with structural propagation via Personalized PageRank.
+    \item An evaluation on SWE-bench Lite demonstrating a 74.0\% Recall@10, driven primarily by resolving the reachability bottleneck.
+    \item An integration through the Model Context Protocol (MCP), allowing AI agents to request ranked source context via a stable tool interface.
+\end{enumerate}
+
+The remainder of this paper is organized as follows. \Cref{sec:background} provides background on static analysis and graph-based ranking. \Cref{sec:architecture} presents the architecture of CodeGraph, while \Cref{sec:methodology} details the structural retrieval methodology. \Cref{sec:evaluation} reports the evaluation results. \Cref{sec:discussion} interprets the structural limits of the system, and \Cref{sec:conclusion} concludes the paper.

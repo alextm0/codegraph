@@ -23,6 +23,7 @@
 \usepackage{listings}       % code listings
 \usepackage[ruled, vlined, linesnumbered]{algorithm2e} % formal algorithms
 \usepackage{xcolor}         % colors for listings
+\usepackage{fontawesome5}   % icons for thesis figures
 
 % Code listing style shared across all chapters
 \definecolor{codegray}{rgb}{0.5,0.5,0.5}
@@ -31,7 +32,16 @@
 \definecolor{codegreen}{rgb}{0,0.5,0}
 \definecolor{backcolour}{rgb}{0.97,0.97,0.97}
 
-% Lattice Design System Colors
+% Thesis Illustration Style Guide Colors
+\definecolor{cgslate}{HTML}{2F3640}    % Primary Text & Borders
+\definecolor{cgsoftgray}{HTML}{F1F2F6} % Base Node Background
+\definecolor{cgpannelgray}{HTML}{F8F9FA} % Grouping Box Backgrounds
+\definecolor{cgorange}{HTML}{FFCC99}   % Seed / Source Nodes
+\definecolor{cgblue}{HTML}{CCCCFF}     % Intermediate Nodes
+\definecolor{cggreen}{HTML}{99FF99}    % Target / Success Nodes
+\definecolor{cglightgray}{HTML}{A4B0BE} % Connecting Arrows (secondary)
+
+% Legacy Lattice Colors (for compatibility during transition)
 \definecolor{latticeblue}{HTML}{2563EB}
 \definecolor{latticegreen}{HTML}{059669}
 \definecolor{latticered}{HTML}{DC2626}
@@ -167,7 +177,7 @@
 \begin{document}
 
 \specialization{Computer Science}
-\title{Structural Context Retrieval for AI Coding Agents via Weighted Personalized PageRank on Code Dependency Graphs}
+\title{CodeGraph: Repository-Level Structural Retrieval for AI Coding Agents via Personalized PageRank}
 \author{Toma Alexandru-Mihai}
 \supervisor{Lect. PhD. Arthur Molnar}
 

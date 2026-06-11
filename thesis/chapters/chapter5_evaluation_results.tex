@@ -8,16 +8,6 @@ We evaluate CodeGraph on SWE-bench Lite, a benchmark of 300 real GitHub issues p
 
 The optimal configuration reaches 74.0\% Recall@10, a 32 percentage point improvement over the initial baseline. This chapter tells the story of how the system reached that result. Rather than presenting the final numbers in isolation, we trace the iterative engineering process: a diagnostic discovery about the bimodal structure of retrieval failures led to a Seed-First strategy that produced the dominant share of all performance gains.
 
-The chapter is organized as follows:
-\begin{itemize}
-    \item \Cref{sec:eval-framework} establishes the evaluation environment, defines the benchmark, and specifies the metrics.
-    \item \Cref{sec:eval-trajectory} maps the performance trajectory from the initial baseline to the optimal configuration.
-    \item \Cref{sec:eval-diagnostics} explains the bimodal rank distribution that shaped all subsequent engineering decisions.
-    \item \Cref{sec:eval-seeds} details the five systematic seed refinements that unlocked the dominant performance gain.
-    \item \Cref{sec:eval-ablations} reports the ablation studies that isolate and validate each component's contribution.
-    \item \Cref{sec:eval-synthesis} synthesizes per-repository performance and defines the structural ceiling of the current approach.
-\end{itemize}
-
 % ============================================================
 \section{Evaluation Framework}
 \label{sec:eval-framework}
@@ -44,7 +34,7 @@ This setup makes the benchmark well-suited for evaluating retrieval systems. Iss
     \small
     \caption{Repositories in SWE-bench Lite by instance count. The dataset spans six domain categories and provides a rigorous test for repository-level retrieval.}
     \label{tab:repo-characteristics}
-    \renewcommand{\arraystretch}{1.4}
+    \cgtablerows
     \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{4.0cm} >{\RaggedRight\arraybackslash}p{1.8cm} >{\RaggedRight\arraybackslash}X @{}}
         \toprule
@@ -81,94 +71,7 @@ The evaluation protocol simulates a realistic agent loop. For each SWE-bench Lit
 
 \begin{figure}[H]
     \centering
-    \resizebox{\textwidth}{!}{%
-    \begin{tikzpicture}[
-            stage/.style={draw, rounded corners=8pt,
-                    minimum width=3.6cm, minimum height=2.2cm,
-                    text width=3.2cm, align=center,
-                    line width=0.8pt, inner sep=8pt, font=\small},
-            badge/.style={circle, minimum size=20pt, inner sep=0pt,
-                    font=\footnotesize\bfseries, text=white, line width=0pt},
-            datalabel/.style={font=\scriptsize\itshape, color={rgb,255:red,75;green,85;blue,99},
-                    align=center, inner sep=2pt},
-            arr/.style={-{Stealth[length=7pt, width=5pt]}, line width=1.5pt,
-                    color={rgb,255:red,37;green,99;blue,235}},
-            input/.style={draw, rounded corners=8pt, fill=white,
-                    draw={rgb,255:red,31;green,41;blue,55}, line width=0.7pt,
-                    font=\scriptsize, align=center, text width=2.4cm,
-                    inner sep=6pt},
-            node distance=2.2cm
-        ]
-
-        % ---------------------------------------------------------------
-        % NODES
-        % ---------------------------------------------------------------
-        
-        % Input: SWE-bench Instance
-        \node[input] (instance) at (0,0) {\textbf{SWE-bench}\\\textbf{Instance}\\[2pt]\tiny (Issue + Gold Patch)};
-        
-        % Retrieval Stage
-        \node[stage, fill={rgb,255:red,219;green,234;blue,254},
-              draw={rgb,255:red,37;green,99;blue,235}, right=of instance] (retrieval)
-            {\vspace{12pt}\\\textbf{CodeGraph}\\[-1pt]\textbf{Retrieval}\\[6pt]
-             {\tiny\color{gray!70}300 Instances}};
-             
-        % Predictions
-        \node[stage, fill={rgb,255:red,243;green,244;blue,246},
-              draw={rgb,255:red,31;green,41;blue,55}, right=of retrieval] (topk)
-            {\vspace{12pt}\\\textbf{Ranked File}\\[-1pt]\textbf{List}\\[6pt]
-             {\tiny\color{gray!70}Top-100 Candidates}};
-
-        % Validation Stage
-        \node[stage, fill={rgb,255:red,254;green,243;blue,199},
-              draw={rgb,255:red,245;green,158;blue,11}, right=of topk] (validation)
-            {\vspace{12pt}\\\textbf{Metric}\\[-1pt]\textbf{Calculation}\\[6pt]
-             {\tiny\color{gray!70}Recall@$k$, MRR}};
-
-        % Performance Report
-        \node[stage, fill={rgb,255:red,209;green,250;blue,229},
-              draw={rgb,255:red,5;green,150;blue,105}, right=of validation] (report)
-            {\vspace{12pt}\\\textbf{Performance}\\[-1pt]\textbf{Report}\\[6pt]
-             {\tiny\color{gray!70}74.0\% R@10}};
-
-        % Stage badges (Shifted to the top-left corner outside the box)
-        \node[badge, fill={rgb,255:red,37;green,99;blue,235}]
-            at ([xshift=-10pt,yshift=10pt]retrieval.north west) {\footnotesize 1};
-        \node[badge, fill={rgb,255:red,245;green,158;blue,11}]
-            at ([xshift=-10pt,yshift=10pt]validation.north west) {\footnotesize 2};
-        \node[badge, fill={rgb,255:red,5;green,150;blue,105}]
-            at ([xshift=-10pt,yshift=10pt]report.north west) {\footnotesize 3};
-
-        % Arrows
-        \draw[arr] (instance.east) -- node[datalabel, above, yshift=4pt] {Issue\\Description} (retrieval.west);
-        \draw[arr] (retrieval.east) -- node[datalabel, above, yshift=4pt] {PPR\\Scores} (topk.west);
-        \draw[arr] (topk.east) -- node[datalabel, above, yshift=4pt] {Predictions} (validation.west);
-        \draw[arr] (validation.east) -- (report.west);
-        
-        % Gold File Path arrow
-        \draw[arr, color={rgb,255:red,5;green,150;blue,105}] (instance.south) -- ++(0,-1.6) -| node[datalabel, pos=0.25, below, yshift=-4pt] {Gold File Path} (validation.south);
-
-        % Phases
-        \begin{scope}[on background layer]
-            % Retrieval Phase
-            \node[draw={rgb,255:red,37;green,99;blue,235}, dashed,
-                  rounded corners=10pt,
-                  fill={rgb,255:red,239;green,246;blue,255},
-                  fit=(retrieval)(topk), inner xsep=18pt, inner ysep=48pt] (retphase) {};
-            % Validation Phase
-            \node[draw={rgb,255:red,5;green,150;blue,105}, dashed,
-                  rounded corners=10pt,
-                  fill={rgb,255:red,240;green,253;blue,244},
-                  fit=(validation)(report), inner xsep=18pt, inner ysep=48pt] (valphase) {};
-        \end{scope}
-        
-        \node[font=\footnotesize\bfseries, color={rgb,255:red,37;green,99;blue,235},
-              above=12pt of retphase] {Retrieval Phase};
-        \node[font=\footnotesize\bfseries, color={rgb,255:red,5;green,150;blue,105},
-              above=12pt of valphase] {Evaluation Phase};
-
-    \end{tikzpicture}%
-    }
+    \includegraphics[width=\textwidth]{assets/eval_pipeline.png}
     \caption[SWE-bench Lite evaluation pipeline]{The evaluation pipeline for the SWE-bench Lite benchmark. For each instance, CodeGraph retrieves a ranked list of files based on the issue description, which the evaluation harness compares against the human-written gold patch to compute retrieval metrics.}
     \label{fig:eval-pipeline}
 \end{figure}
@@ -192,7 +95,7 @@ All baselines run on the same SWE-bench Lite instances and repositories as CodeG
 \label{sec:eval-trajectory}
 % ============================================================
 
-This section presents the performance trajectory from the initial baseline to the optimal configuration. The goal is to show not only where the system ended up, but how each engineering decision contributed to the final result, so that the trajectory itself serves as evidence for the design choices documented throughout this thesis.
+The initial configuration achieves 42.0\% R@10, which is 7.7 percentage points below BM25 alone. Three engineering stages close this gap and surpass it, reaching 74.0\% R@10. This section traces each stage and shows how the trajectory itself serves as evidence for the design choices documented throughout this thesis.
 
 The initial configuration, which uses confidence-weighted PPR restart, achieves 42.0\% R@10. For comparison, BM25 alone achieves 49.7\%, meaning the initial graph-based system underperforms a simple lexical baseline. This gap is the first key finding: it reveals that the problem lies not in the graph structure itself, but in how the personalization vector is constructed. The subsequent engineering iterations address this directly. \Cref{tab:trajectory-results} records the full trajectory.
 
@@ -201,7 +104,7 @@ The initial configuration, which uses confidence-weighted PPR restart, achieves 
     \small
     \caption{Performance trajectory from the initial baseline to the optimal configuration. Each row adds one intervention to the previous configuration.}
     \label{tab:trajectory-results}
-    \renewcommand{\arraystretch}{1.5}
+    \cgtablerows
     \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}p{1.2cm} >{\RaggedRight\arraybackslash}p{1.2cm} >{\RaggedRight\arraybackslash}p{1.2cm} >{\RaggedRight\arraybackslash}p{1.6cm} @{}}
         \toprule
@@ -227,40 +130,7 @@ The improvement trajectory follows three stages:
 
 \begin{figure}[H]
     \centering
-    \begin{tikzpicture}[
-            lbl/.style={font=\scriptsize\sffamily, align=center},
-        ]
-        \pgfmathsetmacro{\hA}{42.0*0.06}
-        \pgfmathsetmacro{\hB}{49.7*0.06}
-        \pgfmathsetmacro{\hC}{60.7*0.06}
-        \pgfmathsetmacro{\hD}{72.3*0.06}
-        \pgfmathsetmacro{\hE}{74.0*0.06}
-
-        \fill[blue!15, draw=gray!60] (0,   0) rectangle (1.2, \hA);
-        \fill[gray!35, draw=gray!60, dashed] (1.8, 0) rectangle (3.0, \hB);
-        \fill[blue!30, draw=gray!60] (3.6, 0) rectangle (4.8, \hC);
-        \fill[blue!50, draw=gray!60] (5.4, 0) rectangle (6.6, \hD);
-        \fill[blue!70, draw=gray!60] (7.2, 0) rectangle (8.4, \hE);
-
-        \node[lbl] at (0.6,  \hA+0.25) {42.0\%};
-        \node[lbl] at (2.4,  \hB+0.25) {49.7\%};
-        \node[lbl] at (4.2,  \hC+0.25) {60.7\%};
-        \node[lbl] at (6.0,  \hD+0.25) {72.3\%};
-        \node[lbl, text=blue!70!black, font=\scriptsize\sffamily\bfseries] at (7.8,  \hE+0.25) {74.0\%};
-
-        \node[lbl, text width=1.6cm] at (0.6,  -0.65) {Initial\\Baseline};
-        \node[lbl, text width=1.6cm] at (2.4,  -0.65) {BM25\\Baseline};
-        \node[lbl, text width=1.6cm] at (4.2,  -0.65) {Uniform\\PPR};
-        \node[lbl, text width=1.8cm] at (6.0,  -0.65) {+\,Seed\\Refinement};
-        \node[lbl, text width=1.6cm] at (7.8,  -0.65) {Optimal\\($k=30$)};
-
-        \draw[-{Stealth[length=4pt]}, gray!60, semithick] (-0.3, 0) -- (-0.3, 5.0);
-        \node[rotate=90, lbl, text=gray!60!black] at (-1.3, 2.5) {Recall@10};
-        \foreach \y/\pct in {0/0, 1.8/30, 3.0/50, 4.5/75} {
-            \draw[gray!30, thin] (-0.3, \y) -- (9.2, \y);
-            \node[lbl, text=gray!60!black] at (-0.75, \y) {\pct\%};
-        }
-    \end{tikzpicture}
+    \includegraphics[width=\textwidth]{assets/recall_trajectory.png}
     \caption{Recall@10 trajectory. We show the grey bar (BM25-only) for reference; the remaining bars represent successive CodeGraph configurations.}
     \label{fig:trajectory}
 \end{figure}
@@ -270,7 +140,7 @@ The improvement trajectory follows three stages:
 \label{sec:eval-diagnostics}
 % ============================================================
 
-This section explains the diagnostic insight that motivated the Seed-First engineering strategy. Understanding why failures occur is more informative than knowing how many occur: this analysis reveals that CodeGraph's retrieval ceiling is set by a structural property of the dependency graph, not by the ranking function.
+CodeGraph's retrieval failures are bimodal: the target file either ranks in the top-5 or does not appear in the top-10 at all. This pattern reveals that the retrieval ceiling is set by a structural property of the dependency graph, not by the ranking function, and it directly motivated the Seed-First engineering strategy.
 
 \paragraph{The Bimodal Rank Distribution.}
 When we inspected the distribution of ranks for the target file across the initial configuration, we found a striking bimodal pattern: for most issues, the target file either ranks in the top-5 or does not appear in the top-10 at all. Only 15 out of 300 instances (5\%) fall in the intermediate band (ranks 6--10). This pattern holds across configurations and repositories, and is illustrated in \cref{fig:bimodal}.
@@ -287,7 +157,7 @@ This diagnostic directly motivates the Seed-First engineering strategy described
     \small
     \caption{Attribution of performance gains to engineering interventions. Seed quality is the primary driver of retrieval success.}
     \label{tab:attribution-summary}
-    \renewcommand{\arraystretch}{1.5}
+    \cgtablerows
     \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\arraybackslash}p{4.2cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}p{1.4cm} @{}}
         \toprule
@@ -296,7 +166,6 @@ This diagnostic directly motivates the Seed-First engineering strategy described
         Algorithm Refinement    & Uniform vs. weighted PPR restart   & +18.7pp \\
         Seed Quality Refinement & Compound tokenization, IDF weighting & +11.6pp \\
         Budget Adjustment       & Candidate pool $k=30$ & +1.7pp \\
-        \midrule
         \textbf{Total Improvement} & & \textbf{+32.0pp} \\
         \bottomrule
     \end{tabularx}
@@ -305,25 +174,7 @@ This diagnostic directly motivates the Seed-First engineering strategy described
 
 \begin{figure}[H]
     \centering
-    \begin{tikzpicture}[
-            lbl/.style={font=\scriptsize\sffamily, align=center},
-        ]
-        % Heights proportional to instance counts (174, 15, 111 out of 300)
-        \pgfmathsetmacro{\hMissed}{174/300*5}
-        \pgfmathsetmacro{\hMid}{15/300*5}
-        \pgfmathsetmacro{\hTop}{111/300*5}
-        \fill[red!25, draw=gray!60] (0, 0) rectangle (1.6, \hMissed);
-        \fill[blue!20, draw=gray!60] (2.4, 0) rectangle (4.0, \hMid);
-        \fill[green!35, draw=gray!60] (4.8, 0) rectangle (6.4, \hTop);
-        \node[lbl] at (0.8, \hMissed+0.25) {\textbf{174}};
-        \node[lbl] at (3.2, \hMid+0.25) {\textbf{15}};
-        \node[lbl] at (5.6, \hTop+0.25) {\textbf{111}};
-        \node[lbl] at (0.8, -0.5) {Missed\\(Rank $>10$)};
-        \node[lbl] at (3.2, -0.5) {Rank 6--10};
-        \node[lbl] at (5.6, -0.5) {Rank 1--5};
-        \draw[-{Stealth[length=4pt]}, gray!60, semithick] (-0.3, 0) -- (-0.3, 3.5);
-        \node[rotate=90, lbl, text=gray!60!black] at (-1.3, 1.75) {Instances};
-    \end{tikzpicture}
+    \includegraphics[width=\textwidth]{assets/bimodal_rank_distribution.png}
     \caption{Bimodal rank distribution for the initial configuration (300 instances). Instances land almost exclusively in Rank 1--5 or outside the top~10; only 5\% fall in the intermediate band. This pattern implies that PPR ranking is not the primary bottleneck once a useful seed exists.}
     \label{fig:bimodal}
 \end{figure}
@@ -403,7 +254,7 @@ The quantitative trajectory in \cref{sec:eval-trajectory} shows how far the syst
     \small
     \caption{Zero-recall failure rates by repository for the optimal configuration.}
     \label{tab:per-repo}
-    \renewcommand{\arraystretch}{1.4}
+    \cgtablerows
     \begin{adjustbox}{max width=\textwidth}
     \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\bfseries}p{4.2cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}X @{}}
         \toprule
@@ -414,7 +265,6 @@ The quantitative trajectory in \cref{sec:eval-trajectory} shows how far the syst
         django/django     & 114 & 31 & 27\% \\
         sympy/sympy       & 77 & 24 & 31\% \\
         pylint-dev/pylint & 6  & 5  & 83\% \\
-        \midrule
         \textbf{Total (Weighted Avg)} & \textbf{300} & \textbf{78} & \textbf{26\%} \\
         \bottomrule
     \end{tabularx}
@@ -432,40 +282,7 @@ An analysis of the 78 zero-recall instances identifies two distinct failure mode
 
 \begin{figure}[H]
     \centering
-    \begin{tikzpicture}[
-        node distance=2.0cm and 0.5cm,
-        rootbox/.style={draw, rounded corners=8pt, line width=1.2pt,
-            fill={rgb,255:red,243;green,244;blue,246},
-            draw={rgb,255:red,31;green,41;blue,55},
-            text width=5.5cm, align=center, font=\small\bfseries, minimum height=1.1cm},
-        leafbox/.style={draw, rounded corners=8pt, line width=1.0pt,
-            text width=5.2cm, align=center, font=\small, minimum height=1.6cm,
-            inner sep=10pt},
-        arrow/.style={-{Stealth[length=6pt, width=4pt]}, line width=1.2pt, color=gray!50},
-        subtextstyle/.style={font=\footnotesize, color={rgb,255:red,55;green,65;blue,81}, 
-            line height=1.25},
-    ]
-    \newcommand{\subtext}[1]{{\color[rgb]{0.21,0.25,0.32}\footnotesize #1}}
-        % Root
-        \node[rootbox] (total) {78 Zero-Recall Failures};
-        
-        % Connectivity Gaps
-        \node[leafbox, fill={rgb,255:red,254;green,243;blue,199}, 
-              draw={rgb,255:red,245;green,158;blue,11}, below left=1.4cm and -1.0cm of total] (connectivity) 
-            {\textbf{Connectivity Gaps (40 cases)}\\[6pt]
-             \subtext{Seeds land in the correct directory but no explicit structural path connects them to the target file}};
-             
-        % Semantic Gaps
-        \node[leafbox, fill={rgb,255:red,254;green,226;blue,226}, 
-              draw={rgb,255:red,220;green,38;blue,38}, below right=1.4cm and -1.0cm of total] (semantic) 
-            {\textbf{Semantic Gaps (38 cases)}\\[6pt]
-             \subtext{The bug report uses abstract terms with no lexical overlap with source code identifiers}};
-        
-        % Arrows
-        \draw[arrow] (total.south) -- ++(0,-0.6) -| (connectivity.north);
-        \draw[arrow] (total.south) -- ++(0,-0.6) -| (semantic.north);
-
-    \end{tikzpicture}
+    \includegraphics[width=\textwidth]{assets/failure_taxonomy.png}
     \caption{Failure taxonomy of the 78 zero-recall instances. Connectivity Gaps account for 40 cases and arise from missing structural paths in the dependency graph. Semantic Gaps account for 38 cases and arise from lexical mismatch between issue descriptions and source code identifiers.}
     \label{fig:taxonomy}
 \end{figure}
@@ -477,4 +294,4 @@ An analysis of the 78 zero-recall instances identifies two distinct failure mode
 \end{itemize}
 
 \paragraph{Conclusion.}
-These two failure modes define the structural ceiling of the CodeGraph approach. Connectivity Gaps arise from the sparsity of explicit dependency edges across logically related files. Semantic Gaps arise from the inability of lexical matching to bridge abstract bug descriptions to code identifiers. Both are addressable in principle: Connectivity Gaps through richer graph schemas (with the caveat from \cref{sec:eval-ablation-structural} that naive structural augmentation introduces Probability Dilution), and Semantic Gaps through dense embedding retrieval that connects natural-language descriptions to code entities through learned similarity. The integration of these two retrieval modalities is the primary direction for future work, discussed further in \cref{ch:conclusion}.
+These two failure modes define the structural ceiling of the current approach: Connectivity Gaps arise from missing explicit dependency edges between logically related files, and Semantic Gaps arise from the inability of lexical matching to bridge abstract descriptions to code identifiers. Together, they account for all 78 zero-recall instances and establish the boundary conditions that \cref{ch:discussion} interprets and \cref{ch:conclusion} addresses through directions for future work.

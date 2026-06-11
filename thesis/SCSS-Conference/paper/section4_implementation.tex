@@ -1,0 +1,34 @@
+\section{Implementation}
+\label{sec:implementation}
+
+CodeGraph is implemented in Python and centers around a deterministic execution path. The system translates the design described in \Cref{sec:architecture} into a robust indexing and retrieval engine.
+
+\subsection{Tree-sitter Parsing}
+
+To parse source code safely without relying on a full compiler, CodeGraph utilizes the Tree-sitter parser generator. This produces a Concrete Syntax Tree (CST) that maps directly to source byte offsets. Unlike standard ASTs, Tree-sitter's byte-level mapping preserves formatting and tolerates syntax errors---an essential feature for development environments where code is frequently in an intermediate, non-compiling state. 
+
+During indexing, the parser executes a robust extraction pass:
+\begin{enumerate}
+    \item It reads source bytes from disk and parses them into a CST.
+    \item It walks the CST using dedicated extractors to populate immutable entity records.
+    \item It assigns each entity a qualified name, such as \texttt{auth.py::login}.
+\end{enumerate}
+
+\subsection{Two-Pass Graph Construction}
+
+Once entities and references are parsed, they must be stored in the Neo4j database. Because source code frequently contains forward references (e.g., a function in \texttt{main.py} calling a utility in \texttt{utils.py} before it is parsed), the database loading follows a two-pass sequence:
+\begin{enumerate}
+    \item \textbf{Pass 1 (Entity and Containment):} Traverses the repository and creates all structural nodes (\texttt{File}, \texttt{Class}, \texttt{Function}, \texttt{Method}) and their intra-file \texttt{CONTAINS} edges.
+    \item \textbf{Pass 2 (Cross-File Edges):} With the full node population in place, the second pass resolves dependencies and safely links \texttt{IMPORTS}, \texttt{CALLS}, and \texttt{INHERITS\_FROM} edges across files.
+\end{enumerate}
+
+All graph writes are executed via parameterized Cypher queries utilizing batched \texttt{UNWIND} and \texttt{MERGE} clauses, guaranteeing idempotency. Incremental updates trigger localized parsing and a fast application of these two passes on the modified file batch.
+
+\subsection{Agent Interfaces}
+
+The pipeline is intentionally separated into a stateless retrieval logic core and multiple thin interfaces, ensuring identical behavior across interactions:
+\begin{itemize}
+    \item \textbf{Model Context Protocol (MCP) Server:} A FastMCP-based server running over standard input/output. It exposes the \texttt{get\_relevant\_context} tool directly to AI agents. It avoids re-establishing database connections per query by initializing a persistent Neo4j driver and GDS client through a lifespan context manager.
+    \item \textbf{Command-Line Interface (CLI):} Built for local evaluation and scripting, it executes the same retrieval path and can emit a structured provenance trace detailing seed selection weights and PPR propagation paths via \texttt{codegraph explain}.
+    \item \textbf{Interactive Visualizer:} A graphical tool served via FastAPI and React that allows developers to visually debug topological relevance flows.
+\end{itemize}

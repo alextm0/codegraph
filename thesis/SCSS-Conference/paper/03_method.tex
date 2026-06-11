@@ -1,0 +1,42 @@
+\section{Methodology}
+\label{sec:method}
+
+CodeGraph treats code retrieval as a two-stage process: lexical signals prioritize the entry points (seeds) into the codebase, while structural propagation disambiguates and ranks the broader functional neighbourhood. This division of labour ensures that natural-language queries can find a starting point, while the ranking itself remains anchored in execution semantics.
+
+\subsection{Seed Selection}
+
+Personalized PageRank requires a set of starting nodes. Seed selection translates the natural-language task description into a personalization vector---a probability distribution determining where the random walk restarts.
+
+CodeGraph constructs this vector from three complementary signals:
+\begin{enumerate}
+    \item \textbf{Entity match:} Extracts direct identifier mentions (CamelCase, snake\_case) from the task text using regex patterns and matches them against the graph's node vocabulary. Highly ambiguous names are down-weighted using inverse-document-frequency (IDF) scaling to prevent ubiquitous words like \texttt{update} from dominating.
+    \item \textbf{BM25 keyword search:} Broadens coverage when explicit identifiers are absent. Entities are indexed by short name, qualified name, path, and docstrings. A compound tokenization step splits names at CamelCase boundaries and underscores, ensuring abstract queries (e.g., ``SQL compilation'') can match composite identifiers (e.g., \texttt{SQLCompiler}).
+    \item \textbf{Issue path hint:} Extracts directory fragments or file names mentioned in the issue text and maps them to entities located under the corresponding path.
+\end{enumerate}
+
+These signals are merged to form a robust starting distribution that does not rely exclusively on perfect entity resolution.
+
+\subsection{IDF-Based Edge Reweighting}
+
+Uniform graph traversal assumes every structural connection contributes equally to relevance. In practice, however, some connections point to highly specific domain logic, while others point to generic utility nodes (e.g., global loggers or base classes) reused across large parts of the repository.
+
+To attenuate the influence of generic hubs, CodeGraph assigns each edge a weight inversely proportional to the in-degree of its target node: $w(e) = 1 / \log_2(\operatorname{in\_degree}(v) + 2)$. This logarithmic penalty steers probability mass away from ubiquitous hubs, ensuring that relevance is propagated primarily along domain-specific pathways. \Cref{fig:idf-reweighting} illustrates this intuition.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{assets/idf_reweighting.png}
+    \caption{IDF edge reweighting. Panel (a) uses uniform weights, diluting relevance. Panel (b) attenuates the weight toward the high in-degree hub, keeping relevance mass on the domain-specific callee.}
+    \label{fig:idf-reweighting}
+\end{figure}
+
+\subsection{Design Rationale for Structural Retrieval}
+
+The methodology is governed by several strict design choices that prioritize robust structural semantics over raw data density or empirical heuristics.
+
+\textbf{Coarse-Grained Entity Granularity:} The graph schema restricts nodes strictly to files, classes, functions, and methods. CodeGraph explicitly avoids line-level resolution or full Abstract Syntax Tree (AST) ingestion. While ASTs capture complete syntactic correctness, their overwhelming density dilutes retrieval probability mass. The chosen four-entity model provides the exact abstraction layer through which developers typically organize, modularize, and reference code, maintaining a graph size that is efficient for matrix operations.
+
+\textbf{Precision Over Noisy Connectivity:} During graph construction, call resolution is performed conservatively. If a function call site is ambiguous and cannot be resolved to a definitive definition within the codebase, CodeGraph omits the edge entirely. This choice favors precision over recall in the graph topology itself: it is safer to miss an implicit connection than to inject false structural pathways that would misdirect the PageRank random walk. 
+
+\textbf{Explicit Dependencies Over Proximity Heuristics:} We restrict edges strictly to syntactic dependencies (\texttt{CALLS}, \texttt{IMPORTS}, \texttt{CONTAINS}, \texttt{INHERITS\_FROM}). We do not use directory-proximity heuristics (e.g., connecting all files in the same folder). As our ablation studies confirm, adding proximity edges creates dense subgraphs that indiscriminately diffuse relevance. CodeGraph's retrieval fidelity is built on the premise that execution paths matter more than file system locality.
+
+\textbf{Uniform Restart as a Robustness Mechanism:} A critical algorithmic decision is the use of a uniform restart distribution over the selected seeds, rather than weighting restarts by lexical confidence scores. In software repositories, a highly confident lexical match is often an ambiguous, common identifier (e.g., a generic \texttt{Manager} class). Weighting by confidence amplifies these false positives. Uniform restart is a robustness decision under noisy seed conditions: by giving every extracted seed an equal share of the initial mass, CodeGraph allows the graph topology to arbitrate. Correct seeds that share structural paths compound their mass cooperatively, while isolated incorrect seeds dissipate their relevance into uncoordinated neighbourhoods.

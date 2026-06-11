@@ -1,0 +1,19 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Large Language Models (LLMs) have transformed AI coding agents from code-completion tools into autonomous systems capable of inspecting files, proposing patches, and running tests. However, an agent's success is strictly constrained by a simple prerequisite: it must observe the right code within its context window. Repository-scale tasks make this selection difficult. A bug report typically describes symptoms in high-level natural language, whereas the relevant implementation details are often scattered across module boundaries, linked by imports, calls, and inheritance hierarchies.
+
+Current retrieval approaches for coding agents isolate lexical and structural signals. Sparse retrieval methods (e.g., BM25) localize context using term frequency but fail when task vocabulary diverges from source-code identifiers. Dense retrieval models embed both text and code to bridge semantic gaps, yet they compute relevance purely from token sequences, ignoring the structural dependencies that govern execution. This mismatch between how developers describe issues and how repositories are organized creates a retrieval bottleneck that purely text-centric methods struggle to overcome.
+
+Graph propagation recovers the structural relationships that text search misses. By parsing source code into a dependency graph of entities and relations, retrieval can traverse the explicit topology of the repository. Rather than relying on a single dominant signal, lexical and structural mechanisms can cooperate: lexical search isolates plausible entry points (seeds), while structural propagation (via Personalized PageRank) diffuses relevance across the dependency network to rank the broader functional neighbourhood.
+
+This paper introduces CodeGraph, a hybrid retrieval system that integrates lexical anchoring with structural propagation and deterministic ranking. Our central diagnosis is that seed quality, rather than ranking sophistication, dominates the retrieval ceiling. If lexical signals localize the right general region, graph propagation reliably disambiguates and amplifies the correct targets. If seeds miss the relevant neighbourhood entirely, no propagation mechanism can recover the target. Reachability is the primary constraint.
+
+The main contributions of this work are:
+\begin{enumerate}
+    \item A hybrid retrieval formulation in which lexical signals identify candidate entry points, while graph propagation performs repository-scale ranking.
+    \item An empirical diagnosis showing that retrieval performance is limited primarily by seed reachability, not by downstream ranking complexity.
+    \item A deterministic structural retrieval system that reaches 74.0\% Recall@10 on SWE-bench Lite, outperforming a strong BM25 baseline by 24.3 percentage points.
+\end{enumerate}
+
+The remainder of this paper is organized as follows. \Cref{sec:related_work} situates our approach against existing code retrieval methods. \Cref{sec:method} details the core retrieval methodology. \Cref{sec:system} provides an overview of the implementation. \Cref{sec:experimental_setup} outlines the evaluation framework, and \Cref{sec:results} reports the quantitative findings and analyses. \Cref{sec:discussion} isolates the structural limits of our method and implications for AI agents, and \Cref{sec:conclusion} concludes.

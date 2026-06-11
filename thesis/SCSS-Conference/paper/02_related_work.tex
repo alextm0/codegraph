@@ -1,0 +1,22 @@
+\section{Related Work}
+\label{sec:related_work}
+
+Retrieval for Large Language Models (LLMs) in software engineering falls into three broad categories: sparse, dense, and graph-based retrieval.
+
+\textbf{Sparse Retrieval:} Sparse retrieval methods, such as BM25 \cite{bm25}, compute relevance based on term overlap between the query and the indexed code tokens. While fast, scalable, and interpretable, sparse methods suffer from extreme lexical sensitivity. A natural language query mentioning ``database compilation'' will not natively match a class named \texttt{DBCompiler}. Pure lexical search struggles when the issue description uses vocabulary that abstracts away from precise implementation identifiers.
+
+\textbf{Dense Retrieval:} Dense retrieval methods encode queries and code entities into a shared continuous vector space using pre-trained models like CodeBERT \cite{codebert} or UniXcoder \cite{unixcoder}. The primary strength of dense methods is their paraphrase tolerance. By mapping natural-language concepts and code snippets to nearby vectors, they can anchor retrieval purely on semantic meaning, succeeding precisely where abstract issue descriptions lack the exact vocabulary of the underlying code. 
+
+Despite this semantic power, dense retrieval alone is insufficient for robust repository navigation. Because embeddings compute similarity strictly from token sequences, they remain blind to the explicit structural relationships that govern code execution. A dense model does not natively understand that a view depends on a specific serializer, or that a subclass inherits methods from a base class. Furthermore, dense ranking is opaque: when an irrelevant file is ranked highly, there is no interpretable structural trace explaining why it was chosen, making it difficult for an agent to debug its own context acquisition.
+
+Consequently, CodeGraph is positioned as a hybrid rather than an anti-dense system. Our methodology argues that semantic methods (whether sparse or dense) are best utilized to solve the seed selection problem—identifying candidate entry points—while structural methods should be reserved for the actual ranking and diffusion of relevance across the codebase.
+
+\textbf{Graph-Based Retrieval:} Graph-based systems explicitly model dependencies (calls, imports, inheritance) and propagate relevance along these paths. Recent systems like RepoGraph \cite{ouyang2025repograph}, LocAgent \cite{chen2025locagent}, CodexGraph \cite{liu2024codexgraph}, and LARGER \cite{hu2026larger} have shown that traversing the graph structure recovers code missed by text search.
+However, they face trade-offs in determinism, ranking, and cost:
+\begin{itemize}
+    \item \textbf{RepoGraph} models repositories at the line level and retrieves unranked $k$-hop ego-graphs. Without ranking, expanding the radius dilutes relevance, returning large unfiltered contexts.
+    \item \textbf{LocAgent} and \textbf{LARGER} combine lexical anchoring with local neighbourhood expansion, but remain constrained to local bounding boxes rather than providing a global repository-wide ranking under a fixed context budget.
+    \item \textbf{CodexGraph} exposes graph databases through LLM-generated graph queries. While expressive, placing an LLM directly inside the retrieval loop makes the process slow, expensive, and non-deterministic.
+\end{itemize}
+
+Existing repository retrieval methods differ in where they place complexity: sparse retrievers rely on lexical overlap, dense retrievers encode semantic similarity without explicit dependency reasoning, and graph systems recover structure but often sacrifice determinism, ranking fidelity, or cost efficiency. CodeGraph is positioned as a hybrid alternative: lexical matching is used only to anchor retrieval, while structural propagation performs the actual disambiguation and ranking under a fixed context budget.
