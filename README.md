@@ -1,8 +1,18 @@
 # CodeGraph
 
-Graph-based context selection engine for AI coding agents.
+Structural context retrieval for AI coding agents.
+
+CodeGraph achieves **74.0% Recall@10**, delivering a **24.3 percentage point gain** over standard BM25 lexical search. It is a Python-first, agent-oriented retrieval system that prioritizes structurally precise context over broad, shallow search.
 
 CodeGraph parses a Python repository into a dependency graph (Neo4j), ranks code relevance with Personalized PageRank, and exposes the results through an MCP server. When you ask an AI assistant to edit your code, CodeGraph tells it exactly which files and functions to look at — not by guessing from embeddings, but by following the actual call and import graph.
+
+## Trust & Transparency
+
+CodeGraph provides three core trust signals to help agents and developers verify retrieval quality:
+
+1.  **Seed Provenance**: Every retrieved file explicitly shows which "seeds" (entity names or text matches) triggered its inclusion.
+2.  **Traceable PageRank Paths**: The `explain` command reveals the structural relationship between your task description and the retrieved code.
+3.  **Shared Retrieval Core**: The same ranking logic powers the CLI, the MCP server, and the visualizer, ensuring consistent results across all surfaces.
 
 ## How it works
 

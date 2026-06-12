@@ -108,6 +108,7 @@ def init_helper(config_path: Path, target: str | None = None) -> None:
         ".venv",
         "node_modules",
         ".pytest_cache",
+        ".codegraph_cache/",
         "tests/fixtures/",
     ]
     console.print(

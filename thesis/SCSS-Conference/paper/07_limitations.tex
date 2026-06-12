@@ -1,0 +1,30 @@
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+The deterministic nature of CodeGraph ensures that retrieval failures can be traced to structural reachability gaps rather than opaque model behavior. This structural interpretability clarifies the boundaries of graph-based retrieval and suggests directions for future development.
+
+\subsection{Implications for Coding Agents}
+
+Autonomous agents require stable, low-latency tools. Systems that place large language models inside the retrieval loop to generate queries or re-rank snippets introduce non-deterministic variance and high latency. Under identical query conditions, an agent may observe different contexts on successive runs.
+
+CodeGraph addresses this by separating graph construction (offline) from ranking propagation (online). Because Personalized PageRank relies on exact matrix multiplication, the same set of seeds always yields the same file-level ranking. This determinism allows agent designers to cache retrieval outcomes, build reproducible evaluation harnesses, and treat codebase retrieval as a stable API rather than a stochastic oracle.
+
+\subsection{Scope and Validity Boundaries}
+
+We define several boundaries that affect the interpretation and generalization of our findings:
+\begin{itemize}
+    \item \textbf{Static Analysis Dependence:} CodeGraph relies on syntax-derived relationships. Collaborations that occur through dynamic imports, configuration files, or database queries are not captured, creating Connectivity Gaps.
+    \item \textbf{Python-Only Scope:} We implement the parsing and edge-resolution modules specifically for Python. Extending the system to compiled or multi-language projects requires implementing type-resolving parsers.
+    \item \textbf{File-Level Proxy:} We conduct the evaluation at the file level. This does not capture multi-file patch complexities or cases where fine-grained class or function snippets are required.
+    \item \textbf{Benchmark Generalization:} We tuned the damping factor, top-$k$, and seed weights on the SWE-bench Lite dataset. Lacking an independent held-out validation set, these parameters may reflect characteristics specific to these repositories.
+\end{itemize}
+
+\subsection{Analysis of Retrieval Failures}
+
+We categorize the 78 zero-recall instances into two primary failure modes:
+\begin{itemize}
+    \item \textbf{Connectivity Gaps (40 instances):} Occur when the target file is not connected to any seed node by explicit dependency edges. This happens in plugin-based architectures or dynamic systems (e.g., pylint) where components register dynamically rather than importing one another.
+    \item \textbf{Semantic Gaps (38 instances):} Arise when the natural language description contains zero vocabulary overlap with the code identifiers. In these cases, seed extraction fails to place any entry points in the relevant neighborhood.
+\end{itemize}
+
+To resolve semantic gaps while preserving determinism, future systems could evaluate using lightweight dense vector models strictly for the seed selection phase. To bridge connectivity gaps, incorporating data-flow tracking or runtime tracing could expose relationships that static syntax analysis misses.

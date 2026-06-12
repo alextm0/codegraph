@@ -1,0 +1,35 @@
+\section{System Overview}
+\label{sec:system}
+
+CodeGraph formulates repository retrieval as a staged transformation from raw source code to ranked context. The pipeline comprises parsing, graph construction, seed selection, PPR-based ranking, and context delivery. \Cref{fig:pipeline-architecture} illustrates this workflow. By separating graph construction (offline) from retrieval (online), the system provides deterministic, low-latency responses suitable for agent integration.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{assets/pipeline_architecture.png}
+    \caption{CodeGraph indexing and retrieval pipeline. The indexing phase builds the repository graph offline; the retrieval phase ranks context per query for the AI agent.}
+    \label{fig:pipeline-architecture}
+\end{figure}
+
+\subsection{Graph Representation and Construction}
+
+CodeGraph indexes a codebase by parsing source files into a static dependency graph. We use Tree-sitter \cite{treesitter} to extract a four-entity model consisting of files, classes, functions, and methods. We represent these entities as nodes in a Neo4j property graph database \cite{neo4j2024docs}.
+
+We establish structural links using four relationship types:
+\begin{itemize}
+    \item \texttt{CONTAINS}: Denotes lexical nesting (e.g., a file containing a class, or a class containing a method).
+    \item \texttt{IMPORTS}: Captures cross-file module imports.
+    \item \texttt{CALLS}: Captures invocation relationships between functions and methods, resolved using the conservative three-level protocol.
+    \item \texttt{INHERITS\_FROM}: Connects subclasses to their parent classes.
+\end{itemize}
+
+To handle forward references during construction, we build the graph in a two-pass sequence. The first pass traverses the repository to create all node entities and local containment edges. The second pass evaluates import statements and call expressions to construct cross-file relationship edges once all definition nodes are present.
+
+\subsection{Context Delivery and Interfaces}
+
+Once Personalized PageRank computes the structural scores, CodeGraph aggregates and packages the ranked nodes into a source-code context package for the agent.
+
+\textbf{Deduplication and Filtering:} We roll up entity-level ranks to file-level ranks. If multiple sub-entities (such as separate functions) from the same file are highly ranked, we omit the parent file node and deliver only the relevant sub-entity snippets to conserve the token budget.
+
+\textbf{Dynamic Budgeting:} We enforce a configured context budget (defaulting to 6,000 tokens) using a local tokenizer to estimate the token footprint of each code snippet. Snippets are appended in rank order until the budget is exhausted.
+
+CodeGraph exposes this pipeline through a Model Context Protocol (MCP) server that provides a standard JSON-RPC tool interface for autonomous agents. The server exposes a retrieval tool (\texttt{get\_relevant\_context}) and a structural query tool (\texttt{query\_dependencies}). We also provide a browser-based visualization interface to inspect seed propagation subgraphs and debug retrieval failures.

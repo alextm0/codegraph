@@ -158,5 +158,5 @@ After large git operations, prefer `codegraph rebuild`.
 ## Anti-recipes (do not)
 
 - Guess file paths without `get_relevant_context`
-- Expect MCP `find_dead_code` — it does not exist (DEC-007)
+- Expect MCP `find_dead_code` — it does not exist
 - Use `codegraph doctor --reset` — **not implemented**; use `codegraph rebuild` (clears via `clear_database`)

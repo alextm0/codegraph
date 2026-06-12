@@ -5,49 +5,78 @@
 \chapter{Discussion and Limitations}
 \label{ch:discussion}
 
-The results presented in \cref{ch:evaluation} established that CodeGraph provides a performance gain over standard lexical baselines. 
- However, the metrics alone do not fully capture the qualitative lessons learned during the system's development. This chapter interprets what these results tell us about the nature of graph-based retrieval, discusses the implications for AI coding agents, and identifies the practical boundaries that limit the system's generalizability.
+The evaluation in \cref{ch:evaluation} quantified CodeGraph's retrieval performance; this chapter interprets what those results reveal about the nature of graph-based code retrieval. We examine three findings that extend beyond the specific system: the complementary relationship between lexical and structural signals, the conditions under which graph propagation helps or fails, and the implications of deterministic structural retrieval for AI agent design. We then assess the limitations of both the system and its evaluation.
+
 
 % =============================================================================
 \section{Interpretation of Results}
 \label{sec:interpretation}
 % =============================================================================
 
-CodeGraph's main result is that better Seed Extraction makes graph-based retrieval more effective. The challenge is to translate abstract natural language symptoms into precise starting nodes in a code graph. The performance trajectory in \cref{ch:evaluation} shows which changes improved that translation.
+The 24.3 percentage point improvement over the BM25 baseline is the headline result, representing the measured value of structural propagation in code retrieval. Three interpretive findings emerge from the evaluation data.
 
-\subsection{Seed Quality as the Dominant Bottleneck}
-The evaluation shows that seed quality, not algorithm tuning, is the primary bottleneck in CodeGraph. The most impactful performance jump, rising from 42.0\% to the final 74.0\% Recall@10, was driven by refinements to the seed extraction process, such as compound tokenization and inverse-frequency weighting. Our observation of a bimodal distribution in the results further supports this: when the seeds land near the correct region, the structural propagation stage almost always pushes the target file into the top ranks. This suggests that the retrieval ceiling is set by the reachability of the target from the initial seeds, rather than by the finesse of the ranking algorithm.
+\subsection{Lexical-Structural Complementarity}
+\label{sec:complementarity}
 
-\subsection{PPR as Signal Amplification}
-Personalized PageRank behaves like a filter that boosts consistent structural signals and suppresses noise from misleading seeds. Our finding that uniform restart outperforms weighted restart confirms that the graph topology itself is often more reliable than the raw BM25 scores of individual seeds. By treating all seeds equally, we allow the graph's connectivity to decide which starting points are most likely to be relevant. PPR effectively amplifies the regions where multiple independent signals converge, while diluting the influence of outlier seeds that have no structural support in the codebase.
+The evaluation establishes a precise relationship between lexical and structural retrieval signals. BM25 alone reaches 49.7\% R@10; the full pipeline reaches 74.0\%. The 24.3 percentage point gap is the measured value of structural propagation, but that gap exists only because lexical matching provides the starting points. Neither signal alone is sufficient: BM25 without graph structure cannot reach files that share no vocabulary with the task description, and PPR without lexical seeds has no starting point at all.
 
-\subsection{When Graph Structure Helps}
-The effectiveness of CodeGraph is tied to both the style of the bug report and the organization of the repository. The system is strongest when bug descriptions name specific functions or modules, providing clear lexical anchors. Structurally, it performs best in repositories with clear module boundaries and cohesive directories. It is weakest in description-impoverished cases where symptoms are abstract (e.g., the app crashes), or in repositories with large, heterogeneous directories where many unrelated files share a similar vocabulary. These failures, categorized as semantic gaps, indicate where pure lexical-structural retrieval reaches its limit.
+This complementarity is not symmetric. Lexical matching is the bottleneck: when it fails to place any seed in the correct region of the graph, structural propagation has nothing to amplify. The 78 zero-recall instances are dominated by cases where seeds either land in the wrong neighborhood entirely (Semantic Gaps) or land in the right neighborhood without an explicit edge to the target (Connectivity Gaps). In both cases, the ranking function is not at fault. This asymmetry explains why the Seed-First engineering strategy, which concentrates effort on improving the quality of lexical seeds, produced the dominant share of all performance gains.
+
+\subsection{Uniform Restart as a General Principle}
+\label{sec:uniform-restart-principle}
+
+The finding that uniform PPR restart outperforms weighted restart by 18.7 percentage points reflects a general principle in seed-based graph retrieval: when seed quality is imperfect, seed diversity matters more than seed confidence.
+
+Weighted restart assigns more probability to seeds with higher BM25 or entity-match scores. In practice, confidence scores are unreliable indicators of correctness. A high-scoring seed may match a common identifier like \texttt{update} that appears in dozens of unrelated files. Uniform restart avoids this failure by giving every seed an equal share of restart probability. The graph topology then resolves the competition: correct seeds tend to share structural paths through common dependencies, so their PPR mass accumulates at the intersection, while isolated incorrect seeds dissipate probability locally and are overtaken.
+
+\subsection{Bimodal Rank Distribution as a Diagnostic}
+\label{sec:bimodal-methodology}
+
+The bimodal rank distribution reported in \cref{sec:eval-diagnostics} is not only a finding about CodeGraph; it is a diagnostic methodology that other retrieval systems can apply. By plotting the rank distribution of ground-truth targets, a system designer can determine whether the bottleneck is ranking quality or reachability.
+
+In CodeGraph's case, the near-absence of intermediate ranks demonstrated that ranking refinement had low expected value compared to seed improvement. This diagnostic directly shaped the engineering strategy and prevented wasted effort on algorithm refinement that could not have addressed the dominant failure mode.
+
 
 % =============================================================================
 \section{Implications for AI Coding Agents}
 \label{sec:implications}
 % =============================================================================
 
-The retrieval rate achieved by the system changes where an AI coding agent spends its effort. When CodeGraph places the target file near the top of the result list, the agent can use more of its context window to understand the bug and write the fix. The search problem does not disappear, but it becomes a smaller part of the task.
+CodeGraph's results have three concrete implications for how AI coding agents interact with codebases.
 
-Deterministic graph navigation also reduces a common failure mode in agent workflows: guessing file locations that do not exist or following relationships that are only implied by language. Through MCP, the agent receives paths, entities, and relationships extracted from the repository itself. This does not make the agent's reasoning deterministic, but it gives the reasoning step a concrete substrate: files that exist, edges that were parsed, and scores that can be inspected.
+\subsection{Context Quality and Reasoning Efficiency}
+
+When retrieval is precise, the agent's context window is spent on relevant code rather than on search results that must be filtered. The improvement from 42.0\% to 74.0\% R@10 means that, for the majority of instances, the agent can begin reasoning about the bug immediately rather than requesting additional files or guessing at locations. This reduces the number of tool calls the agent must make and concentrates its limited context budget on code that matters.
+
+\subsection{Determinism and System Transparency}
+
+CodeGraph produces the same output for the same input. For users, this means retrieval failures can be reproduced and inspected: seeds, graph structure, and PPR scores are all available for diagnosis. For agent frameworks, determinism means retrieval results can be cached, compared across runs, and used as stable inputs to downstream reasoning.
+
+The contrast with non-deterministic systems is instructive. When retrieval itself is non-deterministic, failures become harder to diagnose and improvements harder to validate. CodeGraph's deterministic design allowed the evaluation trajectory in \cref{sec:eval-trajectory} to attribute performance changes to specific engineering interventions with confidence.
+
+\subsection{Tool Interface Design}
+
+CodeGraph exposes its retrieval pipeline through two concise MCP tools, prioritizing simplicity over the expansive toolsets of other platforms. This reflects a design philosophy: a retrieval system should minimize the number of decisions the agent must make. With a single \texttt{get\_relevant\_context} call, the agent receives a ranked, token-budgeted context package. While a narrow interface limits the agent's ability to provide custom retrieval parameters, the evaluation suggests the default configuration is robust across diverse repositories and issue types.
+
 
 % =============================================================================
-\section{Technical Boundaries and Generalizability}
-\label{sec:technical-limitations}
+\section{Limitations and Threats to Validity}
+\label{sec:limitations}
 % =============================================================================
 
-CodeGraph's results depend on assumptions that do not hold for every repository. This section separates limitations of the static graph from limitations of the evaluation protocol.
+This section focuses on limitations specific to the evaluation and the dimensions of validity that affect how broadly the results should be interpreted.
 
-\paragraph{Static Analysis Boundary.} 
-CodeGraph cannot see dynamic behaviors like runtime module loading or monkey-patching. These dynamic patterns create missing edges in the static graph, contributing to connectivity gaps where a target file is structurally isolated from its seeds. Without runtime signals, the graph remains an incomplete map of the program's actual execution flow.
+\paragraph{Single-benchmark evaluation.}
+All reported metrics come from SWE-bench Lite, featuring 12 well-structured open-source Python repositories. Performance on proprietary codebases or repositories with weaker structural organization may differ. Codebase structure is a strong moderator of retrieval quality, as seen in the variation between scikit-learn and Pylint.
 
-\paragraph{Ecosystem and Language Scope.} 
-The current system is Python-specific. Adapting it to other languages would require targeted investment in new parsers and resolution logic. Furthermore, the evaluation used SWE-bench Lite, which consists of popular, well-structured open-source projects. The performance of CodeGraph on proprietary or legacy codebases, which may feature poorer naming conventions, more dynamic patterns, or monolithic directories with weak boundaries, might be lower than what we observed in this benchmark.
+\paragraph{File-level evaluation.}
+We evaluate retrieval at the file level: an instance is a success if the gold file appears in the top-$k$ results. This does not capture cases where the relevant code spans only a few lines within a large file, or where the agent needs context from supporting files not in the gold patch.
 
-\paragraph{Metric Proxies.}
-The use of Recall@10 assumes that retrieving the correct file is equivalent to solving the retrieval portion of the task. While this is a standard proxy, it does not measure whether the agent can correctly interpret the file or if the bug requires edits across many files that are not as easily ranked. We also evaluate only the first retrieval step, which does not capture the human-like iterative pattern of an agent exploring a repository over multiple turns.
+\paragraph{Single retrieval step.}
+The evaluation measures the quality of a single retrieval call. In practice, AI agents retrieve context iteratively. A system that enables effective follow-up queries might outperform one that achieves higher single-call recall but offers less structural visibility.
 
-\paragraph{Scalability.} 
-PPR is efficient at the scale of the SWE-bench repositories evaluated in this thesis, but million-node graphs and continuous updates remain open engineering problems. Interactive use also requires the graph to stay fresh while an agent or developer edits files, which is harder than rebuilding a static snapshot.
+\paragraph{External validity.}
+SWE-bench Lite covers popular open-source Python projects. Repositories with weak structural organization or inconsistent naming may produce sparser graphs and weaker seed matches. Additionally, the benchmark issues tend to include technical detail that aids lexical matching; bug reports in other settings may be less technically precise.
+
+\paragraph{Scalability.}
+PPR execution on repositories with tens of thousands of nodes requires approximately 50\,ms. For larger monorepos with millions of nodes, the GDS projection and PPR execution may require optimization strategies that are not currently implemented.

@@ -13,22 +13,34 @@ Design notes:
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 
 from neo4j import Driver, ManagedTransaction
 
 from codegraph.core.parser.models import FileEntities
 from codegraph.core.graph.utils import normalize_path
-from codegraph.core.graph.resolution import (
-    _PYTHON_BUILTINS,
-    _build_entity_lookup,
-    _build_import_map,
-    _resolve_caller,
-    _resolve_callee,
-    _resolve_base_class,
-    _resolve_import_to_file_path,
-)
+from codegraph.core.parser.registry import get_registry
 
 logger = logging.getLogger(__name__)
+
+def _build_entity_lookup(all_entities: list[FileEntities]) -> dict[str, list[str]]:
+    """Map simple name -> list of qualified_names for all classes, functions, and methods."""
+    lookup: dict[str, list[str]] = {}
+    for fe in all_entities:
+        for fn in fe.functions:
+            qname = f"{normalize_path(fn.file_path)}::{fn.name}"
+            lookup.setdefault(fn.name, []).append(qname)
+        for cls in fe.classes:
+            qname = f"{normalize_path(cls.file_path)}::{cls.name}"
+            lookup.setdefault(cls.name, []).append(qname)
+        for m in fe.methods:
+            dotted = f"{m.class_name}.{m.name}"
+            qname = f"{normalize_path(m.file_path)}::{dotted}"
+            lookup.setdefault(dotted, []).append(qname)
+            lookup.setdefault(m.name, []).append(qname)
+    return lookup
+
+
 
 # Base edge weights by relationship type.
 # All values are intentionally 1.0 (uniform). IDF reweighting via apply_idf_weights()
@@ -420,13 +432,17 @@ def _create_inherits_edges(
     all_file_paths: list[str],
 ) -> int:
     """Class -[INHERITS_FROM]-> Class edges."""
+    registry = get_registry()
     edges = []
     for fe in all_entities:
-        import_map = _build_import_map(fe, all_file_paths)
+        ext = Path(fe.file_path).suffix
+        spec = registry.get_spec_by_extension(ext)
+        resolver = spec.resolver_cls()
+        import_map = resolver.build_import_map(fe, all_file_paths)
         for cls in fe.classes:
             src_qname = f"{normalize_path(cls.file_path)}::{cls.name}"
             for base in cls.bases:
-                dst_qname = _resolve_base_class(base, lookup, fe.file_path, import_map)
+                dst_qname = resolver.resolve_base_class(base, lookup, fe.file_path, import_map)
                 if dst_qname:
                     edges.append(
                         {
@@ -465,19 +481,23 @@ def _create_calls_edges(
     all_file_paths: list[str],
 ) -> int:
     """Function/Method -[CALLS]-> Function/Method edges."""
+    registry = get_registry()
     edges = []
     for fe in all_entities:
-        import_map = _build_import_map(fe, all_file_paths)
+        ext = Path(fe.file_path).suffix
+        spec = registry.get_spec_by_extension(ext)
+        resolver = spec.resolver_cls()
+        import_map = resolver.build_import_map(fe, all_file_paths)
         for call in fe.calls:
             # Skip calls to Python built-in functions, types, and exceptions
             # (e.g. len, print, frozenset, ValueError).  These are plain names
             # with no dot; dotted names like "obj.method" are never builtins.
             callee = call.callee_name
-            if "." not in callee and callee in _PYTHON_BUILTINS:
+            if "." not in callee and callee in resolver.get_builtins():
                 continue
 
-            src_qname = _resolve_caller(call.caller_name, fe.file_path)
-            dst_qname = _resolve_callee(callee, lookup, fe.file_path, import_map)
+            src_qname = resolver.resolve_caller(call.caller_name, fe.file_path)
+            dst_qname = resolver.resolve_callee(callee, lookup, fe.file_path, import_map)
             if src_qname and dst_qname:
                 edges.append(
                     {
@@ -513,12 +533,16 @@ def _create_imports_edges(
     tx: ManagedTransaction, all_entities: list[FileEntities]
 ) -> int:
     """File -[IMPORTS]-> File edges (module path -> file path resolution)."""
+    registry = get_registry()
     all_file_paths = [normalize_path(fe.file_path) for fe in all_entities]
     edges = []
     for fe in all_entities:
+        ext = Path(fe.file_path).suffix
+        spec = registry.get_spec_by_extension(ext)
+        resolver = spec.resolver_cls()
         src_path = normalize_path(fe.file_path)
         for imp in fe.imports:
-            dst_path = _resolve_import_to_file_path(imp.module_path, all_file_paths)
+            dst_path = resolver.resolve_import_to_file_path(imp.module_path, all_file_paths)
             if dst_path:
                 edges.append(
                     {

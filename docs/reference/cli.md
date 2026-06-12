@@ -66,7 +66,7 @@ Example: `codegraph find AuthService`
 
 ### `query TASK [options]`
 
-Run PPR retrieval pipeline.
+Run the **Retrieval Path** pipeline and print context.
 
 | Option | Description |
 |--------|-------------|
@@ -78,9 +78,11 @@ Run PPR retrieval pipeline.
 | `--trace` | Structured retrieval trace JSON |
 | `--viz` | Open visualizer after query |
 
+Displays **identified seeds** to provide provenance for the retrieved results.
+
 ### `explain TASK`
 
-Show seed nodes and reasoning paths (default top 10 files).
+Show seed nodes and reasoning paths (default top 10 files). Provides structural transparency by explaining *why* a file was returned.
 
 | Option | Description |
 |--------|-------------|

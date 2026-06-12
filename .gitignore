@@ -1,18 +1,8 @@
-# MkDocs build output
-site/
-
-# AI Agents
-.agents/
-.claude/
-memory/
-
 # Python environment
 __pycache__/
 *.py[cod]
 *$py.class
-venv/
 .venv/
-env/
 .env
 build/
 dist/
@@ -22,13 +12,12 @@ dist/
 frontend/node_modules/
 frontend/dist/
 
-# Neo4j / Local Data (if applicable)
-data/
-logs/
+# Neo4j / Local Data
+config.yaml
+.mcp.json
 
 # Benchmark runner cache and results
 .codegraph_cache/
-demo/requests/
 
 # IDEs
 .vscode/
@@ -36,30 +25,19 @@ demo/requests/
 *.swp
 *.swo
 .worktrees/
+.DS_Store
 
-.superpowers
+# AI / System
+.agents/
+.claude/
+.superpowers/
 out/
-skills-lock.json
-
-# Gemini CLI / AI Research
 .gemini/
 .gemini.zip
-GEMINI_DEEP_RESEARCH_RESULTS.md
 plans/
-ANARA_SYSTEM_PROMPT.md
 
-# Thesis working exports (generated / draft markdown)
-thesis/thesis_combined.md
-thesis/chapters/chapter4_implementation.md
-.envrc
+# Project Specific
 .codegraph_last_built
-.DS_Store
 *.pdf
-docs/superpowers/
-# Vendored CGC docs snapshot (inspiration only; not part of this repo)
-docs/CodeGraphContext-Docs-From-Github/
-TODO.md
-thesis/review_ch1_to_ch5.tex
-thesis/scripts/compile_chapter3.py
-thesis/scripts/generate_chapter_pdfs.py
 projects/
+

@@ -17,7 +17,7 @@ def test_output_order_preserved_end_to_end() -> None:
     ]
     pending = all_instances[:]
 
-    def fake_setup(group_key, driver, gds, parser, cache_dir, ablation, retriever):
+    def fake_setup(group_key, driver, gds, cache_dir, ablation, retriever):
         return 10, "/fake/path", None, None
 
     def fake_query(instance, *args, **kwargs):
@@ -47,7 +47,7 @@ def test_output_order_preserved_end_to_end() -> None:
         patch("evaluation.swe_bench_runner.setup_group", side_effect=fake_setup),
         patch("evaluation.swe_bench_runner.run_instance_query", side_effect=fake_query),
     ):
-        _run_grouped(pending, all_instances, None, None, None, None, args, ablation, out)
+        _run_grouped(pending, all_instances, None, None, None, args, ablation, out)
 
     lines = [line for line in out.getvalue().splitlines() if line]
     written_ids = [json.loads(line)["instance_id"] for line in lines]

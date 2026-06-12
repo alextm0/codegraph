@@ -2,15 +2,26 @@
 
 ## Project
 
-**CodeGraph** — Graph-based context selection engine for AI coding agents.
+**CodeGraph** — Structural context retrieval for AI coding agents.
 
-Parses Python repositories into dependency graphs (Neo4j), ranks code relevance using Personalized PageRank, and exposes results via an MCP server that any AI agent can plug into.
+CodeGraph achieves **74.0% Recall@10**, delivering a **24.3 percentage point gain** over standard BM25 lexical search. It is a Python-first, agent-oriented retrieval system that prioritizes structurally precise context over broad, shallow search.
+
+## Mental Model
+
+- **Indexing Path (Offline)**: Python → tree-sitter → Neo4j structural graph.
+- **Retrieval Path (Online)**: Task → seeds → Personalized PageRank → ranked context snippets.
+
+## Trust & Transparency
+
+1. **Seed Provenance**: Every retrieved entity explicitly identifies the "seeds" (entity names or text matches) that triggered its selection.
+2. **Traceable Paths**: The `explain` interface reveals the structural relationship between the task and the retrieved code.
+3. **Shared Retrieval Core**: Identical ranking logic powers the CLI, MCP, and visualizer.
 
 ## Architecture
 
 ```
-Source code → tree-sitter parsing → entity extraction → import/call resolution
-→ Neo4j graph → Personalized PageRank → post-processing → MCP server → AI agent
+Indexing Path: Source code → tree-sitter parse → entity extraction → graph build
+Retrieval Path: User Task → seed selection → PPR → context formatting → delivery
 ```
 
 Detailed documentation for each component is in `docs/` — start at `docs/README.md` (agent source of truth).
@@ -50,7 +61,7 @@ codegraph/
 **Style:**
 - Type hints on all function signatures. No exceptions.
 - Docstrings on all public functions. One-liner is fine if the function is obvious.
-- Frozen dataclasses over Pydantic for entity models (DEC-002).
+- Frozen dataclasses over Pydantic for entity models.
 - No function longer than 50 lines. If it's longer, split it.
 - Name things clearly. `resolve_import()` not `process()`. `ppr_results` not `data`.
 
@@ -121,19 +132,3 @@ python3 -m pytest tests/integration/mcp/test_server.py -v
 - `retrieval_mode`: "uniform"
 
 These are the correct defaults. Do not use 0.85/20 — those are the old pre-tuning values.
-
-## Decision Log
-
-All technical decisions are recorded in `DECISIONS.md` at the project root.
-
-**Rules for AI assistants:**
-
-1. **Before suggesting an alternative approach**, check `DECISIONS.md`. If the topic is already decided (Status: ACTIVE), follow the existing decision. Do not suggest alternatives unless explicitly asked.
-
-2. **When a decision is made during a session**, ask: "Should I add this to DECISIONS.md?" Then append using the template in that file. Use the next sequential number.
-
-3. **When implementation contradicts a decision**, flag it: "This conflicts with DEC-XXXX. Follow existing decision or update it?"
-
-4. **Never silently override a decision.**
-
-5. **When starting a new module**, read `DECISIONS.md` first to understand existing constraints.

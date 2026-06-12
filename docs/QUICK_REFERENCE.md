@@ -19,8 +19,8 @@ codegraph doctor
 | Graph size | `codegraph stats` |
 | Project + MCP status | `codegraph status` |
 | Find symbol / path | `codegraph find AuthService` |
-| Retrieve context (CLI) | `codegraph query "task" --entity AuthService` |
-| Debug ranking | `codegraph explain "task"` |
+| Retrieve context (CLI) | `codegraph query "task" -e AuthService` |
+| Debug Retrieval Path | `codegraph explain "task"` |
 | Callers / callees | `codegraph analyze deps EntityName --direction upstream` |
 | Dead code | `codegraph analyze dead-code` |
 | Visualizer | `codegraph visualize` |
@@ -28,8 +28,14 @@ codegraph doctor
 
 ## MCP tools (exactly 2)
 
-1. **`get_relevant_context`** — PPR-ranked source for a task.
+1. **`get_relevant_context`** — PPR-ranked source for a task. Includes provenance `seeds[]` and `last_indexed` metadata.
 2. **`query_dependencies`** — deps / `symbol_search` / `class_hierarchy` via `mode`.
+
+## Trust Signals
+
+- **Provenance**: `seeds[]` in MCP and CLI output.
+- **Explainability**: `codegraph explain` and `explanation` in MCP.
+- **Consistency**: Shared ranking core across all surfaces.
 
 ## PPR defaults (do not change without benchmarking)
 

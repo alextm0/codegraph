@@ -104,12 +104,3 @@ export interface NodeDetailResponse {
   outgoing: NodeRelation[]
   source_snippet?: string
 }
-
-// ---------------------------------------------------------------------------
-// Subgraph  (/api/subgraph?focus=<file_path>)
-// ---------------------------------------------------------------------------
-
-export interface SubgraphResponse {
-  graph: GraphData
-  focus_path: string
-}

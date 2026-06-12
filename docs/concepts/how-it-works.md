@@ -31,10 +31,11 @@ Entry: `parse_directory()` in `src/codegraph/core/parser/`.
 ## 2. AST extraction
 
 - **tree-sitter-python** builds a concrete syntax tree per file
-- Walkers emit frozen dataclass entities (DEC-002): File, Class, Function, Method
+- Walkers emit frozen dataclass entities: File, Class, Function, Method
 - Record line ranges, docstrings where extracted, call sites, import statements, class bases
 
-Parser: `src/codegraph/core/parser/python_parser.py`.
+Parser implementation: `src/codegraph/core/languages/python/parser.py`.
+Orchestration: `src/codegraph/core/parser/service.py`.
 
 ---
 
@@ -52,7 +53,7 @@ Linker logic lives under `src/codegraph/core/parser/` and graph builder.
 ## 4. Neo4j write
 
 - `clear_database()` on full rebuild
-- Batched `UNWIND` + `MERGE` for nodes and relationships (DEC-008)
+- Batched `UNWIND` + `MERGE` for nodes and relationships
 - Idempotent: re-running rebuild replaces content for the project
 
 Builder: `src/codegraph/core/graph/graph_builder.py`.

@@ -66,13 +66,11 @@ def test_cli_custom_config(mock_db_manager):
 @patch("codegraph.cli.commands.build.load_raw_config")
 @patch("codegraph.cli.commands.build.resolve_project_root")
 @patch("codegraph.cli.commands.build.clear_database")
-@patch("codegraph.cli.commands.build.create_parser")
 @patch("codegraph.cli.commands.build.parse_directory")
 @patch("codegraph.cli.commands.build.build_graph")
 def test_rebuild_helper_logic(
     mock_build_graph,
     mock_parse_directory,
-    mock_create_parser,
     mock_clear_database,
     mock_resolve_root,
     mock_load_raw,
@@ -97,7 +95,6 @@ def test_rebuild_helper_logic(
 
     mock_setup_logging.assert_called_once()
     mock_clear_database.assert_called_once()
-    mock_create_parser.assert_called_once()
     mock_parse_directory.assert_called_once()
     mock_build_graph.assert_called_once()
 

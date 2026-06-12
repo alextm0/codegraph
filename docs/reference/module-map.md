@@ -8,12 +8,22 @@ Per-file responsibilities. See [PROJECT_LAYOUT.md](../PROJECT_LAYOUT.md) for ful
 
 | File | Role |
 |------|------|
-| `python_parser.py` | `create_parser`, `parse_file`, `parse_directory` |
-| `extractors.py` | tree-sitter walks: defs, calls, imports |
+| `service.py` | `parse_file`, `parse_directory`, orchestration |
+| `registry.py` | LanguageRegistry, LanguageSpec |
 | `node_utils.py` | Source text, docstrings, signatures, stdlib filter |
 | `models.py` | Frozen entity dataclasses, `FileEntities` |
-| `python_lang.py` | Grammar binding |
 | `base.py` | Parser abstractions |
+
+---
+
+## `core/languages/`
+
+| File | Role |
+|------|------|
+| `registration.py` | register_all_languages() |
+| `python/parser.py` | PythonParser implementation |
+| `python/resolver.py` | PythonResolver implementation |
+| `python/extractors.py` | tree-sitter walks: defs, calls, imports |
 
 Doc: [../concepts/parser.md](../concepts/parser.md)
 
@@ -24,7 +34,7 @@ Doc: [../concepts/parser.md](../concepts/parser.md)
 | File | Role |
 |------|------|
 | `graph_builder.py` | `build_graph`, `clear_database`, UNWIND+MERGE, two-pass edges |
-| `resolution.py` | Call/import/inherit resolution (no Neo4j) |
+| `resolver_interface.py` | LanguageResolver ABC |
 | `ppr.py` | GDS projection, uniform/weighted PPR, `PPRConfig` |
 | `connection.py` | Driver factory, config load |
 | `database.py` | `DatabaseManager` singleton |
@@ -156,4 +166,3 @@ React UI — see [../guides/visualization.md](../guides/visualization.md).
 |------|------|
 | `docs/README.md` | Hub |
 | `AGENTS.md` | Short MCP contract |
-| `DECISIONS.md` | DEC-XXX log |

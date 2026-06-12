@@ -1,0 +1,42 @@
+\section{Related Work}
+\label{sec:related_work}
+
+Code retrieval methods for large language models generally fall into three categories: sparse lexical search, dense vector retrieval, and graph-based traversal.
+
+\textbf{Sparse Retrieval:} Sparse methods like BM25 \cite{bm25} rank files based on term frequency overlap. Although highly scalable and deterministic, sparse methods are sensitive to exact lexical matches. They struggle when natural-language descriptions use abstract terminology that does not match specific code identifiers.
+
+\textbf{Dense Retrieval:} Dense retrieval models like CodeBERT \cite{codebert} and UniXcoder \cite{unixcoder} embed queries and code snippets into a continuous vector space to capture semantic similarity. While this helps bridge vocabulary differences, dense models ignore the explicit structural dependencies that govern program execution. Dense models do not encode inheritance or call relationships directly, and their vector similarity scores provide no interpretable trace for debugging context selection. CodeGraph is designed as a hybrid system: lexical and dense methods can identify starting points, while graph propagation performs structural ranking.
+
+\textbf{Graph-Based Retrieval:} Graph-based systems represent source repositories as networks of program entities and dependencies. Table~\ref{tab:retrieval-comparison} compares CodeGraph with representative systems on graph granularity, retrieval method, ranking scope, and computational cost.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Comparison of repository retrieval approaches.}
+    \label{tab:retrieval-comparison}
+    \begin{adjustbox}{max width=\linewidth}
+    \begin{tabular}{lllll}
+        \toprule
+        \textbf{System} & \textbf{Graph Level} & \textbf{Retrieval Method} & \textbf{Global Ranking} & \textbf{Deterministic \& Low-Cost} \\
+        \midrule
+        BM25 \cite{bm25} & None & Term matching & Yes & Yes \\
+        CodeBERT \cite{codebert} & None & Vector similarity & Yes & Yes \\
+        \midrule
+        RepoGraph \cite{ouyang2025repograph} & Line & $k$-hop ego-graph & None & Yes \\
+        LocAgent \cite{chen2025locagent} & Entity & BFS + BM25 rescoring & Local & Yes \\
+        CodexGraph \cite{liu2024codexgraph} & Symbol & LLM graph queries & None & No \\
+        LARGER \cite{hu2026larger} & Entity & Local expansion & Local & Yes \\
+        \midrule
+        \textbf{CodeGraph} (Ours) & Entity & Lexical seeds + PPR & \textbf{Global} & \textbf{Yes} \\
+        \bottomrule
+    \end{tabular}
+    \end{adjustbox}
+\end{table}
+
+Existing graph systems face distinct design trade-offs:
+\begin{itemize}
+    \item \textbf{RepoGraph} \cite{ouyang2025repograph} models code at the line level and extracts unranked $k$-hop ego-graphs. Because it lacks a ranking function, expanding the traversal radius returns large, unfiltered code blocks that consume the agent's context budget.
+    \item \textbf{LocAgent} \cite{chen2025locagent} and \textbf{LARGER} \cite{hu2026larger} combine lexical search with local graph traversal. However, they limit expansion to local neighborhoods and do not compute a global repository-wide ranking.
+    \item \textbf{CodexGraph} \cite{liu2024codexgraph} uses a language model to generate graph-database queries. Placing an LLM inside the retrieval loop increases query latency, monetary cost, and non-deterministic behavior.
+\end{itemize}
+
+CodeGraph differs from these approaches by combining multi-signal lexical matching for seed selection with Personalized PageRank (PPR) for global repository ranking. This design yields a deterministic, low-cost retrieval method that evaluates execution-level structures to deliver a ranked context package under a fixed budget.

@@ -13,7 +13,7 @@ CodeGraph uses a **property graph** in Neo4j: four node labels and four relation
 | `Function` | Module-level function | same pattern |
 | `Method` | Method on a class | same pattern |
 
-**Identity rule (DEC-003):**
+**Identity rule:**
 
 ```
 qualified_name = <file_path> + '::' + <name>
@@ -34,7 +34,7 @@ There is no separate `Module` or `Repository` node — package structure appears
 | `CALLS` | Function/Method → Function/Method | Resolved invocation (may be absent if ambiguous) |
 | `INHERITS_FROM` | Class → Class | Base class link |
 
-**Removed:** `CO_LOCATED` (iter-3 cleanup, DEC-009).
+**Removed:** `CO_LOCATED` (iter-3 cleanup).
 
 ---
 
@@ -45,7 +45,7 @@ When parser sees a call `foo()`:
 1. Resolve via imports in the same file
 2. Else same-file definition
 3. Else globally unique name in the index
-4. If multiple candidates → **no `CALLS` edge** (DEC-004)
+4. If multiple candidates → **no `CALLS` edge**
 
 Agents should not assume every runtime call appears in the graph.
 

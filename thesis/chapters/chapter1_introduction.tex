@@ -7,14 +7,14 @@
 
 Large Language Models (LLMs) have made AI coding agents useful for more than isolated code completion. Agents can now inspect files, propose patches, and run tests, but their success still depends on a simple prerequisite: they must see the right code. Repository-scale tasks make this difficult. A bug report may describe a symptom in natural language, while the relevant implementation is spread across imports, calls, and inheritance relationships that are not visible to text search alone.
 
-This thesis introduces CodeGraph, a hybrid retrieval system for repository-level code navigation. CodeGraph parses Python repositories into a dependency graph, selects seed entities from a task description, and uses Personalized PageRank to rank structurally related code. The central claim is not that graph structure replaces lexical search, but that lexical and structural signals solve different parts of the retrieval problem. Lexical signals identify where the search can begin; graph propagation identifies which connected code entities are likely to matter.
+This thesis introduces CodeGraph, a hybrid retrieval system for repository-level code navigation. CodeGraph parses Python repositories into a dependency graph, selects seed entities from a task description, and uses Personalized PageRank to rank structurally related code. The central claim is that lexical matching places the search in the right region of the codebase, and graph propagation ranks structurally related code once that region is reached. Lexical signals identify where the search can begin; graph propagation identifies which connected code entities are likely to matter.
 
 % =============================================================================
 \section{Motivation}
 \label{sec:motivation}
 % =============================================================================
 
-Current approaches to code retrieval typically rely on lexical keyword matching or dense vector embeddings. These methods are useful for finding textually similar files, but software changes often follow structure rather than vocabulary. A bug described in a view, parser, or public API may require a change in a helper, compiler, or base class several edges away from the named component. This mismatch between natural language symptoms and source-code structure is the Semantic Gap addressed throughout the thesis.
+Code retrieval methods treat each file as an independent document, but codebases are not collections of independent documents. They are connected systems where functionality is distributed across imports, calls, and inheritance hierarchies. A task described in natural language may require understanding code that is structurally close but textually distant, linked by dependency chains that text search cannot follow.
 
 The primary bottleneck is Seed Extraction: translating an ambiguous task description into useful starting points inside the code graph. If no seed lands near the relevant subsystem, even a strong ranking algorithm has little useful signal to propagate. If the seed set contains a mix of correct and noisy matches, graph structure can still help by amplifying the region where independent signals converge. CodeGraph is designed around this division of labor.
 
@@ -23,13 +23,14 @@ The primary bottleneck is Seed Extraction: translating an ambiguous task descrip
 \label{sec:objectives}
 % =============================================================================
 
-This research develops and evaluates a retrieval architecture that uses source-code structure as an explicit relevance signal. The objectives are:
+This research develops CodeGraph, a graph-based retrieval system for AI coding agents. The specific contributions are:
 
 \begin{enumerate}
-    \item To design a graph representation of Python source code that captures calls, imports, containment, and inheritance without indexing every AST node.
-    \item To implement a hybrid retrieval pipeline that combines lexical anchoring with structural propagation using Personalized PageRank (PPR).
-    \item To evaluate the approach on SWE-bench Lite and identify which design choices drive file-level retrieval success.
-    \item To expose the retrieval pipeline through the Model Context Protocol (MCP), so AI agents can request ranked source context through a stable tool interface.
+    \item A Tree-sitter-based parsing pipeline that extracts calls, imports, and inheritance relationships from Python source code to construct a weighted dependency graph.
+    \item A hybrid retrieval engine that pairs lexical matching with Personalized PageRank propagation, producing deterministic, structure-aware rankings of codebase entities.
+    \item An MCP server for AI agent integration and a CLI tool for direct use.
+    \item A visualization application for exploring code dependency graphs and understanding retrieval results.
+    \item A comprehensive evaluation on SWE-bench Lite (300 real software issues), demonstrating 74.0\% Recall@10 and a 24.3 percentage point improvement over the BM25 baseline.
 \end{enumerate}
 
 % =============================================================================
@@ -37,4 +38,6 @@ This research develops and evaluates a retrieval architecture that uses source-c
 \label{sec:roadmap}
 % =============================================================================
 
-We organize the remainder of this thesis as follows. \Cref{ch:background} provides the technical background on static analysis and graph-based ranking, while surveying related work in the field. \Cref{ch:design} presents the architectural design of the CodeGraph pipeline and the theoretical basis for structural relevance. \Cref{ch:implementation} details the engineering choices and algorithmic implementations that realize this design. \Cref{ch:evaluation} reports the results of our empirical evaluation on real-world software tasks. Finally, \cref{ch:discussion} interprets the qualitative impact of these results, and \cref{ch:conclusion} summarizes the contributions and suggests future research directions.
+The thesis is organized as a progression from problem definition to system validation. Chapters 2 and 3 establish the foundations: Chapter 2 provides the technical background on static analysis and graph-based ranking while surveying related work, and Chapter 3 presents the architectural design of CodeGraph and the theoretical basis for graph-based relevance propagation. Chapters 4 and 5 describe the system and its evaluation: Chapter 4 details the implementation and algorithmic choices, and Chapter 5 reports results on SWE-bench Lite. Chapters 6 and 7 interpret these findings: Chapter 6 discusses the broader implications for AI coding agents, and Chapter 7 summarizes contributions and outlines future research directions.
+
+\paragraph{Declaration of AI Assistance.} During the preparation of this work the author used Claude in order to refine the vocabulary for academic style. After using this tool/service, the author reviewed and edited the content as needed and takes full responsibility for the content of the thesis.

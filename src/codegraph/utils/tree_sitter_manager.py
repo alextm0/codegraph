@@ -1,12 +1,16 @@
 """Centralized tree-sitter language grammar loading and caching.
 
 Design notes:
+- Role: This manager handles the low-level loading of tree-sitter shared libraries (grammars).
+- Contrast: While `core.parser.registry.LanguageRegistry` routes file extensions to high-level
+  Parser/Resolver classes, this manager is used by those Parsers to obtain the underlying
+  tree-sitter Language object for syntax tree construction.
 - Grammars are loaded once per language and cached; repeated calls to get_language()
   are cheap after the first load.
 - No thread locks: parsing is single-threaded per the project's design.
 - LANGUAGE_ALIASES maps common shorthand names to canonical names ("py" → "python").
 - SUPPORTED_EXTENSIONS maps file extensions to canonical language names.
-  Update both dicts when adding a new language parser.
+  Update both dicts when adding a new language grammar loader.
 """
 
 import tree_sitter_python as tspython

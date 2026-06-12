@@ -33,14 +33,12 @@ seed_selection:
 
     monkeypatch.setenv("CODEGRAPH_CONFIG", str(config_path))
     from codegraph.core.graph import clear_database, build_graph, get_database_manager
-    from codegraph.core.parser import create_parser, parse_directory
+    from codegraph.core.parser import parse_directory
 
     db = get_database_manager()
     db.initialize(str(config_path))
     driver = db.get_driver()
-
-    parser = create_parser()
-    entities = parse_directory(str(_FIXTURE), parser)
+    entities = parse_directory(str(_FIXTURE))
     clear_database(driver)
     build_graph(driver, entities)
 
@@ -77,6 +75,7 @@ seed_selection:
         exclude_seed_paths=raw.get("seed_selection", {}).get("exclude_seed_paths") or [],
         default_token_budget=2000,
         default_top_k=5,
+        default_include_explanations=True,
     )
     out = get_relevant_context_impl(
         "routing blueprint", None, None, 5, 2000, state, include_explanations=True

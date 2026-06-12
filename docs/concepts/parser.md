@@ -1,6 +1,6 @@
 # Parser and entity extraction
 
-CodeGraph ingests **Python only** via **tree-sitter**. All parsed values are **frozen dataclasses** (DEC-002).
+CodeGraph ingests **Python only** via **tree-sitter**. All parsed values are **frozen dataclasses**.
 
 **Code:** `src/codegraph/core/parser/`
 
@@ -15,9 +15,8 @@ CodeGraph ingests **Python only** via **tree-sitter**. All parsed values are **f
 
 **Entry points:**
 
-- `create_parser()` — returns configured `Parser`
-- `parse_file(source, file_path, parser)` → `FileEntities`
-- `parse_directory(directory, parser, exclude_patterns)` → `list[FileEntities]`
+- `parse_file(source, file_path)` → `FileEntities`
+- `parse_directory(directory, exclude_patterns)` → `list[FileEntities]`
 
 ---
 
@@ -42,9 +41,9 @@ Stdlib imports are filtered (`node_utils.is_stdlib_module`) so they do not becom
 
 | Module | Role |
 |--------|------|
-| `python_parser.py` | File discovery, parse orchestration |
-| `python_lang.py` | Language / grammar binding |
-| `extractors.py` | tree-sitter queries for defs, calls, imports |
+| `service.py` | Orchestration, directory walking, language dispatch |
+| `registry.py` | Language registration and spec routing |
+| `core/languages/python/` | Python-specific parser, resolver, and extractors |
 | `node_utils.py` | Text extraction, docstrings, signatures, enclosing scope |
 | `base.py` | Shared parser abstractions |
 
@@ -84,7 +83,7 @@ Would require:
 
 1. New tree-sitter grammar + extractors
 2. New resolution module (imports/calls differ per language)
-3. DEC-003 update or new decision for node labels
+3. Update or new decision for node labels
 4. Graph builder edge creators
 
 Do not copy CGC multi-language docs as implemented behavior. See [../roadmap.md](../roadmap.md).

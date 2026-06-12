@@ -17,7 +17,7 @@ Password resolution order:
 
 1. `NEO4J_PASSWORD` environment variable
 2. `.env` via `python-dotenv`
-3. Never from `config.yaml` (DEC-010)
+3. Never from `config.yaml`
 
 Config URI/username from `config.yaml` → `neo4j` section.
 
@@ -33,7 +33,7 @@ Enables idempotent `MERGE` during batch writes.
 
 ---
 
-## Write patterns (DEC-008)
+## Write patterns
 
 - `clear_database()` — `DETACH DELETE` all nodes (full rebuild)
 - `delete_file_entities(file_path)` — incremental watch: remove one file’s nodes

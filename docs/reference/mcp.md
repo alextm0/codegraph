@@ -3,7 +3,7 @@
 Server: FastMCP, stdio transport, name `codegraph`.  
 Register: `codegraph install` → `codegraph serve`.
 
-**Exactly two tools** (DEC-007). No stats, dead-code, or Cypher over MCP.
+**Exactly two tools**. No stats, dead-code, or Cypher over MCP.
 
 ---
 
@@ -21,7 +21,6 @@ Register: `codegraph install` → `codegraph serve`.
 | `top_k` | int | yes | `0` → server default (30) |
 | `token_budget` | int | yes | `0` → default (6000) |
 | `include_explanations` | bool | no (default **true**) | Adds per-result `explanation`; `seeds[]` always returned |
-
 ### Success response (JSON string)
 
 ```json
@@ -30,11 +29,14 @@ Register: `codegraph install` → `codegraph serve`.
     "result_count": 12,
     "total_tokens": 4500,
     "token_budget": 6000,
+    "last_indexed": "2026-06-08T10:39:22.451674+00:00",
     "visualizer_url": "http://localhost:8474"
   },
   "seeds": [
     { "qualified_name": "src/auth.py::AuthService", "source": "entity_match", "weight": 0.15 }
   ],
+```
+
   "results": [
     {
       "entity_name": "AuthService",

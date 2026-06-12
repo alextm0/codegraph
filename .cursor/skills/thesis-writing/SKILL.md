@@ -57,9 +57,9 @@ If prose conflicts with `docs/` or `DECISIONS.md`, **fix the thesis** (or flag a
 
 For any multi-paragraph edit or chapter pass:
 
-1. **Read & mark** — Open the matching `docs/` pages from the table above; flag any thesis line that contradicts them. Mark vague/dense phrasing, sentences >25 words, cognitive overload. Map Zotero comments to line ranges if provided.
-2. **Rewrite for purpose** — Topic sentence first; subsection must have one clear teaching goal.
-3. **Visual & technical synthesis** — Every complex flow needs TikZ, listing, or table; propose concrete figure if missing.
+1. **Logical Flow Audit** — Map paragraph-by-paragraph logical progression (`P1 -> P2 -> P3`) of the section. Identify conceptual gaps, missing motivation, or premature conclusions before editing. Open matching `docs/` pages from the table above; flag any thesis line that contradicts them. Mark vague/dense phrasing, sentences >25 words, cognitive overload. Map Zotero comments to line ranges if provided.
+2. **Rewrite for purpose** — Topic sentence first; subsection must have one clear teaching goal. Implement active voice, split long sentences, and use precise casing for technical terms.
+3. **Visual & technical synthesis** — Every complex flow needs TikZ, listing, or table; propose concrete figure if missing. Check [tikz-guide.md](references/tikz-guide.md) for coordinate, styling, and scaling standards.
 4. **Language pass** — Active *we*; strip weasel words; no quotes on established terms; no em dashes (use colon/comma/parens). See [style-guide.md](references/style-guide.md) and PLAYBOOK.md patterns.
 5. **LaTeX sanity** — `\label`/`\cref`, list intros with `\noindent`, citations vs `references.bib`.
 
@@ -75,6 +75,10 @@ When returning edits, use:
 ## Summary
 [1–2 sentences: teaching goal + main structural change]
 
+## Logical Flow Audit
+* **Progress Map**: `P1 (Intent) -> P2 (Intent) -> P3 (Intent)`
+* **Gaps/Transition Issues**: (Detailed analysis of flow and logical connections)
+
 ## Changes
 ### [subsection id or title]
 **Issue:** …
@@ -89,12 +93,14 @@ When returning edits, use:
 - [paths to docs/ files read for this pass]
 
 ## Checklist
+- [ ] Logical flow audit completed and progression mapped
 - [ ] Claims match `docs/` + `DECISIONS.md` (list conflicts if any)
 - [ ] Teaching goal stated in opening
 - [ ] Bottom-up order
 - [ ] Metrics grounded (no weasel words)
 - [ ] No em dashes / no quoted technical terms
 - [ ] Numbers match chapter 5 / summary.json
+- [ ] TikZ/Tables conform to [tikz-guide.md](references/tikz-guide.md)
 ```
 
 For long `.tex` excerpts, prefer **After** blocks only when the change is localized; otherwise give a patch-style rewrite of the paragraph.

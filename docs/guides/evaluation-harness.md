@@ -1,6 +1,6 @@
 # SWE-bench evaluation harness
 
-Reproducible benchmark for **file-level retrieval** on SWE-bench Lite. Used for thesis Chapter 5 and tuning DEC-001 defaults.
+Reproducible benchmark for **file-level retrieval** on SWE-bench Lite. Used for thesis Chapter 5 and tuning defaults.
 
 **Code:** `evaluation/` package at repo root (installed via `pyproject.toml` `include`).
 
@@ -78,7 +78,7 @@ First clone of a large repo (Django, SymPy) can take **several minutes**; git `-
 | `apply_idf` | `no_idf` |
 | `ppr_config` | `ppr_weighted`, `uniform_alpha_070`, `top_k_10`, damping sweeps |
 
-**Production defaults** match `AblationConfig(name="baseline")` + uniform α=0.70, top_k=30 in `config.yaml` (DEC-001).
+**Production defaults** match `AblationConfig(name="baseline")` + uniform α=0.70, top_k=30 in `config.yaml`.
 
 ---
 
@@ -139,7 +139,6 @@ Presets: `quick`, `full` (see `evaluation/ablations.py` → `PRESETS`).
 | `compare_runs.py` | Diff two `summary.json` files |
 | `report.py` | Generate reports from results |
 | `error_analysis.py` | Dig into zero-recall cases |
-| `find_killer_example.py` | Find illustrative failure/success |
 | `local_correctness_test.py` | Smaller sanity runs |
 | `repo_manager.py` | Clone cache, `checkout_commit` |
 | `dataset.py` | Load SWE-bench Lite, instance grouping |
@@ -180,3 +179,4 @@ Differences from interactive use:
 Optional: `--file-rank-by max_score` for file ordering experiments (default `first_entity`).
 
 `summary.json` records `git_commit` when the runner is executed inside a git checkout.
+.

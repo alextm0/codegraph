@@ -1,0 +1,20 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Autonomous coding agents require accurate context retrieval to resolve repository-level software bugs. An agent must observe the correct code files within its context window to generate valid patches. However, repositories are large and complex, and issue descriptions are written in natural language that often abstracts away from the names of classes, functions, and files.
+
+Existing retrieval methods typically treat source code as flat text. Sparse retrievers (e.g., BM25) localize files based on term frequency but fail when the task vocabulary differs from code identifiers. Dense retrievers map natural language and code to a shared vector space, yet they compute relevance from token sequences, ignoring the structural dependencies (such as imports, calls, and inheritance) that define code execution. Consequently, text-centric methods struggle to navigate relationships that cross file and module boundaries.
+
+Graph-based retrieval addresses these limitations by modeling the codebase as a network of entities and dependencies. In a hybrid setup, lexical search locates candidate entry points, and structural propagation traverses the graph to rank the surrounding functional neighborhood. We introduce CodeGraph, a hybrid retrieval system that integrates lexical seeding with Personalized PageRank (PPR) over a static dependency graph. In contrast to systems that rely on language models to generate queries or perform local neighborhood expansion, CodeGraph computes a global, deterministic ranking over the repository. This configuration establishes a distinct operating point: it provides repository-wide ranking under a fixed context budget without the latency or non-determinism of LLM-mediated loops.
+
+Our central empirical finding is that seed reachability, rather than ranking sophistication, determines the retrieval ceiling. If lexical signals identify the correct general neighborhood, structural propagation reliably ranks the target files. If seeds miss the target neighborhood entirely, no ranking mechanism can recover them. 
+
+The primary contributions of this work are:
+\begin{itemize}
+    \item A hybrid retrieval formulation combining multi-signal lexical seeding with global Personalized PageRank propagation to navigate repository structure.
+    \item A deterministic repository-wide ranking setup that operates without placing non-deterministic language models inside the retrieval loop.
+    \item An empirical evaluation on SWE-bench Lite showing a 74.0\% Recall@10, which improves upon a BM25 baseline by 24.3 percentage points.
+    \item A diagnostic analysis establishing that seed reachability, rather than downstream ranking sophistication, determines the retrieval ceiling in graph-based code search.
+\end{itemize}
+
+We organize the remainder of this paper as follows. \Cref{sec:related_work} positions CodeGraph against sparse, dense, and graph-based retrieval. \Cref{sec:method} details the core retrieval methodology. \Cref{sec:system} provides an overview of the system architecture. \Cref{sec:experimental_setup} outlines the evaluation framework, and \Cref{sec:results} reports the quantitative findings. \Cref{sec:discussion} analyzes the structural limits and implications for coding agents, and \Cref{sec:conclusion} concludes.

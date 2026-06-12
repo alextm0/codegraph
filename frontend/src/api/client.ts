@@ -3,7 +3,6 @@ import type {
   QueryResponse,
   NodeDetailResponse,
   GraphData,
-  SubgraphResponse,
 } from '../types/api'
 
 const BASE = ''
@@ -88,74 +87,6 @@ export async function getStats(): Promise<GraphStats> {
   return res.json()
 }
 
-export interface SearchResultRow {
-  qualified_name: string
-  name: string
-  label: string
-  file_path: string
-}
-
-export async function searchNodes(q: string): Promise<{ results: SearchResultRow[] }> {
-  const params = new URLSearchParams({ q })
-  const res = await fetch(`${BASE}/api/search?${params}`)
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export async function getSubgraph(focus: string): Promise<SubgraphResponse> {
-  const params = new URLSearchParams({ focus })
-  const res = await fetch(`${BASE}/api/subgraph?${params}`)
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export interface DoctorCheck {
-  name: string
-  ok: boolean
-  message: string
-  fix_hint: string | null
-  severity: string
-}
-
-export async function getDoctor(): Promise<{ ok: boolean; checks: DoctorCheck[] }> {
-  const res = await fetch(`${BASE}/api/doctor`)
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export interface DeadCodeRow {
-  qualified_name: string
-  name: string
-  label: string
-  file_path: string
-}
-
-export async function getDeadCode(limit = 50): Promise<{ results: DeadCodeRow[]; total: number }> {
-  const params = new URLSearchParams({ limit: String(limit) })
-  const res = await fetch(`${BASE}/api/dead-code?${params}`)
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export interface DependencyRow {
-  qualified_name: string
-  name: string
-  label: string
-  file_path: string
-  relationship_type: string
-}
-
-export async function getDependencies(
-  entity: string,
-  direction: 'upstream' | 'downstream' | 'both',
-  depth: number = 1,
-): Promise<{ results: DependencyRow[] }> {
-  const params = new URLSearchParams({ entity, direction, depth: String(depth) })
-  const res = await fetch(`${BASE}/api/dependencies?${params}`)
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
 export interface FileSourceResponse {
   file_path: string
   content: string
@@ -176,16 +107,5 @@ export async function getFile(filePath: string): Promise<FileSourceResponse> {
       throw new Error(body || `HTTP ${res.status}`)
     }
   }
-  return res.json()
-}
-
-export async function getDependenciesGraph(
-  entity: string,
-  direction: 'upstream' | 'downstream' | 'both',
-  depth: number = 1,
-): Promise<{ graph: GraphData }> {
-  const params = new URLSearchParams({ entity, direction, depth: String(depth) })
-  const res = await fetch(`${BASE}/api/dependencies/graph?${params}`)
-  if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
