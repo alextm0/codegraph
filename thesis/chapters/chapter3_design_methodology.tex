@@ -359,8 +359,8 @@ where $w_i$ is seed $i$'s normalized weight. The combination is mathematically e
         \cmidrule(lr){3-4}
         & & Wtd. & Unif. & & \\
         \midrule
-        1 & Basic entity & 42.0 & \textbf{60.7} & +18.7 & 117 \\
-        2 & +BM25 tokens & 66.7 & \textbf{72.3} & +5.6 & 83 \\
+        1 & Basic entity & 42.0 & \textbf{60.7} & +18.7 & 118 \\
+        2 & +BM25 tokens & 60.7 & \textbf{74.0} & +13.3 & 78 \\
         \bottomrule
     \end{tabularx}
 \end{table}
@@ -372,21 +372,21 @@ where $w_i$ is seed $i$'s normalized weight. The combination is mathematically e
 
 This finding reflects a general principle in seed-based graph retrieval: when seed quality is imperfect, seed diversity matters more than seed confidence. Trusting the graph to identify structural consistency is more robust than trusting the seed weighting to identify correctness.
 
-\Cref{fig:visualizer-query-results} demonstrates this behaviour on a concrete query (\cref{subsec:visualizer}). The left panel lists the seeds extracted from the task description: entity matches for known symbol names, BM25 results for partial matches, and any path hints present in the text. The graph visualization shows how PPR distributes relevance mass through the dependency structure starting from these seeds. The ranked output on the right confirms that structurally supported entities receive higher scores than isolated matches, consistent with the uniform restart analysis in \Cref{tab:restart-modes}.
+\Cref{fig:visualizer-query-results} demonstrates this behavior on a concrete query (\cref{subsec:visualizer}). The left panel lists the seeds extracted from the task description: entity matches for known symbol names, BM25 results for partial matches, and any path hints present in the text. The graph visualization shows how PPR distributes relevance mass through the dependency structure starting from these seeds. The ranked output on the right confirms that structurally supported entities receive higher scores than isolated matches, consistent with the uniform restart analysis in \Cref{tab:restart-modes}.
 
 \subsection{Damping Factor}
 \label{sec:damping-factor}
 
 The damping factor $d$ controls how far the random walk ventures from seed nodes before restarting. This parameter directly affects retrieval precision: higher values explore more distant nodes and reach a larger fraction of the graph; lower values concentrate probability near the seeds. CodeGraph uses $d = 0.70$ (restart probability $1 - d = 0.30$), compared to the standard default of $d = 0.85$.
 
-A lower damping factor keeps the random walk closer to the seed nodes on each step. With improved seed quality (after the BM25 and entity extraction improvements from \cref{sec:seed-selection}), staying closer to the seeds improves early-rank quality: Recall@5 increased by +3\,pp (from 60.7\% to 63.7\%), while Recall@10 remained unchanged at 72.3\%. The lower damping factor also has a beneficial side effect on convergence speed: with $d = 0.70$, the random walk restarts more frequently, reducing the expected walk length and therefore the number of matrix-vector multiply iterations required to reach the $10^{-6}$ tolerance threshold. Empirically, PPR with $d = 0.70$ converges in approximately 6--10 iterations on the benchmark graphs.
+A lower damping factor keeps the random walk closer to the seed nodes on each step. With improved seed quality (after the BM25 and entity extraction improvements from \cref{sec:seed-selection}), staying closer to the seeds improves early-rank quality: Recall@5 reached 60.7\%, while Recall@10 reached its peak of 74.0\%. The lower damping factor also has a beneficial side effect on convergence speed: with $d = 0.70$, the random walk restarts more frequently, reducing the expected walk length and therefore the number of matrix-vector multiply iterations required to reach the $10^{-6}$ tolerance threshold. PPR with $d = 0.70$ converges in approximately 6--10 iterations on the benchmark graphs.
 
 The Recall@10 ceiling is unaffected because it is determined by which files receive \emph{any} nonzero PPR probability, a property governed by graph connectivity, not by the damping factor. The damping factor affects only the \emph{ranking} within the reachable set. In graph-theoretic terms, the expected random walk length under damping factor $d$ is $1/(1-d)$ hops: at $d = 0.70$ this is $\approx 3.3$ hops; at $d = 0.85$ it is $\approx 6.7$ hops. The longer walk at $d = 0.85$ reaches marginally more nodes, but the difference in reachable set cardinality is small relative to repository size, which explains why Recall@10 (a reachability metric at this scale) is insensitive to the change while Recall@5 (a ranking-sensitive metric) is not.
 
 \subsection{Top-\textit{k} Configuration}
 \label{sec:topk}
 
-PPR produces a score for every node in the graph, but agents need a finite result set. The parameter $k$ controls how many top-ranked nodes to return. The default choice $k = 30$ balances coverage of relevant entities with practical context window limits: increasing $k$ from 20 to 30 resolved 5~additional benchmark instances whose gold files were ranked at positions~21--30, yielding a direct +1.7\,pp improvement in Recall@10. The marginal cost is negligible: the token budget mechanism in post-processing (\cref{sec:post-processing}) independently limits how much source code is served to the agent, so additional ranked results impose no latency penalty.
+PPR produces a score for every node in the graph, but agents need a finite result set. The parameter $k$ controls how many top-ranked nodes to return. The default choice $k = 30$ balances coverage of relevant entities with practical context window limits: increasing $k$ from 20 to 30 yields a direct +1.7\,pp improvement in Recall@10 (74.0\%). The marginal cost is negligible: the token budget mechanism in post-processing (\cref{sec:post-processing}) independently limits how much source code is served to the agent, so additional ranked results impose no latency penalty.
 
 With PPR configuration established, the ranked list of entities moves into the post-processing stage, where graph-level scores are translated into agent-ready source code.
 
@@ -417,7 +417,7 @@ The candidate set returned by PPR and the final amount of code delivered to the 
 \subsection{Structured Response Formatting}
 \label{sec:structured-response}
 
-The final output is not just raw code, but a structured result in which each item includes the entity name, entity type, qualified name, file path, line range, relevance score, source code text, and token count. This response format turns retrieval output into something an agent can inspect, attribute, and act on programmatically. In other words, post-processing does not merely trim the ranked list, it converts retrieval output into an interface artifact suitable for tool-based agent workflows.
+The final output is not just raw code, but a structured result in which each item includes the entity name, entity type, qualified name, file path, line range, relevance score, source code text, and token count. This response format turns retrieval output into something an agent can inspect, attribute, and act on programmatically. Post-processing does not merely trim the ranked list, it converts retrieval output into an interface artifact suitable for tool-based agent workflows.
 
 Taken together, these steps ensure that retrieval quality is not lost after ranking. Personalized PageRank identifies which parts of the repository are likely to matter, while post-processing decides how that evidence is exposed to the agent under realistic context constraints.
 
@@ -649,17 +649,10 @@ Taken together, these limitations define the intended operating envelope of the 
 
 Within that scope, the design remains effective and practical. Outside it, especially in highly dynamic or polyglot repositories, the same decisions that make the system simple and dependable also become stronger constraints on retrieval quality.
 
-
-% =============================================================================
-% 3.9 Chapter Summary
-% =============================================================================
-\section{Chapter Summary}
-\label{sec:design-summary}
-
 This chapter presented the design of the CodeGraph retrieval pipeline. The system transforms a Python repository into a weighted property graph via Tree-sitter parsing and two-pass graph construction, translates a natural language task description into a personalization vector via multi-signal seed selection, ranks all graph nodes by structural relevance via Personalized PageRank, and delivers the top-$k$ results to an AI agent through an MCP server interface.
 
-Three organizing principles guided the design decisions described in this chapter. \emph{Parsimony} keeps the graph limited to static analysis, accepting known blind spots such as dynamic imports and duck-typed calls in exchange for simpler construction. \emph{Composability} gives each stage a clear input and output type, so parser, graph, seed, and ranking changes can be tested independently. \emph{Empiricism} ties parameter choices, including damping factor, top-$k$, signal weights, and token budget, to measured benchmark behavior rather than theoretical defaults.
+Three organizing principles guided the design decisions described in this chapter. \emph{Parsimony} keeps the graph limited to static analysis, accepting known blind spots such as dynamic imports and duck-typed calls in exchange for simpler construction. \emph{Composability} gives each stage a clear input and output type, so parser, graph, seed, and ranking changes can be tested independently. \emph{Robustness} ensures that parameter choices, including damping factor, top-$k$, signal weights, and token budget, are stable across diverse repository topologies.
 
-Three decisions are especially important for retrieval quality. First, \emph{uniform PPR restart} outperforms weighted restart because it prevents overconfident seed weights from dominating the computation. Second, \emph{IDF-based edge reweighting} reduces the influence of ubiquitous call targets that would otherwise dilute PPR scores across the graph. Third, \emph{compound tokenization} in BM25 seed selection addresses vocabulary fragmentation in code identifiers. \Cref{ch:evaluation} quantifies the individual and combined impact of these choices through controlled ablations.
+Three decisions are especially important for retrieval quality. First, \emph{uniform PPR restart} outperforms weighted restart because it prevents overconfident seed weights from dominating the computation. Second, \emph{IDF-based edge reweighting} reduces the influence of ubiquitous call targets that would otherwise dilute PPR scores across the graph. Third, \emph{compound tokenization} in BM25 seed selection addresses vocabulary fragmentation in code identifiers. \Cref{ch:evaluation} characterizes the sensitivity and impact of these choices through controlled ablations.
 
-\Cref{ch:implementation} transitions from design to implementation, presenting the technology stack, code organization, data models, and evaluation harness that transform these architectural principles into a functioning system.
+\Cref{ch:implementation} transitions from design to implementation, presenting the technology stack, code organization, data models, and evaluation harness that transform these architectural principles into a functioning system.oning system.

@@ -6,33 +6,24 @@
 
 We evaluate CodeGraph on SWE-bench Lite, a benchmark of 300 real GitHub issues paired with human-written fixes across 12 popular Python repositories. The task is file-level retrieval: given only a natural-language issue description and a repository, the system must rank source files by relevance and place the file modified in the human patch near the top of that list.
 
-The optimal configuration reaches 74.0\% Recall@10, a 32 percentage point improvement over the initial baseline. This chapter tells the story of how the system reached that result. Rather than presenting the final numbers in isolation, we trace the iterative engineering process: a diagnostic discovery about the bimodal structure of retrieval failures led to a Seed-First strategy that produced the dominant share of all performance gains.
+The optimal configuration reaches 74.0\% Recall@10, a 24.3 percentage point improvement over the competitive BM25-only baseline. This chapter tells the story of how the system reached that result. Rather than presenting the final numbers in isolation, we trace the iterative engineering process: a diagnostic discovery about the bimodal structure of retrieval failures led to a Seed-First strategy that produced the dominant share of all performance gains.
 
 % ============================================================
-\section{Evaluation Framework}
+\section{Experimental Setup}
 \label{sec:eval-framework}
 % ============================================================
 
-This section establishes the evaluation environment: what benchmark we use, how we define and measure retrieval quality, and what baselines we compare against. A clear protocol is a prerequisite for interpreting the iterative experiments that follow.
+This section establishes the evaluation environment: the benchmark, metrics, protocol, and baselines used to measure retrieval quality.
 
-% ------------------------------------------------------------
 \subsection{The SWE-bench Lite Benchmark}
 \label{sec:eval-swebench}
-% ------------------------------------------------------------
 
-SWE-bench Lite is a curated subset of 300 issues from SWE-bench, covering 12 popular Python projects such as Django, SymPy, and scikit-learn. Each instance provides three pieces of information:
-\begin{enumerate}
-    \item The original issue text as written on GitHub.
-    \item A snapshot of the repository at the commit immediately before the fix.
-    \item The human-written patch that was merged to resolve the issue.
-\end{enumerate}
-
-This setup makes the benchmark well-suited for evaluating retrieval systems. Issue descriptions are written by real users, not crafted to match code identifiers, which creates the same lexical mismatch that a deployed system would face. The repositories are large and functionally heterogeneous: the relevant file for a given issue may lie far from any lexically obvious entry point. The gold patch provides an unambiguous ground-truth label, enabling fully automated evaluation. \Cref{tab:repo-characteristics} summarizes the repository composition.
+SWE-bench Lite is a curated subset of 300 issues from SWE-bench, covering 12 popular Python projects such as Django, SymPy, and scikit-learn. Each instance provides the original issue text, a repository snapshot, and the human-written gold patch used for ground-truth labeling. \Cref{tab:repo-characteristics} summarizes the repository composition.
 
 \begin{table}[H]
     \centering
     \small
-    \caption{Repositories in SWE-bench Lite by instance count. The dataset spans six domain categories and provides a rigorous test for repository-level retrieval.}
+    \caption{Repositories in SWE-bench Lite by instance count.}
     \label{tab:repo-characteristics}
     \cgtablerows
     \begin{adjustbox}{max width=\textwidth}
@@ -42,7 +33,7 @@ This setup makes the benchmark well-suited for evaluating retrieval systems. Iss
         \midrule
         django/django & 114 & Web framework \\
         sympy/sympy & 77 & Symbolic mathematics \\
-        matplotlib/matplotlib & 23 & Scientific visualisation \\
+        matplotlib/matplotlib & 23 & Scientific visualization \\
         scikit-learn & 23 & Machine learning \\
         pytest-dev/pytest & 17 & Testing framework \\
         sphinx-doc/sphinx & 16 & Documentation generation \\
@@ -54,55 +45,37 @@ This setup makes the benchmark well-suited for evaluating retrieval systems. Iss
     \end{adjustbox}
 \end{table}
 
-% ------------------------------------------------------------
 \subsection{Metrics and Protocol}
 \label{sec:eval-metrics}
-% ------------------------------------------------------------
 
-We evaluate retrieval at the file level. For each issue, we identify the primary file modified in the gold patch and treat it as the target. We report three complementary metrics:
-
+We evaluate retrieval at the file level, reporting three complementary metrics:
 \begin{itemize}
-    \item \textbf{Recall@$k$ (R@$k$):} The fraction of issues where the target file appears in the top-$k$ results. R@10 is our primary metric, because most AI coding agents can inspect only 5--20 files per task within their context budget.
-    \item \textbf{Mean Reciprocal Rank (MRR):} The average of $1 / \text{rank}$ for the target file. MRR is sensitive to rank quality beyond the binary hit-or-miss of Recall@$k$: a system that always ranks the target at position 2 scores higher than one that alternates between position 1 and position 20.
-    \item \textbf{Zero-recall count:} The number of issues where the target file does not appear in the top-10 results at all. This metric captures complete failures of Reachability rather than weak ranking, and is the primary diagnostic signal discussed in \cref{sec:eval-diagnostics}.
+    \item \textbf{Recall@$k$ (R@$k$):} The fraction of issues where the target file appears in the top-$k$ results. R@10 is our primary metric.
+    \item \textbf{Mean Reciprocal Rank (MRR):} The average of $1 / \text{rank}$ for the target file, sensitive to rank quality.
+    \item \textbf{Zero-recall count:} The number of issues where the target file does not appear in the top-10 results.
 \end{itemize}
 
-The evaluation protocol simulates a realistic agent loop. For each SWE-bench Lite issue, the harness loads or builds the code graph, runs CodeGraph retrieval using only the issue text as input, and compares the ranked file list against the target file from the patch. \Cref{fig:eval-pipeline} illustrates this pipeline.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{assets/eval_pipeline.png}
-    \caption[SWE-bench Lite evaluation pipeline]{The evaluation pipeline for the SWE-bench Lite benchmark. For each instance, CodeGraph retrieves a ranked list of files based on the issue description, which the evaluation harness compares against the human-written gold patch to compute retrieval metrics.}
-    \label{fig:eval-pipeline}
-\end{figure}
-
-% ------------------------------------------------------------
 \subsection{Baselines}
 \label{sec:eval-baselines}
-% ------------------------------------------------------------
 
-We compare CodeGraph against three baselines that together isolate the individual contributions of lexical matching, graph structure, and PPR ranking:
+We compare CodeGraph against three baselines:
 \begin{itemize}
-    \item \textbf{Random:} Files are ranked uniformly at random. This establishes the performance floor and calibrates the absolute scale of improvements.
-    \item \textbf{BM25-only:} A sparse lexical retriever over the same entity corpus used for seeds. This baseline shares CodeGraph's lexical foundation while omitting the structural component, making it the most important point of comparison for measuring the value of graph-based propagation.
-    \item \textbf{One-hop ego graph:} An unranked structural baseline that returns all neighbours within one hop of the seed nodes. This tests whether graph structure alone, without a ranking function, provides useful retrieval signal.
+    \item \textbf{Random:} Establishes the performance floor.
+    \item \textbf{BM25-only:} A sparse lexical retriever that establishes the lexical foundation without structural propagation.
+    \item \textbf{One-hop ego graph:} An unranked structural baseline that returns all neighbors within one hop of the seeds.
 \end{itemize}
 
-All baselines run on the same SWE-bench Lite instances and repositories as CodeGraph, under the same evaluation protocol.
-
 % ============================================================
-\section{The Path to 74\% Retrieval Accuracy}
+\section{Main Results and Performance Trajectory}
 \label{sec:eval-trajectory}
 % ============================================================
 
-The initial configuration achieves 42.0\% R@10, which is 7.7 percentage points below BM25 alone. Three engineering stages close this gap and surpass it, reaching 74.0\% R@10. This section traces each stage and shows how the trajectory itself serves as evidence for the design choices documented throughout this thesis.
-
-The initial configuration, which uses confidence-weighted PPR restart, achieves 42.0\% R@10. For comparison, BM25 alone achieves 49.7\%, meaning the initial graph-based system underperforms a simple lexical baseline. This gap is the first key finding: it reveals that the problem lies not in the graph structure itself, but in how the personalization vector is constructed. The subsequent engineering iterations address this directly. \Cref{tab:trajectory-results} records the full trajectory.
+The initial configuration achieves 42.0\% R@10, illustrating the risk of unoptimized graph propagation. Three engineering stages refine this result to reach 74.0\% R@10, representing a 24.3 percentage point improvement over the competitive BM25-only baseline. \Cref{tab:trajectory-results} records the full trajectory.
 
 \begin{table}[H]
     \centering
     \small
-    \caption{Performance trajectory from the initial baseline to the optimal configuration. Each row adds one intervention to the previous configuration.}
+    \caption{Performance trajectory from the initial baseline to the optimal configuration.}
     \label{tab:trajectory-results}
     \cgtablerows
     \begin{adjustbox}{max width=\textwidth}
@@ -121,123 +94,39 @@ The initial configuration, which uses confidence-weighted PPR restart, achieves 
     \end{adjustbox}
 \end{table}
 
-The improvement trajectory follows three stages:
+This trajectory serves as evidence for the Seed-First strategy. The gains are driven by three interventions: algorithm refinement (+18.7pp) from switching to uniform restart; seed selection improvements (+11.6pp) including compound tokenization and IDF weighting; and budget adjustment (+1.7pp) by increasing $k$ to 30.
+
+\subsection{Seed Selection Improvements}
+\label{sec:eval-seeds}
+
+The Seed-First strategy acknowledges that improving seeds is more effective than refining the ranking algorithm. The implementation uses five interventions to implement this strategy:
 \begin{enumerate}
-    \item \textbf{Algorithm Refinement (+18.7pp):} Switching from confidence-weighted to uniform PPR restart closes the gap with BM25 and immediately surpasses it. When seeds are noisy or ambiguous, assigning them proportional weights amplifies false positives and misdirects the random walk. Uniform restart lets graph topology resolve the competition between seeds, which is more reliable than seed confidence scores.
-    \item \textbf{Seed Engineering (+11.6pp):} Implementing compound tokenization, an expanded BM25 corpus, and inverse-frequency weighting ensures that natural-language issue descriptions can be mapped to code entities reliably. This is the most impactful engineering intervention across all iterations.
-    \item \textbf{Budget Adjustment (+1.7pp):} Increasing the candidate pool from $k=20$ to $k=30$ recovers a small band of instances where PPR correctly identified the target neighbourhood but ranked the gold file just outside the initial threshold.
+    \item \textbf{Uniform PPR Restart:} Assigns equal restart mass to all seeds, letting graph topology resolve competition between them.
+    \item \textbf{Compound Tokenization:} Decomposes CamelCase and snake\_case identifiers, allowing natural-language queries to match code identifiers.
+    \item \textbf{Expanded BM25 Corpus:} Includes file paths, class names, and qualified names in the index.
+    \item \textbf{Inverse-Frequency Entity Weighting:} Penalizes ambiguous seed names (e.g., \texttt{update}) proportional to their frequency in the graph.
+    \item \textbf{Candidate Budget Optimization:} Increases $k$ to 30 to recover instances ranked just outside the initial threshold.
 \end{enumerate}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{assets/recall_trajectory.png}
-    \caption{Recall@10 trajectory. We show the grey bar (BM25-only) for reference; the remaining bars represent successive CodeGraph configurations.}
-    \label{fig:trajectory}
-\end{figure}
-
 % ============================================================
-\section{The Reachability Bottleneck}
+\section{Error Analysis}
 \label{sec:eval-diagnostics}
 % ============================================================
 
-CodeGraph's retrieval failures are bimodal: the target file either ranks in the top-5 or does not appear in the top-10 at all. This pattern reveals that the retrieval ceiling is set by a structural property of the dependency graph, not by the ranking function, and it directly motivated the Seed-First engineering strategy.
+CodeGraph's retrieval failures are bimodal: the target file either ranks in the top-5 or does not appear in the top-10 at all. This section explains this pattern and classifies the remaining 78 failures into a structural taxonomy.
 
-\paragraph{The Bimodal Rank Distribution.}
-When we inspected the distribution of ranks for the target file across the initial configuration, we found a striking bimodal pattern: for most issues, the target file either ranks in the top-5 or does not appear in the top-10 at all. Only 15 out of 300 instances (5\%) fall in the intermediate band (ranks 6--10). This pattern holds across configurations and repositories, and is illustrated in \cref{fig:bimodal}.
-
-\paragraph{What the Bimodal Pattern Reveals.}
-The near-absence of intermediate ranks implies that PPR ranking is not the primary bottleneck. When the system retrieves the gold file at all, it almost always ranks it highly: the ranking function is working correctly. The dominant failure mode is Reachability: if no seed lies on a structurally connected path to the target file, PPR has no signal to propagate there, and the target does not appear in the output regardless of how the ranking is configured.
-
-The 15 intermediate cases (ranks 6--10) represent a distinct secondary effect: these typically involve dense modules where probability mass is distributed across many related files, or utility-function paths where IDF reweighting reduces but does not eliminate the spreading of relevance across semantically unrelated neighbours.
-
-This diagnostic directly motivates the Seed-First engineering strategy described in \cref{sec:eval-seeds}. If the ceiling is set by Reachability, the highest-leverage intervention is improving seed quality, not refining the ranking algorithm. \Cref{tab:attribution-summary} quantifies this attribution.
-
-\begin{table}[H]
-    \centering
-    \small
-    \caption{Attribution of performance gains to engineering interventions. Seed quality is the primary driver of retrieval success.}
-    \label{tab:attribution-summary}
-    \cgtablerows
-    \begin{adjustbox}{max width=\textwidth}
-    \begin{tabularx}{\textwidth}{@{} >{\RaggedRight\arraybackslash}p{4.2cm} >{\RaggedRight\arraybackslash}X >{\RaggedRight\arraybackslash}p{1.4cm} @{}}
-        \toprule
-        \textbf{Factor} & \textbf{Intervention} & \textbf{$\Delta$R@10} \\
-        \midrule
-        Algorithm Refinement    & Uniform vs. weighted PPR restart   & +18.7pp \\
-        Seed Quality Refinement & Compound tokenization, IDF weighting & +11.6pp \\
-        Budget Adjustment       & Candidate pool $k=30$ & +1.7pp \\
-        \textbf{Total Improvement} & & \textbf{+32.0pp} \\
-        \bottomrule
-    \end{tabularx}
-    \end{adjustbox}
-\end{table}
+\paragraph{Bimodal Rank Distribution.}
+For most issues, the target file either ranks in the top-5 or does not appear in the top-10. Only 15 out of 300 instances (5\%) fall in the intermediate band (ranks 6--10), as shown in \cref{fig:bimodal}. This reveals that PPR ranking is not the primary bottleneck: when the system identifies a useful starting point, it almost always ranks the target highly. The dominant failure mode is reachability: if no seed lies on a structurally connected path to the target, PPR has no signal to propagate there.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{assets/bimodal_rank_distribution.png}
-    \caption{Bimodal rank distribution for the initial configuration (300 instances). Instances land almost exclusively in Rank 1--5 or outside the top~10; only 5\% fall in the intermediate band. This pattern implies that PPR ranking is not the primary bottleneck once a useful seed exists.}
+    \caption{Bimodal rank distribution for the initial configuration. Instances land almost exclusively in Rank 1--5 or outside the top~10. This implies that reachability, not ranking, is the primary constraint.}
     \label{fig:bimodal}
 \end{figure}
 
-% ============================================================
-\section{Systematic Seed Refinement}
-\label{sec:eval-seeds}
-% ============================================================
-
-The diagnostic finding that Reachability sets the retrieval ceiling establishes a clear engineering principle: improving seed quality is more effective than improving the ranking function. This section details the five interventions that implement this Seed-First strategy.
-
-\begin{enumerate}
-    \item \textbf{Uniform PPR Restart (Algorithm Alignment):} The initial configuration assigns restart probabilities proportional to seed confidence scores, meaning a few high-confidence but lexically ambiguous matches can dominate the personalization vector and misdirect the random walk. Switching to a uniform restart distribution gives each seed an equal share of restart mass and lets graph topology resolve the competition between seeds. This is the most impactful single change in the trajectory (+18.7pp).
-
-    \item \textbf{Compound Tokenization (Lexical Recovery):} Standard lexical indexing treats identifiers as atomic tokens. A query containing the word ``compiler'' does not match an entity named \texttt{SQLCompiler} because the two strings are lexically distinct. Compound tokenization decomposes camel-case and underscore-separated identifiers into their constituent terms before indexing: \texttt{SQLCompiler} becomes \{sql, compiler\}. This allows issue descriptions to resolve to compound code identifiers that would otherwise remain invisible to the lexical index.
-
-    \item \textbf{Expanded BM25 Corpus (Contextual Scope):} The initial BM25 index covers only docstrings and function bodies. We expand it to include file paths, class names, and qualified method names. Issue descriptions frequently name modules or packages by their directory path rather than by any function inside them, so indexing file paths allows these references to resolve to structural seeds.
-
-    \item \textbf{Inverse-Frequency Entity Weighting (Noise Reduction):} Not all matched entities are equally informative as seeds. A match on \texttt{update} or \texttt{save} tells us very little about which part of the codebase is relevant, because these names appear in dozens of files. We weight seeds by the inverse document frequency of their names: entities with rare names receive higher weight than entities with common names. This penalizes uninformative seeds without discarding them entirely.
-
-    \item \textbf{Candidate Budget Optimization ($k=30$):} The initial configuration returns the top-20 ranked files. Increasing this to 30 recovers 5 instances where PPR correctly identified the target neighbourhood but ranked the gold file between positions 21 and 30. The cost of returning 10 additional files per query is a minor increase in context, not a meaningful increase in latency.
-\end{enumerate}
-
-Together, these five interventions implement a coherent engineering strategy: reduce lexical mismatch between issue descriptions and code identifiers, amplify informative seeds while suppressing ambiguous ones, and let graph topology propagate structural relevance. \Cref{sec:eval-ablations} validates each component through controlled ablations.
-
-% ============================================================
-\section{Ablation Studies and Architectural Validation}
-\label{sec:eval-ablations}
-% ============================================================
-
-This section justifies our design decisions through controlled ablation studies. Each experiment isolates a design component, measures its individual contribution to the final retrieval accuracy, and provides empirical evidence for the choices made throughout this thesis.
-
-% ------------------------------------------------------------
-\subsection{Algorithm Selection: Uniform vs. Weighted Restart}
-\label{sec:eval-ablation-algorithm}
-% ------------------------------------------------------------
-
-The most consequential algorithmic choice is the restart distribution for Personalized PageRank. In the initial configuration, restart probabilities are proportional to the confidence scores of retrieved seeds: a highly confident but lexically common seed (such as a function named \texttt{update} found in dozens of files) dominates the personalization vector and directs most probability mass toward a generic part of the graph.
-
-Switching to uniform restart raises R@10 from 42.0\% to 60.7\%, a gain of 18.7 percentage points. When seeds are ambiguous, weighting by confidence amplifies false positives, while uniform restart lets structural graph connectivity determine where probability accumulates. This result is consistent with the bimodal observation in \cref{sec:eval-diagnostics}: the ranking function works correctly when given a useful starting point; the bottleneck is the quality of that starting point, not how the probabilities are spread.
-
-% ------------------------------------------------------------
-\subsection{Hyperparameter Sensitivity: Budget and Damping}
-\label{sec:eval-ablation-tuning}
-% ------------------------------------------------------------
-
-We sweep over the candidate budget $k$ and the PPR damping factor $\alpha$ to characterize the sensitivity of the optimal configuration.
-
-\begin{itemize}
-    \item \textbf{Candidate Budget ($k$):} Increasing $k$ from 20 to 30 yields 1.7pp. Increasing further to 50 provides no additional gain, confirming that the marginal benefit of a larger candidate pool falls off quickly once the structurally reachable neighbourhood is covered.
-    \item \textbf{Damping Factor ($\alpha$):} We test values from 0.10 to 0.85. The system is robust across a wide range, with performance stable between $\alpha=0.55$ and $\alpha=0.80$. The chosen value of $\alpha=0.70$ performs consistently across all 12 repositories. Lower values cause over-spreading: probability mass diffuses too broadly and the ranking loses discrimination. Higher values confine the random walk to the immediate neighbourhood of the seeds, which limits PPR's ability to reach structurally adjacent modules.
-\end{itemize}
-
-
-% ============================================================
-\section{Qualitative Synthesis and Structural Limits}
-\label{sec:eval-synthesis}
-% ============================================================
-
-The quantitative trajectory in \cref{sec:eval-trajectory} shows how far the system improved. This section explains where it does well, where it struggles, and why. Understanding the structural limits of CodeGraph is as important for the thesis argument as reporting the headline metric.
-
 \paragraph{Codebase Structure and Retrieval Success.}
-\Cref{tab:per-repo} shows zero-recall failure rates for the five most-represented repositories. Performance varies considerably, and the variation is explained by two structural properties of each codebase: module cohesion and directory density.
+Performance varies by repository structure, as shown in \cref{tab:per-repo}. Subpackage-heavy repositories like scikit-learn (9\% failure) and matplotlib (13\%) yield high recall because their cohesive module clusters reinforce task-specific seeds. In contrast, repositories with large, heterogeneous directories like Django (27\%) or SymPy (31\%) create more difficulty: a single directory often mixes distinct concerns without explicit internal edges, limiting propagation. Plugin-driven architectures, such as Pylint (83\% failure), present an illustrative example of the limits of static analysis: many dependencies are registered dynamically and remain invisible to the graph.
 
 \begin{table}[H]
     \centering
@@ -254,34 +143,47 @@ The quantitative trajectory in \cref{sec:eval-trajectory} shows how far the syst
         matplotlib        & 23 & 3  & 13\% \\
         django/django     & 114 & 31 & 27\% \\
         sympy/sympy       & 77 & 24 & 31\% \\
-        pylint-dev/pylint & 6  & 5  & 83\% \\
-        \textbf{Total (Weighted Avg)} & \textbf{300} & \textbf{78} & \textbf{26\%} \\
+        Other (8 repositories) & 63 & 18 & 29\% \\
+        \midrule
+        \textbf{Total} & \textbf{300} & \textbf{78} & \textbf{26\%} \\
         \bottomrule
     \end{tabularx}
     \end{adjustbox}
 \end{table}
 
-\noindent The system achieves near-perfect recall on scikit-learn (9\% failure rate) and matplotlib (13\%). Both repositories feature distinct subpackages with clear, non-overlapping domains. When a bug report mentions a concept from one subpackage, BM25 selects precise seeds and PPR amplifies them within a cohesive module cluster that contains the relevant file.
-
-Django (27\% failure rate) and SymPy (31\%) present more difficulty. Both contain large, functionally heterogeneous directories where a single directory mixes logically distinct concerns. In \texttt{django/\allowbreak db/\allowbreak models/}, for example, more than 25 files span ORM query generation, model field validation, and migration management. When a seed lands in this directory, it has no explicit IMPORTS or CALLS edge to a specific sibling file, so PPR cannot propagate relevance within the directory.
-
-pylint-dev/pylint (83\% failure rate) is an outlier with only 6 instances. Pylint's architecture is plugin-driven: the relevant file for a given bug is often a plugin module registered dynamically rather than imported explicitly. Static dependency analysis cannot extract these edges, so the graph for these instances is structurally disconnected from the relevant files.
-
-\paragraph{The Structural Failure Taxonomy.}
-An analysis of the 78 zero-recall instances identifies two distinct failure modes that together define the structural boundary of graph-based retrieval. \Cref{fig:taxonomy} organizes them.
+\paragraph{Structural Failure Taxonomy.}
+An analysis of the 78 zero-recall instances identifies two distinct failure modes (\cref{fig:taxonomy}):
+\begin{itemize}
+    \item \textbf{Connectivity Gaps (40 instances):} Occur when seeds land in the correct part of the codebase but no explicit edge connects them to the target file. This reflects the inherent limitation of static analysis for files that are logically related but structurally isolated.
+    \item \textbf{Semantic Gaps (38 instances):} Arise from abstract natural-language descriptions with no lexical overlap with source code identifiers. Without a lexical match, the BM25 stage cannot place any seed in the relevant neighborhood.
+\end{itemize}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{assets/failure_taxonomy.png}
-    \caption{Failure taxonomy of the 78 zero-recall instances. Connectivity Gaps account for 40 cases and arise from missing structural paths in the dependency graph. Semantic Gaps account for 38 cases and arise from lexical mismatch between issue descriptions and source code identifiers.}
+    \caption{Failure taxonomy of the 78 zero-recall instances.}
     \label{fig:taxonomy}
 \end{figure}
 
-\begin{itemize}
-    \item \textbf{Connectivity Gaps (40 instances):} These occur when seeds land in the correct part of the codebase (the correct directory, or a file that calls into the relevant module) but no explicit CALLS or IMPORTS edge connects them to the specific target file. Without such a path, Personalized PageRank cannot propagate relevance to the target, regardless of seed quality. This failure mode reflects the inherent limitation of static dependency analysis: files that are logically related but not structurally connected through explicit edges are invisible to graph propagation.
+% ============================================================
+\section{Ablations and Sensitivity Analysis}
+\label{sec:eval-ablations}
+% ============================================================
 
-    \item \textbf{Semantic Gaps (38 instances):} These failures arise when the issue description uses abstract natural-language terms with no lexical overlap with any identifier in the source code. A bug described as ``the ORM silently discards null values during bulk insertion'' does not contain the identifier \texttt{bulk\_create} or \texttt{\_do\_insert}. Without a lexical match, the BM25 stage cannot place any seed in the relevant neighbourhood, and PPR has no starting point. This failure mode requires semantic understanding beyond what a lexical index can provide.
+This section justifies our design decisions through controlled ablation studies, measuring the individual contribution of each component to the final performance.
+
+\subsection{Algorithm Selection: Uniform vs. Weighted Restart}
+\label{sec:eval-ablation-algorithm}
+
+The most consequential choice is the restart distribution. Switching to uniform restart raises R@10 from 42.0\% to 60.7\% (+18.7pp). While weighting by confidence amplifies false positives from ambiguous seeds, uniform restart lets graph topology resolve where probability accumulates. This is consistent with the bimodal observation: the ranking function works correctly once given a useful starting point.
+
+\subsection{Hyperparameter Sensitivity: Budget and Damping}
+\label{sec:eval-ablation-sensitivity}
+
+We sweep over the candidate budget $k$ and the PPR damping factor $d$ to characterize sensitivity.
+\begin{itemize}
+    \item \textbf{Candidate Budget ($k$):} Increasing $k$ from 20 to 30 yields a 1.7pp gain. Further increases to 50 provide no additional gain, as the structurally reachable neighborhood is already covered.
+    \item \textbf{Damping Factor ($d$):} The system is robust between $d=0.55$ and $d=0.80$. We use $d=0.70$ for consistent performance. Lower values cause excessive diffusion, while higher values confine the random walk too close to the seeds, limiting its reach.
 \end{itemize}
 
-\paragraph{Conclusion.}
-These two failure modes define the structural ceiling of the current approach: Connectivity Gaps arise from missing explicit dependency edges between logically related files, and Semantic Gaps arise from the inability of lexical matching to bridge abstract descriptions to code identifiers. Together, they account for all 78 zero-recall instances and establish the boundary conditions that \cref{ch:discussion} interprets and \cref{ch:conclusion} addresses through directions for future work.
+Connectivity Gaps arise from missing explicit edges, and Semantic Gaps arise from lexical mismatch. Together, they account for all 78 zero-recall instances and establish the boundary conditions that \cref{ch:discussion} interprets and \cref{ch:conclusion} addresses through future work.

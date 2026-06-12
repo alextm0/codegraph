@@ -15,68 +15,30 @@ This thesis addressed the problem of file-level code retrieval for AI coding age
 
 \subsection{Contributions}
 
-We make five concrete contributions:
+We make three primary contributions:
 
 \begin{enumerate}
-    \item \textbf{A hybrid retrieval architecture.} CodeGraph transforms a Python repository into a four-entity weighted property graph (files, classes, functions, methods) connected by four edge types (CONTAINS, CALLS, IMPORTS, INHERITS\_FROM), translates natural-language task descriptions into personalization vectors through multi-signal seed selection (entity match, BM25, path hints), and ranks all graph nodes by Personalized PageRank. The architecture separates repository preparation from per-query retrieval, keeping query-time execution deterministic and fast.
+\item \textbf{The CodeGraph Retrieval Pipeline.} We designed and implemented a hybrid architecture that transforms Python repositories into deterministic code dependency graphs. By combining multi-signal seed selection with Personalized PageRank, the system provides a ranked and inspectable view of a repository designed for AI agent use.
 
-    \item \textbf{A Seed-First engineering methodology.} Through the bimodal diagnostic (\cref{sec:eval-diagnostics}), we identified that seed quality, not ranking algorithm tuning, is the dominant bottleneck in graph-based code retrieval. This finding motivated a systematic Seed-First strategy: compound tokenization, expanded BM25 corpora, inverse-frequency entity weighting, and uniform PPR restart. These interventions produced the dominant share of the 32 percentage point improvement from baseline to optimal configuration.
+\item \textbf{Evaluation Methodology and Failure Taxonomy.} We evaluated the system on SWE-bench Lite, achieving 74.0\% Recall@10 and demonstrating a 24.3 percentage point gain over lexical baselines. By analyzing both successful and failed retrievals, we identified reachability as the primary retrieval bottleneck, leading to a seed-first engineering strategy. We classified the remaining failures into a taxonomy of connectivity gaps and semantic gaps, defining the structural ceiling of graph-based retrieval.
 
-    \item \textbf{Empirical evaluation on repository-level tasks.} We evaluated CodeGraph on SWE-bench Lite, achieving 74.0\% Recall@10 at the file level. This represents a 24.3 percentage point improvement over BM25 alone and a 32 percentage point improvement over the initial graph-based baseline. Controlled ablations isolate the contribution of each design choice: uniform restart (+18.7pp), seed quality refinements (+11.6pp), and candidate budget adjustment (+1.7pp).
+\item \textbf{Deterministic Agent Integration.} We implemented a stable, MCP-based interface that exposes structural retrieval to AI agents. This interface provides not only ranked context but also seed provenance and structural paths, making the retrieval process transparent and reproducible for both human developers and autonomous agents.
 
-    \item \textbf{An MCP-based agent integration.} CodeGraph exposes its full retrieval capability through two Model Context Protocol tools, making structural retrieval available to any MCP-compatible AI agent (Claude Code, Cursor, VS~Code Copilot) without requiring the agent to understand graph algorithms, parsing, or database queries.
-
-    \item \textbf{A structural failure taxonomy.} We identified two failure modes that together account for all 78 zero-recall instances: Connectivity Gaps (40 cases), where seeds reach the correct area but no explicit dependency edge connects them to the target file; and Semantic Gaps (38 cases), where the task description shares no lexical overlap with relevant code identifiers. These failure modes define the structural ceiling of the current approach and point toward specific future directions.
 \end{enumerate}
 
 \subsection{Central Finding}
 
-The central finding of this thesis is that lexical and structural signals solve different parts of the code retrieval problem. Lexical matching is necessary because it connects a task description to possible starting points in the repository. Graph propagation is necessary because it uses explicit code relationships to reach structurally relevant entities that share no vocabulary with the task description. For repository-level tasks, this combination provides a more reliable retrieval path than text matching alone.
-
-This finding is qualified by an important boundary condition: the combination works only when lexical matching can place at least one seed in the correct region of the dependency graph. When it cannot, structural propagation has nothing to amplify. The retrieval ceiling is therefore set by the lexical-to-structural interface, not by the sophistication of the ranking algorithm.
-
+The central finding of this thesis is that lexical matching provides reachability, while graph propagation provides ranking. Textual similarity can locate the general region of a codebase where a task is relevant, but it cannot navigate the dependency chains that connect related files. Graph propagation follows these chains, using the repository's structure to rank files by their functional relationship to the initial match. This confirms that codebases are connected systems, not collections of independent documents, and that retrieval methods must account for this structure.
 
 % =============================================================================
 \section{Future Work}
 \label{sec:future-work}
 % =============================================================================
 
-The failure taxonomy from \cref{sec:eval-synthesis} identifies two structural limitations that define the most productive directions for future research. We organize future work around these limitations, from the most immediately addressable to the most open-ended.
+The failure taxonomy identifies the most productive directions for future research, centered on bridging the gap between natural language and codebase structure. Vector embeddings could connect natural-language descriptions to code entities through learned semantic similarity, providing seeds that BM25 cannot reach. Alternatively, a language model could preprocess issue descriptions to suggest likely module or class names, augmenting the lexical seeds with concrete entity suggestions.
 
-\subsection{Closing Semantic Gaps}
-\label{sec:future-semantic}
+To close connectivity gaps, future work could explore selective sibling linkages within cohesive directories or gate new edges on co-change evidence from version control. Additionally, type-informed call resolution using lightweight type inference from annotations or property-chain analysis could add edges to the graph without requiring full runtime information.
 
-Semantic Gaps account for 38 of the 78 zero-recall failures. These occur when the task description uses abstract terms with no lexical overlap with source code identifiers. Two approaches could address this limitation:
+The pipeline's language-agnostic design allows for extension to TypeScript or Java through new parser and resolution logic. The next step is to measure the end-to-end impact: how often does an agent produce a correct patch with structural context versus without it? Plugging CodeGraph into a complete SWE-bench resolution pipeline would test this link directly.
 
-\paragraph{Dense embeddings as a seed source.}
-Vector embeddings can connect natural-language descriptions to code entities through learned semantic similarity, even when the two share no surface vocabulary. Adding a dense retrieval component as a fourth seed signal would allow the personalization vector to include entry points that BM25 cannot reach. The key design challenge is calibrating the weight of embedding-derived seeds relative to the existing lexical signals: too much weight risks introducing semantically similar but structurally irrelevant seeds, while too little fails to close the gap.
-
-\paragraph{LLM-assisted seed extraction.}
-A language model could preprocess issue descriptions to suggest likely module names, class names, or technical entities that augment the lexical seeds. Unlike dense embeddings, which operate in a continuous similarity space, LLM-assisted extraction would produce discrete entity hypotheses that can be matched against graph nodes directly. This introduces a trade-off between recall and cost: each retrieval call would require an additional LLM inference step, which increases latency and monetary cost while potentially reducing the system's determinism.
-
-\subsection{Closing Connectivity Gaps}
-\label{sec:future-connectivity}
-
-Connectivity Gaps account for 40 of the 78 zero-recall failures. These occur when seeds land in the correct part of the codebase but no explicit CALLS or IMPORTS edge connects them to the target file. Two strategies could reduce this gap without introducing Probability Dilution:
-
-\paragraph{Selective structural features.}
-Instead of adding naive proximity edges across entire directories—which can harm retrieval quality by diluting probability mass—a more targeted approach would add sibling linkages only within small, cohesive directories (fewer than 10 files), or gate such connections on co-change evidence from version control. Files that are frequently modified together are likely to be functionally related even when they share no explicit import or call.
-
-\paragraph{Type-informed call resolution.}
-The current parser omits ambiguous calls to preserve graph precision. With lightweight type inference, either from type annotations (increasingly common in modern Python) or from simple heuristics like attribute-chain analysis, some currently ambiguous calls could be resolved with higher confidence. This would add edges to the graph without requiring full runtime type information.
-
-\subsection{Extending Scope}
-
-\paragraph{Multi-language support.}
-The graph schema, PPR ranking, and MCP interface are language-agnostic in design. Extending the system to TypeScript or Java requires a new parser and language-specific resolution logic, but no changes to the retrieval pipeline itself. Tree-sitter already provides grammars for over 100 languages, making parser extension feasible.
-
-\paragraph{End-to-end agent evaluation.}
-The current evaluation measures retrieval quality in isolation. The next step is to measure whether better retrieval translates into higher task resolution rates: how often does an agent produce a correct patch with structural context versus without it? Plugging CodeGraph into a complete SWE-bench resolution pipeline would test this link directly.
-
-
-% =============================================================================
-\section{Closing Remarks}
-\label{sec:closing}
-% =============================================================================
-
-Repository-level code retrieval is a prerequisite for effective AI coding agents. The challenge is not merely finding text that matches a query, but identifying the structural region of a codebase that a task requires. CodeGraph demonstrates that explicit graph structure, combined with careful lexical anchoring, provides a practical and interpretable solution to this problem. The remaining work lies at the boundary between language and structure: building better bridges from natural-language descriptions to the structural entry points that graph propagation can amplify.
+This thesis demonstrates that codebases are connected systems, and that retrieval methods must account for this structure. By combining lexical matching with graph propagation, CodeGraph provides a deterministic foundation for repository-scale code navigation. As AI coding agents continue to take on more complex tasks, the integration of structural context will be essential to their effectiveness.

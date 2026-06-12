@@ -9,6 +9,16 @@
 % ---------------------------------------------------------------------------
 % Listing styles (require colors from main.tex)
 % ---------------------------------------------------------------------------
+% Custom Cypher language definition
+\lstdefinelanguage{cypher}{
+    morekeywords={UNWIND, MERGE, MATCH, WHERE, SET, RETURN, AS, OR, AND, CREATE, DELETE, DETACH, REMOVE, WITH, LIMIT, SKIP, ORDER, BY, ASC, DESC, IN, ON, count},
+    sensitive=false,
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]",
+    morestring=[b]',
+}
+
 \lstdefinestyle{cgbase}{
     basicstyle=\ttfamily\footnotesize,
     numbers=none,
@@ -28,6 +38,7 @@
 
 \lstdefinestyle{cgpython}{
     style=cgbase,
+    language=Python,
     commentstyle=\color{codegreen}\itshape,
     keywordstyle=\color{codeblue}\bfseries,
     stringstyle=\color{codepurple},
@@ -40,14 +51,16 @@
 
 \lstdefinestyle{cgshell}{
     style=cgbase,
-    keywordstyle=\color{latticeblue}\bfseries,
+    keywordstyle=\color{codeblue}\bfseries,
     commentstyle=\color{codegreen}\itshape,
 }
 
 \lstdefinestyle{cgcypher}{
     style=cgbase,
+    language=cypher,
     commentstyle=\color{codegreen}\itshape,
-    keywordstyle=\color{latticeblue}\bfseries,
+    keywordstyle=\color{codeblue}\bfseries,
+    stringstyle=\color{codepurple},
 }
 
 % ---------------------------------------------------------------------------
