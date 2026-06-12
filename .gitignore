@@ -25,6 +25,8 @@ frontend/dist/
 # Neo4j / Local Data (if applicable)
 data/
 logs/
+config.yaml
+.mcp.json
 
 # Benchmark runner cache and results
 .codegraph_cache/
