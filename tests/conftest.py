@@ -5,15 +5,35 @@ Tests that need Neo4j are marked with @pytest.mark.neo4j and are skipped when
 the database is not reachable.
 """
 
+import os
 from pathlib import Path
-
 from unittest.mock import MagicMock
+
 import pytest
 
-from codegraph.core.graph.connection import load_config, Neo4jConfig, create_driver, verify_connectivity, close_driver
+from codegraph.core.graph.connection import (
+    Neo4jConfig,
+    close_driver,
+    create_driver,
+    load_config,
+    verify_connectivity,
+)
 from codegraph.core.graph.database import DatabaseManager
 
-_CONFIG_PATH = Path(__file__).parent / "config.yaml"
+def _get_test_config() -> Neo4jConfig:
+    """Return Neo4j config, preferring env vars, then root config, then defaults."""
+    # Standard load_config handles env vars + file fallback
+    root_config = Path(__file__).resolve().parents[1] / "config.yaml"
+    try:
+        return load_config(root_config)
+    except ValueError:
+        # Fallback if no config file AND no env vars
+        return Neo4jConfig(
+            uri="bolt://localhost:7687",
+            username="neo4j",
+            password="password",
+            database="neo4j",
+        )
 
 @pytest.fixture(autouse=True)
 def reset_database_manager():
@@ -34,13 +54,9 @@ def mock_driver():
 # ---------------------------------------------------------------------------
 
 def _neo4j_available() -> bool:
-    """Return True if the test Neo4j instance is reachable.
-
-    Configuration errors (bad config.yaml, missing keys) return False instead
-    of crashing, allowing tests to be skipped in CI.
-    """
+    """Return True if the test Neo4j instance is reachable."""
     try:
-        config = load_config(_CONFIG_PATH)
+        config = _get_test_config()
         driver = create_driver(config)
         ok = verify_connectivity(driver)
         close_driver(driver)
@@ -53,7 +69,7 @@ _NEO4J_AVAILABLE = _neo4j_available()
 
 neo4j_required = pytest.mark.skipif(
     not _NEO4J_AVAILABLE,
-    reason="Neo4j not reachable at bolt://localhost:7687",
+    reason="Neo4j not reachable (checked env vars and config.yaml)",
 )
 
 # ---------------------------------------------------------------------------
@@ -62,8 +78,8 @@ neo4j_required = pytest.mark.skipif(
 
 @pytest.fixture(scope="session")
 def neo4j_config() -> Neo4jConfig:
-    """Return the Neo4j config loaded from config.yaml."""
-    return load_config(_CONFIG_PATH)
+    """Return the Neo4j config."""
+    return _get_test_config()
 
 
 @pytest.fixture(scope="session")
