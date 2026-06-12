@@ -1,7 +1,7 @@
 \section{Methodology}
 \label{sec:method}
 
-CodeGraph treats code retrieval as a two-stage process: lexical signals prioritize the entry points (seeds) into the codebase, while structural propagation disambiguates and ranks the broader functional neighbourhood. This division of labour ensures that natural-language queries can find a starting point, while the ranking itself remains anchored in execution semantics.
+CodeGraph treats code retrieval as a two-stage process: lexical signals prioritize the entry points (seeds) into the codebase, while structural propagation disambiguates and ranks the broader functional neighborhood. This division of labor ensures that natural-language queries can find a starting point, while the ranking itself remains anchored in execution semantics.
 
 \subsection{Seed Selection}
 
@@ -46,16 +46,16 @@ where $d \in (0,1)$ is the damping factor (set to $0.70$), and $P$ is the transi
     P_{uv} = \frac{w(u, v)}{\sum_{(u, k) \in E} w(u, k)}
     \label{eq:transition}
 \end{equation}
-Personalized PageRank is computed over an undirected projection of the property graph, allowing relevance mass to diffuse both upstream (from callees to callers) and downstream (from callers to callees). The resulting vector $\vec{r}$ provides a topologically anchored relevance score for every code entity in the repository.
+We compute Personalized PageRank over an undirected projection of the property graph, allowing relevance mass to diffuse both upstream (from callees to callers) and downstream (from callers to callees). The resulting vector $\vec{r}$ provides a topologically anchored relevance score for every code entity in the repository.
 
 \subsection{Design Rationale for Structural Retrieval}
 
-The methodology is governed by design choices that prioritize structural semantics over syntactic density.
+Four design choices govern this methodology, prioritizing structural semantics over syntactic density.
 
 \textbf{Coarse-Grained Entity Granularity:} The graph schema restricts nodes strictly to files, classes, functions, and methods. CodeGraph explicitly avoids line-level resolution or full Abstract Syntax Tree (AST) ingestion. While ASTs capture complete syntactic correctness, their overwhelming density dilutes retrieval probability mass. The chosen four-entity model provides the exact abstraction layer through which developers typically organize, modularize, and reference code, maintaining a graph size that is efficient for matrix operations.
 
-\textbf{Precision Over Noisy Connectivity:} During graph construction, call resolution is performed conservatively. If a function call site is ambiguous and cannot be resolved to a definitive definition within the codebase, CodeGraph omits the edge entirely. This choice favors precision over recall in the graph topology itself: it is safer to miss an implicit connection than to inject false structural pathways that would misdirect the PageRank random walk. 
+\textbf{Precision Over Noisy Connectivity:} During graph construction, we resolve calls conservatively. If a function call site is ambiguous and cannot be resolved to a definitive definition within the codebase, CodeGraph omits the edge entirely. This choice favors precision over recall in the graph topology itself: it is safer to miss an implicit connection than to inject false structural pathways that would misdirect the PageRank random walk. 
 
 \textbf{Explicit Dependencies Over Proximity Heuristics:} We restrict edges strictly to syntactic dependencies (\texttt{CALLS}, \texttt{IMPORTS}, \texttt{CONTAINS}, \texttt{INHERITS\_FROM}). We do not use directory-proximity heuristics (e.g., connecting all files in the same folder), as adding proximity edges creates dense subgraphs that indiscriminately diffuse relevance. CodeGraph's retrieval fidelity is built on the premise that execution paths matter more than file system locality.
 
-\textbf{Uniform Restart as a Robustness Mechanism:} A critical algorithmic decision is the use of a uniform restart distribution over the selected seeds, rather than weighting restarts by lexical confidence scores. In software repositories, a highly confident lexical match is often an ambiguous, common identifier (e.g., a generic \texttt{Manager} class). Weighting by confidence amplifies these false positives. Uniform restart is a robustness decision under noisy seed conditions: by giving every extracted seed an equal share of the initial mass, CodeGraph allows the graph topology to arbitrate. Correct seeds that share structural paths compound their mass cooperatively, while isolated incorrect seeds dissipate their relevance into uncoordinated neighbourhoods.
+\textbf{Uniform Restart as a Robustness Mechanism:} A critical algorithmic decision is the use of a uniform restart distribution over the selected seeds, rather than weighting restarts by lexical confidence scores. In software repositories, a highly confident lexical match is often an ambiguous, common identifier (e.g., a generic \texttt{Manager} class). Weighting by confidence amplifies these false positives. Uniform restart is a robustness decision under noisy seed conditions: by giving every extracted seed an equal share of the initial mass, CodeGraph allows the graph topology to arbitrate. Correct seeds that share structural paths compound their mass cooperatively, while isolated incorrect seeds dissipate their relevance into uncoordinated neighborhoods.

@@ -1,27 +1,30 @@
 \section{Discussion and Limitations}
 \label{sec:discussion}
 
-The main value of CodeGraph is not only that it improves retrieval accuracy, but that its failure modes are structurally interpretable. Because ranking is deterministic and graph-constrained, missed targets can be traced to missing reachability rather than opaque model behavior. This makes the remaining limitations scientifically informative, and also suggests where hybrid retrieval systems should focus future effort.
+The deterministic nature of CodeGraph ensures that retrieval failures can be traced to structural reachability gaps rather than opaque model behavior. This structural interpretability clarifies the boundaries of graph-based retrieval and suggests directions for future development.
 
-\subsection{Practical Implications for AI Coding Agents}
+\subsection{Implications for Coding Agents}
 
-For AI coding agents to operate autonomously, they require retrieval tools that are not only accurate but stable. When an agent requests context, it needs a fast, predictable response. Systems that place large language models directly inside the retrieval loop (e.g., to generate graph queries or re-rank snippets) introduce high latency and non-deterministic variance. An agent debugging a failure may receive a different context window upon retrying the exact same task.
+Autonomous agents require stable, low-latency tools. Systems that place large language models inside the retrieval loop to generate queries or re-rank snippets introduce non-deterministic variance and high latency. Under identical query conditions, an agent may observe different contexts on successive runs.
 
-CodeGraph provides a deterministic foundation for agent memory. By separating the graph construction (performed asynchronously) from the ranking phase (performed via deterministic matrix multiplication), the system guarantees that the same seed set will always produce the exact same topological ranking. This allows agent designers to cache results, write reproducible evaluation harnesses, and treat the repository graph as a stable environment rather than a stochastic oracle.
+CodeGraph addresses this by separating graph construction (offline) from ranking propagation (online). Because Personalized PageRank relies on exact matrix multiplication, the same set of seeds always yields the same file-level ranking. This determinism allows agent designers to cache retrieval outcomes, build reproducible evaluation harnesses, and treat codebase retrieval as a stable API rather than a stochastic oracle.
 
-\subsection{Structural Limitations and Future Hybridization}
+\subsection{Scope and Validity Boundaries}
 
-An analysis of the zero-recall instances defines the exact boundaries of static graph-based retrieval. We identify two primary failure modes (\Cref{fig:taxonomy}):
+We define several boundaries that affect the interpretation and generalization of our findings:
+\begin{itemize}
+    \item \textbf{Static Analysis Dependence:} CodeGraph relies on syntax-derived relationships. Collaborations that occur through dynamic imports, configuration files, or database queries are not captured, creating Connectivity Gaps.
+    \item \textbf{Python-Only Scope:} We implement the parsing and edge-resolution modules specifically for Python. Extending the system to compiled or multi-language projects requires implementing type-resolving parsers.
+    \item \textbf{File-Level Proxy:} We conduct the evaluation at the file level. This does not capture multi-file patch complexities or cases where fine-grained class or function snippets are required.
+    \item \textbf{Benchmark Generalization:} We tuned the damping factor, top-$k$, and seed weights on the SWE-bench Lite dataset. Lacking an independent held-out validation set, these parameters may reflect characteristics specific to these repositories.
+\end{itemize}
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\linewidth]{assets/failure_taxonomy.png}
-    \caption{Failure taxonomy of the zero-recall instances. Connectivity Gaps account for 40 cases (missing graph edges), and Semantic Gaps account for 38 cases (lexical mismatch).}
-    \label{fig:taxonomy}
-\end{figure}
+\subsection{Analysis of Retrieval Failures}
 
-\textbf{Connectivity Gaps (40 instances):} These occur when seeds land in the correct general region, but no explicit syntactic dependency (e.g., \texttt{CALLS} or \texttt{IMPORTS}) connects the seed to the specific target file. Files that collaborate through implicit data flows, configuration files, or dynamic plugin registries remain invisible to standard structural propagation. This establishes the ceiling of purely static graph retrieval.
+We categorize the 78 zero-recall instances into two primary failure modes:
+\begin{itemize}
+    \item \textbf{Connectivity Gaps (40 instances):} Occur when the target file is not connected to any seed node by explicit dependency edges. This happens in plugin-based architectures or dynamic systems (e.g., pylint) where components register dynamically rather than importing one another.
+    \item \textbf{Semantic Gaps (38 instances):} Arise when the natural language description contains zero vocabulary overlap with the code identifiers. In these cases, seed extraction fails to place any entry points in the relevant neighborhood.
+\end{itemize}
 
-\textbf{Semantic Gaps (38 instances):} These failures arise when the issue description uses highly abstract natural-language terms with zero lexical overlap with any source-code identifier. Without a lexical anchor, the system cannot place any seed in the relevant neighbourhood, causing a total reachability failure.
-
-These limitations naturally motivate the next stage of hybridization. To bridge semantic gaps without sacrificing determinism, future systems should investigate employing lightweight dense embeddings strictly for the initial seed selection stage, allowing abstract tasks to anchor correctly before delegating the final ranking back to the graph structure. To bridge connectivity gaps, integrating dynamic execution traces or semantic data-flow edges could expose implicit dependencies that static syntax misses, yielding an even more complete topological view of the repository.
+To resolve semantic gaps while preserving determinism, future systems could evaluate using lightweight dense vector models strictly for the seed selection phase. To bridge connectivity gaps, incorporating data-flow tracking or runtime tracing could expose relationships that static syntax analysis misses.

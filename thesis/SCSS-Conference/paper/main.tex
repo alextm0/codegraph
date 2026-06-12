@@ -14,28 +14,29 @@
 \usepackage{ragged2e}
 \usepackage[hidelinks,unicode,pdfpagelabels]{hyperref}
 \usepackage[capitalise]{cleveref}
+\usepackage{flushend}
 
 \begin{document}
 
 \title{CodeGraph: Repository-Level Structural Retrieval for AI Coding Agents via Personalized PageRank}
 
-\author{\IEEEauthorblockN{Alexandru-Mihai Toma}
+\author{\IEEEauthorblockN{Autor1}
 \IEEEauthorblockA{\textit{Computer Science Department} \\
 \textit{Babes-Bolyai University}\\
 Cluj-Napoca, Romania \\
-alexandru.toma@stud.ubbcluj.ro}
+email1@example.com}
 \and
-\IEEEauthorblockN{Lect. Phd. Arthur Molnar}
+\IEEEauthorblockN{Autor2}
 \IEEEauthorblockA{\textit{Computer Science Department} \\
 \textit{Babes-Bolyai University}\\
 Cluj-Napoca, Romania \\
-arthur.molnar@ubbcluj.ro}
+email2@example.com}
 }
 
 \maketitle
 
 \begin{abstract}
-LLM-based coding agents can inspect files, propose patches, and run tests, but their success depends heavily on retrieving the right code context. Traditional keyword search and dense retrieval treat code mostly as text, often missing relationships expressed through imports, calls, containment, and inheritance. This paper introduces CodeGraph, a hybrid retrieval system for AI coding agents that combines lexical seeding with Personalized PageRank over a repository-level dependency graph. Evaluated on SWE-bench Lite, CodeGraph achieves 74.0\% Recall@10, a 24.3 percentage point improvement over a strong BM25-only baseline. Our empirical analysis shows that repository retrieval for AI agents improves when lexical matching is used only to place starting points, while structural propagation determines which connected code entities truly matter. The main empirical finding is that seed reachability, not ranking sophistication, sets the performance ceiling.
+AI coding agents require precise repository-scale retrieval to locate relevant context. Traditional keyword search and dense retrieval treat code as text, ignoring structural dependencies like imports, calls, and inheritance hierarchies. We present CodeGraph, a hybrid retrieval system that combines lexical seeding with Personalized PageRank over a repository-level dependency graph. On SWE-bench Lite, CodeGraph achieves 74.0\% Recall@10, improving upon a BM25 baseline by 24.3 percentage points. Our analysis shows that lexical matching is best used to place starting points, while structural propagation determines the relevance of the surrounding neighborhood. We find that seed reachability, rather than downstream ranking sophistication, determines the retrieval performance ceiling.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -51,7 +52,6 @@ Code Retrieval, AI Agents, Graph Databases, Personalized PageRank, Static Analys
 \input{07_limitations}
 \input{08_conclusion}
 
-\nocite{*}
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 

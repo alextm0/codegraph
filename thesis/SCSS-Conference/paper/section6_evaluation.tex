@@ -16,7 +16,7 @@ We compare CodeGraph against three baselines that together isolate the individua
 
 \subsection{Performance Trajectory}
 
-The initial configuration of CodeGraph achieved 42.0\% Recall@10, which underperformed the BM25-only baseline of 49.7\%. However, through systematic engineering of the seed stage, the final optimal configuration reached \textbf{74.0\% Recall@10}, an absolute improvement of 32 percentage points (see \Cref{tab:trajectory-results} and \Cref{fig:trajectory}).
+The initial configuration of CodeGraph achieved 42.0\% Recall@10. Through systematic engineering of the seed stage, the final optimal configuration reached \textbf{74.0\% Recall@10}, a 24.3 percentage point improvement over the competitive BM25-only baseline (49.7\%). This trajectory records the full performance gain from initial unoptimized graph propagation to the final structural retriever.
 
 \begin{table}[htbp]
     \centering

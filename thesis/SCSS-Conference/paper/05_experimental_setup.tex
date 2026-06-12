@@ -1,25 +1,25 @@
 \section{Experimental Setup}
 \label{sec:experimental_setup}
 
-We evaluate CodeGraph on SWE-bench Lite \cite{yang2024swebench}, a benchmark of 300 real GitHub issues paired with human-written fixes across 12 popular Python repositories. The objective is repository-level retrieval: given only a natural-language issue description, the system must rank source files by relevance and identify the files modified in the human patch within the top ranks.
+We evaluate CodeGraph on SWE-bench Lite \cite{yang2024swebench}, a benchmark consisting of 300 real GitHub issues from 12 open-source Python repositories. The objective is repository-level retrieval: given only a natural-language issue description, the system must rank files by relevance, placing the files modified in the human patch at the top of the ranked list.
 
 \subsection{Metrics and Protocol}
 
-While Personalized PageRank operates over fine-grained structural entities (classes, functions, methods), we evaluate retrieval strictly at the file level. File-level retrieval is the right proxy for coding-agent context acquisition: modern agents typically load entire files or large contiguous spans into their context window to understand the surrounding syntactic state, rather than piecing together isolated functions.
+Although Personalized PageRank propagates relevance over fine-grained structural entities (classes, functions, and methods), we evaluate retrieval performance at the file level. File-level retrieval serves as the correct proxy for agent context acquisition, as coding agents typically load entire files into their context window to preserve syntactical context.
 
-To translate entity-level PPR scores into file-level rankings, CodeGraph uses a straightforward aggregation strategy: it groups all ranked entities by their parent file, assigns the file the score of its highest-ranked constituent entity, and deduplicates the list. 
-
-We evaluate the final file-level ranking using three complementary metrics:
+To map entity-level scores to file-level ranks, we group the ranked entities by their parent file and assign each file the score of its highest-ranked constituent entity. We measure performance using three metrics:
 \begin{itemize}
-    \item \textbf{Recall@$k$ (R@$k$):} The fraction of issues where the target file appears in the top-$k$ results. R@10 is our primary metric, reflecting the typical context budget of AI coding agents before hitting distraction thresholds.
-    \item \textbf{Mean Reciprocal Rank (MRR):} The average of $1 / \operatorname{rank}$ for the target file, capturing the exact placement quality within the ranked list.
-    \item \textbf{Zero-recall count:} The number of issues where the target file does not appear in the top-10 results at all, serving as a direct measure of reachability failure.
+    \item \textbf{Recall@$k$ (R@$k$):} The fraction of issues where the target file is retrieved within the top-$k$ results. R@10 is our primary metric, reflecting the typical context budget of AI coding agents.
+    \item \textbf{Mean Reciprocal Rank (MRR):} The average of $1 / \operatorname{rank}$ for the target file, indicating the precision of the ranked results.
+    \item \textbf{Zero-recall count:} The number of issues where the target file does not appear in the top-10 results, indicating a reachability failure.
 \end{itemize}
 
 \subsection{Baselines}
 
-We evaluate the fully engineered CodeGraph pipeline against two carefully selected reference points. These are not merely convenient baselines; they specifically isolate the value of structural propagation and seed engineering:
+We evaluate CodeGraph against four baseline configurations to isolate the contributions of lexical matching, graph topology, and ranking propagation:
 \begin{enumerate}
-    \item \textbf{BM25-only:} A sparse lexical retriever executing over the exact same entity corpus used for CodeGraph's seeds. This baseline shares the exact same lexical foundation but omits the dependency graph. Comparing CodeGraph to BM25-only rigorously isolates the performance contribution of structural ranking from the underlying text indexing.
-    \item \textbf{CodeGraph (Initial):} The initial version of our graph system utilizing weighted PPR restart and basic lexical indexing. Comparing the final system to this initial state quantifies the specific impact of our reachability diagnosis and the subsequent Seed-First engineering strategy.
+    \item \textbf{BM25-only (Basic):} A sparse lexical retriever executing over the entity signatures and docstrings. This baseline omits the dependency graph entirely, serving as a measure of standard text search.
+    \item \textbf{One-hop ego graph:} A structural baseline that retrieves all nodes within a single hop of the BM25 seed nodes without ranking. This tests whether graph structure alone is sufficient without PageRank propagation.
+    \item \textbf{CodeGraph (Initial):} An early system configuration that applied confidence-weighted PPR restart, representing the performance of graph-based ranking prior to our seed engineering interventions.
+    \item \textbf{BM25-only (Seed-Engineered):} A lexical baseline that uses our optimized seed corpus (including compound tokenization and path hints) but omits PPR propagation, isolating the value of structural routing.
 \end{enumerate}

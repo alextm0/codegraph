@@ -16,7 +16,7 @@ An analysis of the 78 zero-recall instances identifies two distinct failure mode
 
 \begin{enumerate}
     \item \textbf{Connectivity Gaps (40 instances):} These occur when seeds land in the correct part of the codebase, but no explicit \texttt{CALLS} or \texttt{IMPORTS} edge connects them to the specific target file. Without such a path, Personalized PageRank cannot propagate relevance to the target. This failure mode reflects an inherent limitation of static dependency analysis: files that collaborate through implicit data flows or configuration rather than explicit code imports are invisible to standard structural propagation.
-    \item \textbf{Semantic Gaps (38 instances):} These failures arise when the issue description uses abstract natural-language terms with no lexical overlap with any identifier in the source code. For example, a bug described as ``the ORM silently discards null values'' does not contain the code identifier \texttt{\_do\_insert}. Without a lexical match, the system cannot place any seed in the relevant neighborhood, and PPR has no starting point.
+    \item \textbf{Semantic Gaps (38 instances):} These failures arise when the issue description uses abstract natural-language terms with insufficient lexical overlap with the target code identifiers. For example, in \textit{django/django-10914}, a request to change default file permissions mentions high-level concepts like ``tempfile'' and ``permissions'' but does not name the target configuration hub, \texttt{global\_settings.py}. Without a precise lexical match to the correct starting neighborhood, structural propagation has no entry point to reach the logically related but structurally isolated target.
 \end{enumerate}
 
 \subsection{Ablation: The Cost of Proximity Edges}
