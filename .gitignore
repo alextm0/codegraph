@@ -41,5 +41,3 @@ plans/
 *.pdf
 projects/
 
-# Vendored CGC docs snapshot (inspiration only; not part of this repo)
-docs/CodeGraphContext-Docs-From-Github/
