@@ -33,14 +33,12 @@ seed_selection:
 
     monkeypatch.setenv("CODEGRAPH_CONFIG", str(config_path))
     from codegraph.core.graph import clear_database, build_graph, get_database_manager
-    from codegraph.core.parser import create_parser, parse_directory
+    from codegraph.core.parser import parse_directory
 
     db = get_database_manager()
     db.initialize(str(config_path))
     driver = db.get_driver()
-
-    parser = create_parser()
-    entities = parse_directory(str(_FIXTURE), parser)
+    entities = parse_directory(str(_FIXTURE))
     clear_database(driver)
     build_graph(driver, entities)
 

@@ -15,14 +15,14 @@
 **Files:**
 - Research: `src/codegraph/core/parser/`
 - Research: `src/codegraph/core/graph/graph_builder.py`
-- Research: `src/codegraph/core/graph/resolution.py`
+- Research: `src/codegraph/core/languages/python/`
 
 - [ ] **Step 1: Discover Tree-Sitter & Entity Extraction**
-    - Walkthrough `python_parser.py` and `extractors.py`.
+    - Walkthrough `core/languages/python/parser.py` and `extractors.py`.
     - Understand how we go from raw bytes to `FileEntities`.
 - [ ] **Step 2: Breakdown Static Resolution**
-    - Examine `resolution.py`. 
-    - Trace the logic of `_resolve_callee`: Import Map &rarr; Same-File &rarr; Global Unique.
+    - Examine `core/languages/python/resolver.py`. 
+    - Trace the logic of `resolve_callee`: Import Map &rarr; Same-File &rarr; Global Unique.
 - [ ] **Step 3: Graph Construction Mechanics**
     - Study `graph_builder.py`.
     - Understand the two-pass build: (1) Nodes/Containment, (2) Cross-file links.

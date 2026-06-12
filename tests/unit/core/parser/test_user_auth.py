@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from codegraph.core.parser.models import FileEntities
-from codegraph.core.parser import create_parser, parse_directory, parse_file
+from codegraph.core.parser import parse_directory, parse_file
 
 # Reorganized path: tests/unit/core/parser/test_user_auth.py
 # Fixtures are at: tests/fixtures/
@@ -30,9 +30,6 @@ FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 PROJECT = FIXTURES_DIR / "user_auth"
 
 
-@pytest.fixture(scope="module")
-def parser():
-    return create_parser()
 
 
 def read(relative_path: str) -> bytes:
@@ -44,7 +41,7 @@ def read(relative_path: str) -> bytes:
 # Function extraction
 # ---------------------------------------------------------------------------
 
-def test_extracts_all_top_level_functions(parser):
+def test_extracts_all_top_level_functions():
     """validators.py defines exactly 4 top-level functions."""
     entities = parse_file(read("utils/validators.py"), "validators.py")
 
@@ -52,7 +49,7 @@ def test_extracts_all_top_level_functions(parser):
     assert names == ["validate_email", "validate_username", "validate_password", "validate_password_strength"]
 
 
-def test_function_has_correct_line_span(parser):
+def test_function_has_correct_line_span():
     """validate_email starts on line 9 and ends after its body."""
     entities = parse_file(read("utils/validators.py"), "validators.py")
 
@@ -61,7 +58,7 @@ def test_function_has_correct_line_span(parser):
     assert fn.end_line > fn.line_number
 
 
-def test_function_signature_contains_parameter_name(parser):
+def test_function_signature_contains_parameter_name():
     """The signature of validate_email should include the 'email' parameter."""
     entities = parse_file(read("utils/validators.py"), "validators.py")
 
@@ -69,7 +66,7 @@ def test_function_signature_contains_parameter_name(parser):
     assert "email" in fn.signature
 
 
-def test_function_docstring_is_extracted(parser):
+def test_function_docstring_is_extracted():
     """validate_email has a docstring that describes its purpose."""
     entities = parse_file(read("utils/validators.py"), "validators.py")
 
@@ -78,7 +75,7 @@ def test_function_docstring_is_extracted(parser):
     assert "email" in fn.docstring.lower()
 
 
-def test_top_level_functions_exclude_methods(parser):
+def test_top_level_functions_exclude_methods():
     """user.py has no top-level functions except create_guest_user — class methods must not appear here."""
     entities = parse_file(read("models/user.py"), "user.py")
 
@@ -90,7 +87,7 @@ def test_top_level_functions_exclude_methods(parser):
 # Class extraction
 # ---------------------------------------------------------------------------
 
-def test_extracts_all_classes(parser):
+def test_extracts_all_classes():
     """user.py defines exactly BaseModel and User — in that order."""
     entities = parse_file(read("models/user.py"), "user.py")
 
@@ -98,7 +95,7 @@ def test_extracts_all_classes(parser):
     assert names == ["BaseModel", "User"]
 
 
-def test_class_inheritance_captured(parser):
+def test_class_inheritance_captured():
     """User inherits from BaseModel — the bases tuple must reflect that."""
     entities = parse_file(read("models/user.py"), "user.py")
 
@@ -106,7 +103,7 @@ def test_class_inheritance_captured(parser):
     assert user.bases == ("BaseModel",)
 
 
-def test_base_class_has_no_bases(parser):
+def test_base_class_has_no_bases():
     """BaseModel has no parent classes."""
     entities = parse_file(read("models/user.py"), "user.py")
 
@@ -118,7 +115,7 @@ def test_base_class_has_no_bases(parser):
 # Method extraction
 # ---------------------------------------------------------------------------
 
-def test_extracts_all_methods_with_correct_class_assignment(parser):
+def test_extracts_all_methods_with_correct_class_assignment():
     """Every method must be linked to the class it belongs to, not mixed up."""
     entities = parse_file(read("models/user.py"), "user.py")
 
@@ -129,7 +126,7 @@ def test_extracts_all_methods_with_correct_class_assignment(parser):
     assert user_methods == {"__init__", "to_dict", "display_name"}
 
 
-def test_decorated_method_is_included(parser):
+def test_decorated_method_is_included():
     """@staticmethod validate_id on BaseModel must still be extracted."""
     entities = parse_file(read("models/user.py"), "user.py")
 
@@ -137,7 +134,7 @@ def test_decorated_method_is_included(parser):
     assert ("BaseModel", "validate_id") in names
 
 
-def test_method_docstring_is_extracted(parser):
+def test_method_docstring_is_extracted():
     """BaseModel.__init__ has a one-line docstring."""
     entities = parse_file(read("models/user.py"), "user.py")
 
@@ -150,7 +147,7 @@ def test_method_docstring_is_extracted(parser):
 # Import extraction
 # ---------------------------------------------------------------------------
 
-def test_absolute_imports_extracted_with_correct_module_paths(parser):
+def test_absolute_imports_extracted_with_correct_module_paths():
     """auth_service.py has two absolute imports from the project package."""
     entities = parse_file(read("services/auth_service.py"), "auth_service.py")
 
@@ -158,7 +155,7 @@ def test_absolute_imports_extracted_with_correct_module_paths(parser):
     assert module_paths == {"user_auth.models.user", "user_auth.utils.validators"}
 
 
-def test_imported_names_captured_for_each_module(parser):
+def test_imported_names_captured_for_each_module():
     """Each import statement lists the names it pulls in."""
     entities = parse_file(read("services/auth_service.py"), "auth_service.py")
 
@@ -170,7 +167,7 @@ def test_imported_names_captured_for_each_module(parser):
     assert "validate_password" in by_module["user_auth.utils.validators"]
 
 
-def test_absolute_import_is_not_marked_relative(parser):
+def test_absolute_import_is_not_marked_relative():
     """Absolute imports must have is_relative=False."""
     entities = parse_file(read("services/auth_service.py"), "auth_service.py")
 
@@ -178,7 +175,7 @@ def test_absolute_import_is_not_marked_relative(parser):
         assert imp.is_relative is False
 
 
-def test_relative_import_is_marked_relative(parser):
+def test_relative_import_is_marked_relative():
     """models/__init__.py uses 'from .user import User' — a relative import."""
     entities = parse_file(read("models/__init__.py"), "models/__init__.py")
 
@@ -188,7 +185,7 @@ def test_relative_import_is_marked_relative(parser):
     assert "User" in imp.imported_names
 
 
-def test_stdlib_imports_are_excluded(parser):
+def test_stdlib_imports_are_excluded():
     """validators.py imports 're' and 'logging' — both stdlib, both must be filtered out."""
     entities = parse_file(read("utils/validators.py"), "validators.py")
 
@@ -199,7 +196,7 @@ def test_stdlib_imports_are_excluded(parser):
 # Call extraction
 # ---------------------------------------------------------------------------
 
-def test_intra_file_call_is_captured(parser):
+def test_intra_file_call_is_captured():
     """validate_password calls validate_password_strength within the same file."""
     entities = parse_file(read("utils/validators.py"), "validators.py")
 
@@ -210,7 +207,7 @@ def test_intra_file_call_is_captured(parser):
     assert call.line_number >= 1
 
 
-def test_caller_scope_is_method_qualified(parser):
+def test_caller_scope_is_method_qualified():
     """Calls inside AuthService.register must have caller_name == 'AuthService.register'."""
     entities = parse_file(read("services/auth_service.py"), "auth_service.py")
 
@@ -222,7 +219,7 @@ def test_caller_scope_is_method_qualified(parser):
     assert "validate_password" in register_callees
 
 
-def test_module_level_call_has_module_scope(parser):
+def test_module_level_call_has_module_scope():
     """A call at module scope (outside any function) reports '<module>' as caller."""
     # create_guest_user() is called at module scope — but in our fixture it's just
     # defined, not called at module level. Use inline source for this edge case.
@@ -237,7 +234,7 @@ def test_module_level_call_has_module_scope(parser):
 # Edge cases
 # ---------------------------------------------------------------------------
 
-def test_empty_file_returns_all_empty_lists(parser):
+def test_empty_file_returns_all_empty_lists():
     """An empty source file must parse without error and return empty entity lists."""
     entities = parse_file(b"", "empty.py")
 
@@ -249,14 +246,14 @@ def test_empty_file_returns_all_empty_lists(parser):
     assert entities.calls == []
 
 
-def test_file_path_is_stored_on_entities(parser):
+def test_file_path_is_stored_on_entities():
     """The file_path passed to parse_file must be accessible on the returned object."""
     entities = parse_file(b"x = 1\n", "some/path.py")
 
     assert entities.file_path == "some/path.py"
 
 
-def test_syntax_error_file_does_not_raise(parser):
+def test_syntax_error_file_does_not_raise():
     """tree-sitter is error-tolerant: a broken file must not raise and must return a FileEntities."""
     broken = b"def foo(\n    x: int\n# missing closing paren\nclass Bar:\n    pass\n"
     entities = parse_file(broken, "broken.py")
@@ -268,17 +265,17 @@ def test_syntax_error_file_does_not_raise(parser):
 # Integration: parse entire fixture directory
 # ---------------------------------------------------------------------------
 
-def test_parse_directory_finds_all_fixture_files(parser):
+def test_parse_directory_finds_all_fixture_files():
     """parse_directory must return one FileEntities per .py file in the fixture tree."""
-    results = parse_directory(str(PROJECT), parser)
+    results = parse_directory(str(PROJECT))
 
     # The fixture tree has exactly 7 .py files
     assert len(results) == 7
 
 
-def test_parse_directory_aggregates_entities_across_files(parser):
+def test_parse_directory_aggregates_entities_across_files():
     """Entities from all files are collected — spot-check key names from each module."""
-    results = parse_directory(str(PROJECT), parser)
+    results = parse_directory(str(PROJECT))
 
     all_functions = [f for r in results for f in r.functions]
     all_classes = [c for r in results for c in r.classes]
@@ -289,10 +286,10 @@ def test_parse_directory_aggregates_entities_across_files(parser):
     assert len(all_methods) == 9  # 3 on BaseModel + 3 on User + 3 on AuthService
 
 
-def test_parse_directory_exclude_pattern_filters_files(parser):
+def test_parse_directory_exclude_pattern_filters_files():
     """Files whose path contains an excluded pattern must be skipped."""
-    results_all = parse_directory(str(PROJECT), parser)
-    results_no_services = parse_directory(str(PROJECT), parser, exclude_patterns=["services"])
+    results_all = parse_directory(str(PROJECT))
+    results_no_services = parse_directory(str(PROJECT), exclude_patterns=["services"])
 
     all_paths = {r.file_path for r in results_all}
     filtered_paths = {r.file_path for r in results_no_services}

@@ -20,7 +20,8 @@ codegraph/
 ├── src/codegraph/         # Main Python package
 │   ├── cli/               # Typer CLI
 │   ├── core/
-│   │   ├── parser/        # tree-sitter ingestion
+│   │   ├── parser/        # language-agnostic orchestration
+│   │   ├── languages/     # tree-sitter extractors and resolvers per language
 │   │   ├── graph/         # Neo4j + GDS + Cypher queries
 │   │   └── retrieval/     # Seeds, PPR pipeline, formatting
 │   ├── mcp/               # FastMCP server (2 tools)
@@ -68,5 +69,5 @@ pip install -e ".[visualizer]"   # fastapi, uvicorn — visualize command
 |------|-----|
 | `evaluation/` | [guides/evaluation-harness.md](guides/evaluation-harness.md) |
 | `thesis/` | [thesis/overview.md](thesis/overview.md) |
-| `demo_script.md` | [guides/demo-defense.md](guides/demo-defense.md) |
+| `docs/guides/demo-defense.md` | [guides/demo-defense.md](guides/demo-defense.md) |
 | `.github/workflows/ci.yml` | [reference/ci.md](reference/ci.md) |

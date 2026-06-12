@@ -11,12 +11,8 @@ logger = logging.getLogger(__name__)
 # Register supported languages when the service module is loaded
 register_all_languages()
 
-def create_parser():
-    return None
-
 def parse_directory(
     directory: str,
-    parser=None,
     exclude_patterns: list[str] | None = None,
     progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> list[FileEntities]:

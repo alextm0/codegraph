@@ -357,11 +357,9 @@ class TestQueryDependencies:
     @pytest.fixture(scope="class")
     def populated_driver(self, neo4j_driver):
         """Populate the graph with user_auth fixture for this test class."""
-        from codegraph.core.parser import create_parser, parse_directory
+        from codegraph.core.parser import parse_directory
         from codegraph.core.graph.graph_builder import build_graph, clear_database
-
-        parser = create_parser()
-        entities = parse_directory(USER_AUTH_DIR, parser)
+        entities = parse_directory(USER_AUTH_DIR)
         clear_database(neo4j_driver)
         build_graph(neo4j_driver, entities)
         yield neo4j_driver
@@ -464,11 +462,9 @@ class TestGetRelevantContext:
     @pytest.fixture(scope="class")
     def populated_driver(self, neo4j_driver):
         """Populate the graph with user_auth fixture for this test class."""
-        from codegraph.core.parser import create_parser, parse_directory
+        from codegraph.core.parser import parse_directory
         from codegraph.core.graph.graph_builder import build_graph, clear_database
-
-        parser = create_parser()
-        entities = parse_directory(USER_AUTH_DIR, parser)
+        entities = parse_directory(USER_AUTH_DIR)
         clear_database(neo4j_driver)
         build_graph(neo4j_driver, entities)
         yield neo4j_driver

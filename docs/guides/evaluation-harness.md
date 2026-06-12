@@ -139,7 +139,6 @@ Presets: `quick`, `full` (see `evaluation/ablations.py` → `PRESETS`).
 | `compare_runs.py` | Diff two `summary.json` files |
 | `report.py` | Generate reports from results |
 | `error_analysis.py` | Dig into zero-recall cases |
-| `find_killer_example.py` | Find illustrative failure/success |
 | `local_correctness_test.py` | Smaller sanity runs |
 | `repo_manager.py` | Clone cache, `checkout_commit` |
 | `dataset.py` | Load SWE-bench Lite, instance grouping |

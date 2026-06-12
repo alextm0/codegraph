@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.core.parser import create_parser, parse_directory
+from codegraph.core.parser import parse_directory
 from codegraph.core.graph.graph_builder import build_graph, clear_database
 from codegraph.core.graph.ppr import (
     PPRConfig,
@@ -22,14 +22,11 @@ FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 USER_AUTH = str(FIXTURES_DIR / "user_auth")
 
 
-@pytest.fixture(scope="module")
-def parser():
-    return create_parser()
 
 
 @pytest.fixture(scope="module")
-def user_auth_entities(parser):
-    return parse_directory(USER_AUTH, parser)
+def user_auth_entities():
+    return parse_directory(USER_AUTH)
 
 
 @pytest.fixture(scope="module")

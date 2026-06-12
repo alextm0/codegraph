@@ -98,7 +98,7 @@ def test_run_instance_query_ppr_computes_metrics(
     driver.session.return_value.__enter__.return_value = session
 
     instance = make_instance("owner/r", "abc", "inst-1")
-    runner = BenchmarkRunner(driver, MagicMock(), None, "", _baseline_ablation(), "ppr")
+    runner = BenchmarkRunner(driver, MagicMock(), "", _baseline_ablation(), "ppr")
 
     result = runner.run_instance_query(instance, total_nodes=100)
 
@@ -116,7 +116,7 @@ def test_run_instance_query_no_seeds_returns_zero(mock_core: MagicMock) -> None:
     driver = MagicMock()
     instance = make_instance("owner/r", "abc", "inst-1")
 
-    runner = BenchmarkRunner(driver, MagicMock(), None, "", _baseline_ablation(), "ppr")
+    runner = BenchmarkRunner(driver, MagicMock(), "", _baseline_ablation(), "ppr")
     result = runner.run_instance_query(instance, total_nodes=10)
 
     assert result["predicted_files"] == []
@@ -130,7 +130,7 @@ def test_run_instance_query_random_baseline(mock_cls: MagicMock) -> None:
     driver = MagicMock()
     instance = make_instance("owner/r", "abc", "inst-1")
 
-    runner = BenchmarkRunner(driver, MagicMock(), None, "", _baseline_ablation(), "random")
+    runner = BenchmarkRunner(driver, MagicMock(), "", _baseline_ablation(), "random")
     result = runner.run_instance_query(instance, total_nodes=5)
 
     assert result["predicted_files"] == ["f1.py", "f2.py"]
@@ -147,9 +147,8 @@ def test_run_instance_delegates_setup_and_query(
     mock_query.return_value = {"instance_id": "x", "error": None}
 
     result = run_instance(
-        instance, MagicMock(), MagicMock(), MagicMock(), "/cache",
-        _baseline_ablation(), "ppr",
-    )
+            instance, MagicMock(), MagicMock(), "/cache", _baseline_ablation(), "ppr"
+        )
 
     mock_setup.assert_called_once()
     mock_query.assert_called_once()
@@ -160,9 +159,8 @@ def test_run_instance_delegates_setup_and_query(
 def test_setup_group_module_wrapper(mock_setup: MagicMock) -> None:
     mock_setup.return_value = (1, "/p", None, None)
     out = setup_group(
-        ("r", "c"), MagicMock(), MagicMock(), MagicMock(),
-        "/cache", _baseline_ablation(), "ppr",
-    )
+            ("r", "c"), MagicMock(), MagicMock(), "/cache", _baseline_ablation(), "ppr"
+        )
     assert out == (1, "/p", None, None)
     mock_setup.assert_called_once()
 

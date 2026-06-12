@@ -42,7 +42,7 @@ Mark Neo4j-dependent tests with project’s `@neo4j_required` pattern.
 
 | Task | Where |
 |------|-------|
-| New Python syntax support | `core/parser/python_parser.py` |
+| New Python syntax support | `core/languages/python/extractors.py` |
 | New edge type | parser + `graph_builder.py` + projection in `ppr.py` |
 | Seed signal | `seed_selection.py`, `config.yaml`, docs |
 | PPR tuning | `ppr.py`, `config.yaml`, evaluation harness |

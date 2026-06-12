@@ -34,7 +34,8 @@ Entry: `parse_directory()` in `src/codegraph/core/parser/`.
 - Walkers emit frozen dataclass entities: File, Class, Function, Method
 - Record line ranges, docstrings where extracted, call sites, import statements, class bases
 
-Parser: `src/codegraph/core/parser/python_parser.py`.
+Parser implementation: `src/codegraph/core/languages/python/parser.py`.
+Orchestration: `src/codegraph/core/parser/service.py`.
 
 ---
 

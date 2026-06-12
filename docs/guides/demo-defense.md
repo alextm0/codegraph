@@ -1,6 +1,6 @@
 # Thesis defense demo script
 
-Step-by-step demo flow. Source: `demo_script.md` at repo root (keep in sync).
+Step-by-step demo flow.
 
 ---
 

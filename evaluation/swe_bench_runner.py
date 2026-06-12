@@ -56,7 +56,6 @@ class BenchmarkRunner:
         self,
         driver: Any,
         gds: Any,
-        parser: Any,
         cache_dir: str,
         ablation: AblationConfig,
         retriever: str = "ppr",
@@ -67,7 +66,6 @@ class BenchmarkRunner:
     ) -> None:
         self.driver = driver
         self.gds = gds
-        self.parser = parser
         self.cache_dir = cache_dir
         self.ablation = ablation
         self.retriever = retriever
@@ -98,7 +96,7 @@ class BenchmarkRunner:
         if self.progress:
             self.progress.phase(f"{label}: parse Python sources")
         entities = parse_directory(
-            repo_path, self.parser, exclude_patterns=["tests", ".git"]
+            repo_path, exclude_patterns=["tests", ".git"]
         )
 
         if self.progress:
@@ -190,7 +188,6 @@ class BenchmarkRunner:
                 group_key,
                 self.driver,
                 self.gds,
-                self.parser,
                 self.cache_dir,
                 self.ablation,
                 self.retriever,
@@ -250,7 +247,6 @@ class BenchmarkRunner:
                     group.key,
                     self.driver,
                     self.gds,
-                    self.parser,
                     self.cache_dir,
                     self.ablation,
                     self.retriever,
@@ -460,13 +456,12 @@ def setup_group(
     group_key: GroupKey,
     driver: Any,
     gds: Any,
-    parser: Any,
     cache_dir: str,
     ablation: AblationConfig,
     retriever: str,
 ) -> tuple[int, str, Any, Any]:
     """Module-level wrapper around BenchmarkRunner.setup_group."""
-    runner = BenchmarkRunner(driver, gds, parser, cache_dir, ablation, retriever)
+    runner = BenchmarkRunner(driver, gds, cache_dir, ablation, retriever)
     return runner.setup_group(group_key)
 
 
@@ -493,13 +488,12 @@ def run_instance(
     instance: dict,
     driver: Any,
     gds: Any,
-    parser: Any,
     cache_dir: str,
     ablation: AblationConfig,
     retriever: str = "ppr",
 ) -> dict:
     """Module-level wrapper around BenchmarkRunner.run_instance."""
-    runner = BenchmarkRunner(driver, gds, parser, cache_dir, ablation, retriever)
+    runner = BenchmarkRunner(driver, gds, cache_dir, ablation, retriever)
     return runner.run_instance(instance)
 
 
@@ -509,14 +503,13 @@ def _run_grouped(
     completed_ids: set[str] | None,
     driver: Any,
     gds: Any,
-    parser: Any,
     args: Any,
     ablation: AblationConfig,
     fh: TextIO,
 ) -> dict:
     """Module-level wrapper around BenchmarkRunner.run_grouped."""
     runner = BenchmarkRunner(
-        driver, gds, parser, args.cache_dir, ablation, args.retriever
+        driver, gds, args.cache_dir, ablation, args.retriever
     )
     return runner.run_grouped(
         pending,
@@ -679,7 +672,6 @@ def main() -> None:
     signal_weights, exclude_seed_paths = _load_benchmark_seed_config(args.config)
     driver = create_driver(neo4j_config)
     gds = create_gds_client(driver)
-    file_
     instance_ids: set[str] | None = None
     subset_name = args.subset_name
     if args.instance_ids_file:
@@ -724,7 +716,6 @@ def main() -> None:
         runner = BenchmarkRunner(
             driver,
             gds,
-            file_parser,
             args.cache_dir,
             ablation,
             args.retriever,

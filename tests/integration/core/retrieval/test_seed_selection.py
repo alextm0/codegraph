@@ -10,7 +10,7 @@ from codegraph.core.retrieval.seed_selection import (
     PersonalizationVector,
     _resolve_signal_weights,
 )
-from codegraph.core.parser import create_parser, parse_directory
+from codegraph.core.parser import parse_directory
 from tests.conftest import neo4j_required
 
 
@@ -53,14 +53,11 @@ FIXTURES_DIR = Path(__file__).parents[3] / "fixtures"
 USER_AUTH = str(FIXTURES_DIR / "user_auth")
 
 
-@pytest.fixture(scope="module")
-def parser():
-    return create_parser()
 
 
 @pytest.fixture(scope="module")
-def user_auth_entities(parser):
-    return parse_directory(USER_AUTH, parser)
+def user_auth_entities():
+    return parse_directory(USER_AUTH)
 
 
 @pytest.fixture(scope="module")
