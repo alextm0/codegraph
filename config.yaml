@@ -33,9 +33,9 @@ project_history:
 - name: codegraph
   path: /Users/alexandrutoma/dev/codegraph
   url: null
-- name: codegraph
-  path: /Users/alexandrutoma/dev/codegraph/projects/codegraph
-  url: null
 - name: flask
   path: /Users/alexandrutoma/dev/codegraph/projects/flask
   url: https://github.com/pallets/flask
+- name: codegraph
+  path: /Users/alexandrutoma/dev/codegraph/projects/codegraph
+  url: null
