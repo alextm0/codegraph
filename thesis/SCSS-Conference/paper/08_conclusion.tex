@@ -1,7 +1,7 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented CodeGraph, a hybrid retrieval system for software repositories that combines lexical seeding with Personalized PageRank propagation. By evaluating the system on SWE-bench Lite, we showed that structural propagation over a static dependency graph achieves 74.0\% Recall@10, outperforming a BM25 baseline by 24.3 percentage points.
+We presented CodeGraph, a deterministic repository-level retrieval system that combines lexical seed selection with Personalized PageRank propagation over a static dependency graph. By evaluating the system on SWE-bench Lite, we showed that structural propagation over a static dependency graph achieves 74.0\% Recall@10, outperforming the strongest lexical BM25 baseline by 16.0 percentage points.
 
 Our analysis indicates that repository-scale retrieval is primarily limited by seed reachability rather than ranking sophistication. When lexical search identifies correct entry points, structural propagation reliably ranks the target files. Consequently, improving the lexical-to-graph interface yields larger performance gains than tuning the ranking algorithm. 
 

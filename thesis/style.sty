@@ -44,6 +44,8 @@ prefix=std@
 
 \DeclareRobustCommand*{\specialization}[1]{\gdef\@specialization{#1}}   % define command for specialization
 \DeclareRobustCommand*{\supervisor}[1]{\gdef\@supervisor{#1}}           % define command for scientific advisor
+\DeclareRobustCommand*{\titlero}[1]{\gdef\@titlero{#1}}                 % define command for romanian title
+\DeclareRobustCommand*{\specializationro}[1]{\gdef\@specializationro{#1}} % define command for romanian specialization
 
 \ifbool{@eng}{\usepackage[english]{babel}}{\usepackage[romanian]{babel}}
 
@@ -96,6 +98,58 @@ SPECIALIZAREA  \@specialization \\
 \begin{flushright}
 {\Large\textit{
 \ifbool{@eng}{Author}{Absolvent}\\ \@author
+}}
+\end{flushright}
+
+\vfill
+
+\begin{center}
+{\Large{\the\year}}
+\end{center}
+
+\end{titlepage}
+}
+
+\newcommand{\maketitlero}
+{
+\begin{titlepage}
+
+\begin{center}
+{\Large\textbf{
+UNIVERSITATEA BABEŞ-BOLYAI CLUJ-NAPOCA \\
+FACULTATEA DE MATEMATICǍ ŞI INFORMATICǍ \\
+SPECIALIZAREA \@specializationro \\
+}}
+\end{center}
+
+\vspace{10em}
+
+\begin{center}
+{\Huge\textbf{
+\ifbool{@dis}{LUCRARE DE DISERTA\c TIE}{}
+\ifbool{@lic}{LUCRARE DE LICEN\c T\u A}{}
+}}
+\end{center}
+
+\vspace{3em}
+
+\begin{center}
+{\huge\textbf{\@titlero}}
+\end{center}
+
+\vspace{10em}
+
+\begin{flushleft}
+{\Large\textbf{
+Conducător științific \\ \@supervisor
+}}
+\end{flushleft}
+
+\vspace{3em}
+
+\begin{flushright}
+{\Large\textit{
+Absolvent\\ \@author
 }}
 \end{flushright}
 

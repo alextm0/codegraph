@@ -167,31 +167,31 @@
 
 % Slide 8
 \begin{frame}{Global structural ranking drives the empirical gain}
-  \begin{columns}[c]
-    \column{0.55\textwidth}
-      \centering
-      \begin{tikzpicture}[scale=0.75, transform shape]
-        \foreach \y/\val/\label/\col in {
-          0/75.7/Uniform PPR (k=50)/positive,
-          1/74.0/Uniform PPR (k=30)/positive,
-          2/68.0/Weighted PPR/positive!70!black,
-          3/51.0/One-hop Ego Graph/gray,
-          4/58.0/BM25-only (Lexical)/gray%
-        } {
-          \fill[\col, rounded corners=1pt] (0,\y) rectangle (\val/10,\y+0.6);
-          \node[right, font=\small\bfseries] at (\val/10, \y+0.3) {\val\%};
-          \node[left, font=\small\bfseries] at (-0.2, \y+0.3) {\label};
-        }
-        % Axis line
-        \draw[thick, draw=gray] (0,-0.2) -- (0,5);
-      \end{tikzpicture}
-    \column{0.45\textwidth}
-      \begin{block}{Key Findings}
-        \begin{itemize}
-          \item \textbf{+16.0 percentage points} over the strongest lexical baseline.
-          \vspace{15pt}
-          \item \textbf{One-hop expansion underperforms} because local structural expansion is not enough.
-        \end{itemize}
+  \vspace{5pt}
+  \centering
+  \resizebox{\textwidth}{!}{
+    \begin{tabular}{lrrrr}
+        \toprule
+        \textbf{Configuration} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{Zero-Recall} \\
+        \midrule
+        BM25-only (Seed-Engineered Lexical Baseline) & 46.7\% & 58.0\% & 0.354 & 126 \\
+        One-hop Ego Graph & 46.7\% & 51.0\% & 0.339 & 147 \\
+        Weighted PPR & 60.7\% & 68.0\% & 0.440 & 96 \\
+        \textbf{Uniform PPR ($k=30$, Main Operating Point)} & \textbf{65.0\%} & \textbf{74.0\%} & \textbf{0.447} & \textbf{78} \\
+        Uniform PPR ($k=50$, Sensitivity Setting) & 65.0\% & 75.7\% & 0.447 & 73 \\
+        \bottomrule
+    \end{tabular}
+  }
+  
+  \vspace{15pt}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      \begin{block}{Significant Gain}
+        \textbf{+16.0 percentage points} over the strongest lexical baseline.
+      \end{block}
+    \column{0.48\textwidth}
+      \begin{block}{Need for Global Ranking}
+        \textbf{One-hop expansion underperforms} because local structural expansion is not enough.
       \end{block}
   \end{columns}
 \end{frame}

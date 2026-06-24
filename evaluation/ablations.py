@@ -80,6 +80,10 @@ ABLATIONS: list[AblationConfig] = [
     # Uniform PPR parameter sweep — combined configurations for further tuning
     # Uniform PPR + damping factor sweep — find optimal alpha for uniform mode
     AblationConfig(
+        name="uniform_alpha_030",
+        ppr_config=PPRConfig(retrieval_mode="uniform", damping_factor=0.30),
+    ),
+    AblationConfig(
         name="uniform_alpha_050",
         ppr_config=PPRConfig(retrieval_mode="uniform", damping_factor=0.50),
     ),
@@ -108,6 +112,23 @@ PRESETS: dict[str, list[str]] = {
     "quick": ["baseline", "ppr_weighted"],
     # All registered ablations (long — use for exhaustive studies only).
     "full": [a.name for a in ABLATIONS],
+    # SCSS paper overnight sweep: 11 ablations + 2 baselines
+    "scss_paper": [
+        "baseline",
+        "ppr_weighted",
+        "no_idf",
+        "no_calls",
+        "no_imports",
+        "no_inherits",
+        "directed_natural",
+        "directed_reverse",
+        "uniform_alpha_030",
+        "uniform_alpha_050",
+        "top_k_10",
+        "top_k_50",
+        "bm25",
+        "one_hop",
+    ],
 }
 
 

@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999998 (TeX Live 2026) (preloaded format=xelatex 2026.5.8)  25 JUN 2026 01:08
+This is XeTeX, Version 3.141592653-2.6-0.999998 (TeX Live 2026) (preloaded format=xelatex 2026.5.8)  25 JUN 2026 01:10
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1062,12 +1062,7 @@ c file (type bmp)
 
 [7
 
-]
-Overfull \hbox (23.43193pt too wide) in paragraph at lines 197--197
- [][] 
- []
-
-[8
+] [8
 
 ]
 File: /Users/alexandrutoma/dev/codegraph/thesis/assets/failure_taxonomy.png Gra
@@ -1098,12 +1093,12 @@ Package rerunfilecheck Info: File `slides.out' has not changed.
 (rerunfilecheck)             Checksum: D41D8CD98F00B204E9800998ECF8427E;0.
  ) 
 Here is how much of TeX's memory you used:
- 26451 strings out of 468168
- 540251 string characters out of 5432816
- 935384 words of memory out of 5000000
- 54632 multiletter control sequences out of 15000+600000
+ 26433 strings out of 468168
+ 540089 string characters out of 5432816
+ 936384 words of memory out of 5000000
+ 54614 multiletter control sequences out of 15000+600000
  630821 words of font info for 69 fonts, out of 8000000 for 9000
  1348 hyphenation exceptions out of 8191
- 128i,15n,123p,419b,956s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 128i,15n,123p,419b,947s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
 Output written on slides.pdf (11 pages).
