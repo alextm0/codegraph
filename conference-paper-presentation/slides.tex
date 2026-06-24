@@ -44,64 +44,22 @@
 
 % Slide 2
 \begin{frame}{Why repository retrieval matters for coding agents}
-  \vspace{15pt}
+  \vspace{5pt}
   \centering
-  \begin{tikzpicture}[
-    box/.style={draw=BorderGray, thick, fill=white, rounded corners=2pt, minimum height=1.5cm, align=center, font=\small},
-    arr/.style={-{Stealth}, thick, draw=DarkNavy!50}
-  ]
-    \node[box, minimum width=2.5cm] (issue) {\textbf{Issue}\\Report};
-    
-    \node[box, right=2cm of issue, minimum width=4cm, minimum height=3cm, fill=LightGray!50, draw=BorderGray!80] (repo) {};
-    \node[above=0.1cm of repo.south, font=\scriptsize, text=black!50] {Large Repository};
-    \node[box, fill=MutedTeal!15, draw=MutedTeal, minimum width=2.5cm, minimum height=1cm] at (repo.center) {\textbf{Relevant}\\\textbf{Context}};
-    
-    \node[box, right=2cm of repo, minimum width=2.5cm] (patch) {\textbf{Patch}\\Generation};
-    
-    \draw[arr] (issue) -- (repo);
-    \draw[arr] (repo) -- (patch);
-  \end{tikzpicture}
+  \includegraphics[width=0.85\textwidth,height=0.6\textheight,keepaspectratio]{assets/image_1.png}
   
-  \vspace{30pt}
+  \vspace{15pt}
   \Large
   A coding agent can only solve a task if the right repository context is retrieved first.
 \end{frame}
 
 % Slide 3
 \begin{frame}{Text alone is not enough for repository retrieval}
-  \vspace{15pt}
-  \begin{columns}[T]
-    \column{0.4\textwidth}
-      \centering
-      \begin{tikzpicture}
-        \node[draw=BorderGray, thick, fill=LightGray!30, rounded corners=2pt, minimum width=4cm, minimum height=4cm, align=center] {
-          \textbf{\large Issue Text} \\[15pt]
-          \textit{Natural language}\\
-          \textit{task description}
-        };
-      \end{tikzpicture}
-      
-    \column{0.1\textwidth}
-      \centering
-      \vspace{2cm}
-      \begin{tikzpicture}
-        \draw[-{Stealth}, line width=2pt, DarkNavy] (0,0) -- (1,0);
-        \draw[{Stealth}-, line width=2pt, DarkNavy] (0,-0.5) -- (1,-0.5);
-      \end{tikzpicture}
-      
-    \column{0.4\textwidth}
-      \centering
-      \begin{tikzpicture}
-        \node[draw=BorderGray, thick, fill=LightGray!30, rounded corners=2pt, minimum width=4cm, minimum height=4cm, align=center] {
-          \textbf{\large Repository Structure} \\[15pt]
-          files, functions, classes \\[10pt]
-          imports, calls, inheritance
-        };
-      \end{tikzpicture}
-  \end{columns}
-  
-  \vspace{30pt}
+  \vspace{5pt}
   \centering
+  \includegraphics[width=0.85\textwidth,height=0.6\textheight,keepaspectratio]{assets/image1.png}
+  
+  \vspace{15pt}
   \Large
   \textbf{CodeGraph bridges language to structure.}
 \end{frame}
@@ -110,7 +68,7 @@
 \begin{frame}{The query chooses where relevance starts, the graph determines where relevance flows}
   \centering
   \vspace{5pt}
-  \includegraphics[width=0.95\textwidth,height=0.65\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/retrieval_flow.png}
+  \includegraphics[width=0.95\textwidth,height=0.65\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/SCSS-Conference/paper/assets/pipeline_architecture.png}
   
   \vspace{15pt}
   \large Lexical signals choose entry points; graph propagation ranks structurally related code.
@@ -121,7 +79,7 @@
   \begin{columns}[c]
     \column{0.5\textwidth}
       \centering
-      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/ast_to_graph.png}
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/SCSS-Conference/paper/assets/pipeline_architecture.png}
     \column{0.48\textwidth}
       \large
       \begin{itemize}
@@ -152,7 +110,7 @@
       \end{itemize}
     \column{0.5\textwidth}
       \centering
-      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/retrieval_flow.png}
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/SCSS-Conference/paper/assets/pipeline_architecture.png}
   \end{columns}
 \end{frame}
 
@@ -161,7 +119,7 @@
   \begin{columns}[c]
     \column{0.5\textwidth}
       \centering
-      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/eval_pipeline.png}
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/SCSS-Conference/paper/assets/pipeline_architecture.png}
     \column{0.48\textwidth}
       \large
       \begin{itemize}
@@ -211,7 +169,7 @@
   \begin{columns}[c]
     \column{0.5\textwidth}
       \centering
-      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/bimodal_rank_distribution.png}
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/SCSS-Conference/paper/assets/bimodal_rank_distribution.png}
     \column{0.48\textwidth}
       \large
       \begin{itemize}
