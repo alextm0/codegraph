@@ -67,10 +67,42 @@
 % Slide 4
 \begin{frame}{The query chooses where relevance starts, the graph determines where relevance flows}
   \centering
-  \vspace{5pt}
-  \includegraphics[width=0.95\textwidth,height=0.65\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/retrieval_flow.png}
+  \vspace{10pt}
+  \begin{tikzpicture}[
+    box/.style={draw=BorderGray, thick, fill=white, rounded corners=2pt, align=center, font=\small},
+    seed/.style={circle, draw=MutedTeal, fill=MutedTeal!20, minimum size=0.4cm},
+    node/.style={circle, draw=DarkNavy, fill=DarkNavy!10, minimum size=0.4cm},
+    arr/.style={-{Stealth}, thick, draw=DarkNavy!50}
+  ]
+    \node[box, minimum width=2cm, minimum height=1.5cm] (query) {\textbf{Query Text}};
+    
+    \node[box, right=1cm of query, minimum width=2cm, minimum height=2.5cm, fill=LightGray!50] (seeds) {};
+    \node[above=0.1cm of seeds.south, font=\scriptsize, text=black!70] {Lexical Seeds};
+    \node[seed] (s1) at ($(seeds.center)+(0,0.5)$) {};
+    \node[seed] (s2) at ($(seeds.center)+(-0.4,-0.3)$) {};
+    \node[seed] (s3) at ($(seeds.center)+(0.4,-0.3)$) {};
+    
+    \node[box, right=1cm of seeds, minimum width=3cm, minimum height=3cm, fill=LightGray!50] (graph) {};
+    \node[above=0.1cm of graph.south, font=\scriptsize, text=black!70] {Dependency Graph};
+    \node[seed] (n1) at ($(graph.center)+(-0.8,0.5)$) {};
+    \node[node] (n2) at ($(graph.center)+(0,0.8)$) {};
+    \node[node] (n3) at ($(graph.center)+(0.8,0.5)$) {};
+    \node[seed] (n4) at ($(graph.center)+(-0.4,-0.5)$) {};
+    \node[node] (n5) at ($(graph.center)+(0.4,-0.5)$) {};
+    \draw[arr] (n1) -- (n2); \draw[arr] (n2) -- (n3); \draw[arr] (n1) -- (n4); \draw[arr] (n4) -- (n5); \draw[arr] (n2) -- (n5);
+    
+    \node[box, right=1cm of graph, minimum width=2cm, minimum height=2.5cm] (ranked) {};
+    \node[above=0.1cm of ranked.south, font=\scriptsize, text=black!70] {Ranked Snippets};
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.3,-0.5)$) -- ($(ranked.north east)+(-0.3,-0.5)$);
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.3,-0.9)$) -- ($(ranked.north east)+(-0.3,-0.9)$);
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.3,-1.3)$) -- ($(ranked.north east)+(-0.3,-1.3)$);
+
+    \draw[arr] (query) -- (seeds);
+    \draw[arr] (seeds) -- (graph);
+    \draw[arr] (graph) -- (ranked);
+  \end{tikzpicture}
   
-  \vspace{15pt}
+  \vspace{25pt}
   \large Lexical signals choose entry points; graph propagation ranks structurally related code.
 \end{frame}
 
@@ -108,10 +140,46 @@
         \vspace{10pt}
         \item Deduplicated context delivery under a fixed budget
       \end{itemize}
-    \column{0.5\textwidth}
-      \centering
-      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/retrieval_flow.png}
   \end{columns}
+  
+  \vspace{20pt}
+  \centering
+  \begin{tikzpicture}[
+    box/.style={draw=BorderGray, thick, fill=white, rounded corners=2pt, align=center, font=\scriptsize},
+    seed/.style={circle, draw=MutedTeal, fill=MutedTeal!20, minimum size=0.3cm},
+    node/.style={circle, draw=DarkNavy, fill=DarkNavy!10, minimum size=0.3cm},
+    arr/.style={-{Stealth}, thick, draw=DarkNavy!50}
+  ]
+    \node[box, minimum width=1.5cm, minimum height=1cm] (query) {Task\\Description};
+    
+    \node[box, right=0.5cm of query, minimum width=1.5cm, minimum height=1.5cm, fill=LightGray!50] (seeds) {};
+    \node[above=0.05cm of seeds.south, font=\tiny, text=black!70] {3 Lexical Seeds};
+    \node[seed] (s1) at ($(seeds.center)+(0,0.3)$) {};
+    \node[seed] (s2) at ($(seeds.center)+(-0.25,-0.15)$) {};
+    \node[seed] (s3) at ($(seeds.center)+(0.25,-0.15)$) {};
+    
+    \node[box, right=0.5cm of seeds, minimum width=2.5cm, minimum height=1.8cm, fill=LightGray!50] (graph) {};
+    \node[above=0.05cm of graph.south, font=\tiny, text=black!70] {Repository Graph};
+    \node[seed] (n1) at ($(graph.center)+(-0.6,0.3)$) {};
+    \node[node] (n2) at ($(graph.center)+(0,0.5)$) {};
+    \node[node] (n3) at ($(graph.center)+(0.6,0.3)$) {};
+    \node[seed] (n4) at ($(graph.center)+(-0.3,-0.3)$) {};
+    \node[node] (n5) at ($(graph.center)+(0.3,-0.3)$) {};
+    \draw[arr] (n1) -- (n2); \draw[arr] (n2) -- (n3); \draw[arr] (n1) -- (n4); \draw[arr] (n4) -- (n5); \draw[arr] (n2) -- (n5);
+    
+    \node[box, right=0.5cm of graph, minimum width=1.5cm, minimum height=1.5cm] (ranked) {};
+    \node[above=0.05cm of ranked.south, font=\tiny, text=black!70] {Top 3 Snippets};
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.2,-0.3)$) -- ($(ranked.north east)+(-0.2,-0.3)$);
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.2,-0.6)$) -- ($(ranked.north east)+(-0.2,-0.6)$);
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.2,-0.9)$) -- ($(ranked.north east)+(-0.2,-0.9)$);
+
+    \node[box, right=0.5cm of ranked, minimum width=1.5cm, minimum height=1cm] (agent) {AI Coding\\Agent};
+
+    \draw[arr] (query) -- (seeds);
+    \draw[arr] (seeds) -- (graph);
+    \draw[arr] (graph) -- (ranked);
+    \draw[arr] (ranked) -- (agent);
+  \end{tikzpicture}
 \end{frame}
 
 % Slide 7
