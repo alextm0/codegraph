@@ -1,0 +1,210 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+\usepackage{amsmath,amssymb,amsthm,booktabs,mathtools}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{tikz}
+
+% Semantic colors from the beamer skill
+\definecolor{positive}{HTML}{0173B2}       % blue
+\definecolor{negative}{HTML}{DE8F05}       % orange
+\definecolor{emphasis}{HTML}{029E73}       % green
+
+\newcommand{\pos}[1]{\textcolor{positive}{\textbf{#1}}}
+\newcommand{\con}[1]{\textcolor{negative}{\textbf{#1}}}
+\newcommand{\HL}[1]{\textcolor{emphasis}{\textbf{#1}}}
+
+\title[CodeGraph: Structural Retrieval]{CodeGraph: Repository-Level Structural Retrieval}
+\subtitle{Deterministic repository retrieval for coding agents under fixed context budgets}
+\author[Toma Alexandru-Mihai]{Toma Alexandru-Mihai}
+\institute[Babes-Bolyai University]{
+  Computer Science Department\\
+  Babes-Bolyai University
+}
+\date[SCSS 2026]{SCSS Conference 2026}
+
+\begin{document}
+
+% Slide 1
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% Slide 2
+\begin{frame}{Coding agents fail when issue text and identifiers do not line up}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      \begin{block}{The Context Requirement}
+        Autonomous coding agents need the \pos{exact, relevant code files} placed into their limited context window to produce valid patches.
+      \end{block}
+      \vspace{10pt}
+      \textbf{The High Stakes:}\\
+      Without the correct context, even the most advanced language models will \con{hallucinate or fail} to resolve the issue.
+
+    \column{0.48\textwidth}
+      \begin{alertblock}{The Vocabulary Gap}
+        Issue descriptions are written in \textit{natural language}, which often lacks the specific \textit{code identifiers} present in the repository.
+      \end{alertblock}
+  \end{columns}
+\end{frame}
+
+% Slide 3
+\begin{frame}{Sparse and dense retrieval miss structural reachability}
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+      \begin{alertblock}{Sparse (e.g., BM25)}
+        \begin{itemize}
+          \item Requires exact lexical overlap.
+          \item \con{Misses dependencies} that share no vocabulary.
+        \end{itemize}
+      \end{alertblock}
+      
+    \column{0.32\textwidth}
+      \begin{alertblock}{Dense (e.g., CodeBERT)}
+        \begin{itemize}
+          \item Captures semantic similarity.
+          \item \con{Ignores explicit execution edges} in the codebase.
+        \end{itemize}
+      \end{alertblock}
+
+    \column{0.32\textwidth}
+      \begin{exampleblock}{CodeGraph (Ours)}
+        \begin{itemize}
+          \item \pos{Navigates reachability}.
+          \item Ranks through actual imports, calls, and inheritance.
+        \end{itemize}
+      \end{exampleblock}
+  \end{columns}
+  \vspace{15pt}
+  \centering
+  \textbf{Code is a graph, not a bag of tokens.} Retrieving it as flat text ignores how the program actually runs and interacts.
+\end{frame}
+
+% Slide 4
+\begin{frame}{The query chooses where relevance starts; the graph decides the flow}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      \begin{block}{1. Lexical Seeding}
+        Natural-language issue text is used strictly to identify plausible \pos{entry points}. This places initial probability mass onto specific nodes in the graph, independent of structural links.
+      \end{block}
+      
+    \column{0.48\textwidth}
+      \begin{exampleblock}{2. Structural Propagation}
+        The final relevance ranking is computed \pos{entirely by graph topology}. Relevance expands outward from the seeds along true repository dependencies, eliminating the need for an LLM to guess what is relevant.
+      \end{exampleblock}
+  \end{columns}
+\end{frame}
+
+% Slide 5
+\begin{frame}{The pipeline bridges raw source code to a ranked context window}
+  \begin{itemize}
+    \item \textbf{Indexing Phase:} Parse the repository and build the dependency graph.
+    \item \textbf{Retrieval Phase:} Select lexical seeds, run Personalized PageRank, and package context.
+  \end{itemize}
+  \vspace{10pt}
+  \centering
+  \includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/pipeline_architecture.png}
+\end{frame}
+
+% Slide 6
+\begin{frame}{Behind the scenes: The Indexing Phase}
+  \begin{block}{Offline Graph Building}
+    The repository is parsed into a structural graph representation once per version, ensuring fast access during retrieval.
+  \end{block}
+  \vspace{10pt}
+  \begin{itemize}
+    \item \textbf{Entity Extraction:} Uses \HL{Tree-sitter} to parse a four-entity model: files, classes, functions, and methods.
+    \item \textbf{Structural Connections:} Two-pass graph construction connects explicit \texttt{CONTAINS}, \texttt{IMPORTS}, \texttt{CALLS}, and \texttt{INHERITS\_FROM} edges.
+    \item \textbf{Conservative Resolution:} Ambiguous call edges are dropped in favor of precision over false connectivity.
+  \end{itemize}
+\end{frame}
+
+% Slide 7
+\begin{frame}{Behind the scenes: The Retrieval Phase}
+  \begin{exampleblock}{Online Execution (Ranking)}
+    Each query dynamically activates seeds and propagates relevance through the graph deterministically.
+  \end{exampleblock}
+  \vspace{10pt}
+  \begin{itemize}
+    \item \textbf{Multi-Signal Seeding:} Combines Entity Matches, BM25 Keywords, and Issue Path Hints.
+    \item \textbf{Deterministic Ranking:} Personalized PageRank relies on exact matrix multiplication. The \pos{same seeds produce the exact same ranking}.
+    \item \textbf{Context Delivery:} Final ranked nodes undergo deduplication and are delivered within a strict 6,000-token budget.
+  \end{itemize}
+\end{frame}
+
+% Slide 8
+\begin{frame}{Global structural ranking drives the empirical gain}
+  \begin{columns}[c]
+    \column{0.45\textwidth}
+      \textbf{Strong Empirical Gains:}
+      \begin{itemize}
+        \item CodeGraph reaches \pos{74.0\% Recall@10} on SWE-bench Lite.
+        \item Improves upon the strongest lexical BM25 baseline by \HL{16.0 percentage points}.
+      \end{itemize}
+      \vspace{10pt}
+      \textbf{Global vs Local:}
+      \begin{itemize}
+        \item A naive one-hop graph expansion only reaches 51.0\%, proving that gains come from \HL{global structural ranking}.
+      \end{itemize}
+      
+    \column{0.55\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/recall_trajectory.png}
+  \end{columns}
+\end{frame}
+
+% Slide 9
+\begin{frame}{The ultimate retrieval ceiling is seed reachability}
+  \begin{columns}[c]
+    \column{0.48\textwidth}
+      \begin{alertblock}{Zero-Recall Failures (78 cases)}
+        Retrieval quality is bounded by whether initial lexical signals can place probability mass into a structurally connected region.
+      \end{alertblock}
+      \vspace{10pt}
+      \begin{itemize}
+        \item \textbf{Connectivity Gaps (40 cases):} Disconnected graphs, dynamic imports.
+        \item \textbf{Semantic Gaps (38 cases):} No vocabulary overlap.
+      \end{itemize}
+      
+    \column{0.5\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.65\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/failure_taxonomy.png}
+  \end{columns}
+\end{frame}
+
+% Slide 10
+\begin{frame}{Conclusion}
+  \begin{block}{Scientific Takeaways}
+    \begin{itemize}
+      \item \textbf{Deterministic lexical-to-graph retrieval} delivers strong context effectively (74.0\% Recall@10).
+      \item It maintains \pos{sub-second median latency}.
+      \item The retrieval ceiling is determined by \pos{seed reachability}, not just ranking sophistication.
+    \end{itemize}
+  \end{block}
+  \vspace{10pt}
+  \begin{alertblock}{Important Boundaries}
+    Static-analysis dependence, Python-only scope, and file-level evaluation remain core limitations.
+  \end{alertblock}
+\end{frame}
+
+% Slide 11
+\begin{frame}
+  \centering
+  \Huge \textbf{Thank you!} \\
+  \vspace{20pt}
+  \begin{tikzpicture}[scale=1]
+    \draw[thick, draw=negative, fill=yellow!80!orange] (0,0) circle (2);
+    \fill[negative] ( -0.7, 0.5) circle (0.3);
+    \fill[negative] (  0.7, 0.5) circle (0.3);
+    \draw[thick, draw=negative, line width=3pt] (-1,-0.5) arc (180:360:1 and 0.8);
+  \end{tikzpicture} \\
+  \vspace{20pt}
+  \Huge Questions?
+\end{frame}
+
+\end{document}
