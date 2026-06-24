@@ -1,111 +1,119 @@
 \documentclass[aspectratio=169,10pt]{beamer}
 
-\usetheme{Madrid}
-\usecolortheme{whale}
-\usecolortheme{orchid}
-\useinnertheme{rounded}
-\useoutertheme{infolines}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
 
 \usepackage{amsmath,amssymb,amsthm,booktabs,mathtools}
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,backgrounds,calc,shadows}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,backgrounds,calc}
 
-% Custom Colors for TikZ
-\definecolor{positive}{HTML}{0173B2}       % blue
-\definecolor{negative}{HTML}{D55E00}       % orange
-\definecolor{neutral}{HTML}{029E73}        % green
-\definecolor{BorderGray}{HTML}{D1D5DB}
-\definecolor{LightGray}{HTML}{F0F2F5}
+% Clean, minimal palette
+\definecolor{DarkNavy}{HTML}{1A2E46}
+\definecolor{MutedTeal}{HTML}{3A7A82}
+\definecolor{LightGray}{HTML}{F8F9FA}
+\definecolor{BorderGray}{HTML}{E5E7EB}
 
-\title[CodeGraph: Structural Retrieval]{CodeGraph: Repository-Level Structural Retrieval}
-\subtitle{Deterministic repository retrieval for coding agents under fixed context budgets}
-\author{Toma Alexandru-Mihai}
-\institute{Babes-Bolyai University}
-\date{SCSS Conference 2026}
+\setbeamercolor{background canvas}{bg=white}
+\setbeamercolor{frametitle}{fg=DarkNavy, bg=white}
+\setbeamercolor{title}{fg=DarkNavy}
+\setbeamercolor{normal text}{fg=black!85}
+\setbeamercolor{itemize item}{fg=MutedTeal}
+\setbeamerfont{frametitle}{series=\bfseries, size=\Large}
+\setbeamertemplate{frametitle}{
+    \vspace{8pt}
+    \insertframetitle
+    \par
+}
 
 \begin{document}
 
 % Slide 1
 \begin{frame}
-  \titlepage
+  \centering
+  \vspace{1.5cm}
+  {\Huge \textcolor{DarkNavy}{\textbf{CodeGraph: Repository-Level\\Structural Retrieval}}} \\
+  \vspace{0.5cm}
+  {\large Deterministic repository retrieval for coding agents\\under fixed context budgets} \\
+  \vspace{1cm}
+  Toma Alexandru-Mihai \\
+  Babes-Bolyai University \\
+  SCSS Conference 2026
 \end{frame}
 
 % Slide 2
 \begin{frame}{Why repository retrieval matters for coding agents}
-  \vspace{10pt}
+  \vspace{15pt}
   \centering
   \begin{tikzpicture}[
-    scale=0.9, transform shape,
-    box/.style={draw=BorderGray, thick, fill=white, rounded corners=4pt, minimum height=1.5cm, align=center, font=\small},
-    arr/.style={-{Stealth}, thick, draw=positive}
+    box/.style={draw=BorderGray, thick, fill=white, rounded corners=2pt, minimum height=1.5cm, align=center, font=\small},
+    arr/.style={-{Stealth}, thick, draw=DarkNavy!50}
   ]
-    \node[box, minimum width=2.5cm, drop shadow={opacity=0.1}] (issue) {\textbf{Issue}\\Report};
+    \node[box, minimum width=2.5cm] (issue) {\textbf{Issue}\\Report};
     
     \node[box, right=2cm of issue, minimum width=4cm, minimum height=3cm, fill=LightGray!50, draw=BorderGray!80] (repo) {};
     \node[above=0.1cm of repo.south, font=\scriptsize, text=black!50] {Large Repository};
-    \node[box, fill=positive!15, draw=positive, minimum width=2.5cm, minimum height=1cm, drop shadow={opacity=0.1}] at (repo.center) {\textbf{Relevant}\\\textbf{Context}};
+    \node[box, fill=MutedTeal!15, draw=MutedTeal, minimum width=2.5cm, minimum height=1cm] at (repo.center) {\textbf{Relevant}\\\textbf{Context}};
     
-    \node[box, right=2cm of repo, minimum width=2.5cm, drop shadow={opacity=0.1}] (patch) {\textbf{Patch}\\Generation};
+    \node[box, right=2cm of repo, minimum width=2.5cm] (patch) {\textbf{Patch}\\Generation};
     
     \draw[arr] (issue) -- (repo);
     \draw[arr] (repo) -- (patch);
   \end{tikzpicture}
   
-  \vspace{25pt}
-  \begin{block}{}
-    \centering\Large
-    A coding agent can only solve a task if the right repository context is retrieved first.
-  \end{block}
+  \vspace{30pt}
+  \Large
+  A coding agent can only solve a task if the right repository context is retrieved first.
 \end{frame}
 
 % Slide 3
 \begin{frame}{Text alone is not enough for repository retrieval}
-  \vspace{10pt}
+  \vspace{15pt}
   \begin{columns}[T]
     \column{0.4\textwidth}
-      \begin{block}{Issue Text}
-        \centering\vspace{10pt}
-        \textit{Natural language}\\
-        \textit{task description}
-        \vspace{10pt}
-      \end{block}
+      \centering
+      \begin{tikzpicture}
+        \node[draw=BorderGray, thick, fill=LightGray!30, rounded corners=2pt, minimum width=4cm, minimum height=4cm, align=center] {
+          \textbf{\large Issue Text} \\[15pt]
+          \textit{Natural language}\\
+          \textit{task description}
+        };
+      \end{tikzpicture}
       
     \column{0.1\textwidth}
       \centering
       \vspace{2cm}
       \begin{tikzpicture}
-        \draw[-{Stealth}, line width=2pt, positive] (0,0) -- (1,0);
-        \draw[{Stealth}-, line width=2pt, positive] (0,-0.5) -- (1,-0.5);
+        \draw[-{Stealth}, line width=2pt, DarkNavy] (0,0) -- (1,0);
+        \draw[{Stealth}-, line width=2pt, DarkNavy] (0,-0.5) -- (1,-0.5);
       \end{tikzpicture}
       
     \column{0.4\textwidth}
-      \begin{block}{Repository Structure}
-        \centering\vspace{10pt}
-        files, functions, classes \\[10pt]
-        imports, calls, inheritance
-        \vspace{10pt}
-      \end{block}
+      \centering
+      \begin{tikzpicture}
+        \node[draw=BorderGray, thick, fill=LightGray!30, rounded corners=2pt, minimum width=4cm, minimum height=4cm, align=center] {
+          \textbf{\large Repository Structure} \\[15pt]
+          files, functions, classes \\[10pt]
+          imports, calls, inheritance
+        };
+      \end{tikzpicture}
   \end{columns}
   
-  \vspace{20pt}
-  \begin{exampleblock}{}
-    \centering\Large
-    \textbf{CodeGraph bridges language to structure.}
-  \end{exampleblock}
+  \vspace{30pt}
+  \centering
+  \Large
+  \textbf{CodeGraph bridges language to structure.}
 \end{frame}
 
 % Slide 4
 \begin{frame}{The query chooses where relevance starts, the graph determines where relevance flows}
   \centering
+  \vspace{5pt}
   \includegraphics[width=0.95\textwidth,height=0.65\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/retrieval_flow.png}
   
-  \vspace{10pt}
-  \begin{block}{}
-    \centering
-    Lexical signals choose entry points; graph propagation ranks structurally related code.
-  \end{block}
+  \vspace{15pt}
+  \large Lexical signals choose entry points; graph propagation ranks structurally related code.
 \end{frame}
 
 % Slide 5
@@ -115,14 +123,15 @@
       \centering
       \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/ast_to_graph.png}
     \column{0.48\textwidth}
+      \large
       \begin{itemize}
-        \item \textbf{Tree-sitter parsing}
+        \item Tree-sitter parsing
         \vspace{10pt}
-        \item \textbf{Four-entity model:} files, classes, functions, methods
+        \item Four-entity model: files, classes, functions, methods
         \vspace{10pt}
-        \item \textbf{Structural links:} \texttt{CONTAINS}, \texttt{IMPORTS}, \texttt{CALLS}, \texttt{INHERITS\_FROM}
+        \item Structural links: \texttt{CONTAINS}, \texttt{IMPORTS}, \texttt{CALLS}, \texttt{INHERITS\_FROM}
         \vspace{10pt}
-        \item \textbf{Persistent repository graph}
+        \item Persistent repository graph
       \end{itemize}
   \end{columns}
 \end{frame}
@@ -131,14 +140,15 @@
 \begin{frame}{Retrieval Phase: seed selection, graph propagation, and context delivery}
   \begin{columns}[c]
     \column{0.48\textwidth}
+      \large
       \begin{itemize}
-        \item \textbf{Entity match, BM25 keyword search, issue path hint}
+        \item Entity match, BM25 keyword search, issue path hint
         \vspace{10pt}
-        \item \textbf{Global PPR ranking} over reachable entities
+        \item Global PPR ranking over reachable entities
         \vspace{10pt}
-        \item \textbf{Deterministic ranking}
+        \item Deterministic ranking
         \vspace{10pt}
-        \item \textbf{Deduplicated context delivery} under a fixed budget
+        \item Deduplicated context delivery under a fixed budget
       \end{itemize}
     \column{0.5\textwidth}
       \centering
@@ -153,46 +163,46 @@
       \centering
       \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/eval_pipeline.png}
     \column{0.48\textwidth}
+      \large
       \begin{itemize}
-        \item \textbf{300 real GitHub issues}
+        \item 300 real GitHub issues
         \vspace{10pt}
-        \item \textbf{12 open-source Python repositories}
+        \item 12 open-source Python repositories
         \vspace{10pt}
-        \item \textbf{Repository-level file retrieval task}
+        \item Repository-level file retrieval task
         \vspace{10pt}
-        \item \textbf{Metrics:} Recall@10, MRR, zero-recall count
+        \item Metrics: Recall@10, MRR, zero-recall count
       \end{itemize}
   \end{columns}
 \end{frame}
 
 % Slide 8
 \begin{frame}{Global structural ranking drives the empirical gain}
-  \vspace{5pt}
-  \centering
-  \resizebox{\textwidth}{!}{
-    \begin{tabular}{lrrrr}
-        \toprule
-        \textbf{Configuration} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{Zero-Recall} \\
-        \midrule
-        BM25-only (Seed-Engineered Lexical Baseline) & 46.7\% & 58.0\% & 0.354 & 126 \\
-        One-hop Ego Graph & 46.7\% & 51.0\% & 0.339 & 147 \\
-        Weighted PPR & 60.7\% & 68.0\% & 0.440 & 96 \\
-        \textbf{Uniform PPR ($k=30$, Main Operating Point)} & \textbf{65.0\%} & \textbf{74.0\%} & \textbf{0.447} & \textbf{78} \\
-        Uniform PPR ($k=50$, Sensitivity Setting) & 65.0\% & 75.7\% & 0.447 & 73 \\
-        \bottomrule
-    \end{tabular}
-  }
-  
-  \vspace{15pt}
-  \begin{columns}[T]
-    \column{0.48\textwidth}
-      \begin{block}{Significant Gain}
-        \textbf{+16.0 percentage points} over the strongest lexical baseline.
-      \end{block}
-    \column{0.48\textwidth}
-      \begin{block}{Need for Global Ranking}
-        \textbf{One-hop expansion underperforms} because local structural expansion is not enough.
-      \end{block}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \foreach \y/\val/\label/\col in {
+          0/75.7/Uniform PPR (k=50)/MutedTeal,
+          1/74.0/Uniform PPR (k=30)/MutedTeal,
+          2/68.0/Weighted PPR/DarkNavy!70,
+          3/51.0/One-hop Ego Graph/BorderGray!80!black,
+          4/58.0/BM25-only (Lexical)/BorderGray!80!black%
+        } {
+          \fill[\col] (0,\y) rectangle (\val/10,\y+0.6);
+          \node[right, font=\small\bfseries] at (\val/10, \y+0.3) {\val\%};
+          \node[left, font=\small] at (-0.2, \y+0.3) {\label};
+        }
+        % Axis line
+        \draw[thick, draw=BorderGray] (0,-0.2) -- (0,5);
+      \end{tikzpicture}
+    \column{0.45\textwidth}
+      \large
+      \begin{itemize}
+        \item \textbf{+16.0 percentage points} over the strongest lexical baseline.
+        \vspace{15pt}
+        \item One-hop expansion underperforms because local structural expansion is not enough.
+      \end{itemize}
   \end{columns}
 \end{frame}
 
@@ -201,45 +211,43 @@
   \begin{columns}[c]
     \column{0.5\textwidth}
       \centering
-      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/failure_taxonomy.png}
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/bimodal_rank_distribution.png}
     \column{0.48\textwidth}
+      \large
       \begin{itemize}
-        \item \textbf{78 zero-recall cases}
+        \item 78 zero-recall cases
         \vspace{10pt}
-        \item \textbf{Connectivity Gaps: 40}
+        \item Connectivity Gaps: 40
         \vspace{10pt}
-        \item \textbf{Semantic Gaps: 38}
+        \item Semantic Gaps: 38
+        \vspace{15pt}
+        \item \normalsize If lexical signals miss the correct structural neighborhood, ranking alone cannot recover the target.
       \end{itemize}
-      \vspace{15pt}
-      \begin{alertblock}{}
-        If lexical signals miss the correct structural neighborhood, ranking alone cannot recover the target.
-      \end{alertblock}
   \end{columns}
 \end{frame}
 
 % Slide 10
 \begin{frame}{What this project shows}
-  \begin{block}{Scientific Takeaways}
-    \begin{itemize}
-      \item \textbf{Structure-aware retrieval} works better than text-only retrieval for coding agents.
-      \vspace{10pt}
-      \item A \textbf{deterministic lexical-to-graph pipeline} achieves strong retrieval quality with low latency.
-      \vspace{10pt}
-      \item The next bottleneck is \textbf{seed reachability}.
-    \end{itemize}
-  \end{block}
+  \vspace{10pt}
+  \Large
+  \begin{itemize}
+    \item Structure-aware retrieval works better than text-only retrieval for coding agents
+    \vspace{15pt}
+    \item A deterministic lexical-to-graph pipeline achieves strong retrieval quality with low latency
+    \vspace{15pt}
+    \item The next bottleneck is seed reachability, not more reranking
+  \end{itemize}
   
-  \vspace{15pt}
-  \begin{exampleblock}{Current Boundaries}
-    Static-analysis dependence, Python-only scope, file-level evaluation.
-  \end{exampleblock}
+  \vspace{40pt}
+  \centering
+  \normalsize\textcolor{black!60}{Current boundaries: static-analysis dependence, Python-only scope, file-level evaluation}
 \end{frame}
 
 % Slide 11
 \begin{frame}
   \centering
   \vspace{2cm}
-  {\Huge \textbf{Thank you!}}\\
+  {\Huge \textcolor{DarkNavy}{\textbf{Thank you}}}\\
   \vspace{1cm}
   {\Large Questions?}
 \end{frame}
