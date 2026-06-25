@@ -25,7 +25,6 @@
 \setbeamercolor{item projected}{bg=DarkNavy,fg=white}
 
 % Customize the footline to match the image exactly
-% Image has: [  Author  ] [  Title  ]
 \setbeamertemplate{footline}
 {
   \leavevmode%
@@ -60,7 +59,7 @@
     \titlepage
 \end{frame}
 
-% Slide 2
+% Slide 2: Ambiguity of Natural Language
 \begin{frame}{The Ambiguity of Natural Language in Agentic Coding}
     \begin{itemize}
         \item \textbf{The Everyday Reality:} Developers increasingly rely on AI agents to navigate large repositories.
@@ -68,13 +67,243 @@
         \item \textbf{The Vocabulary Mismatch:} The prompt rarely matches exact identifiers like \texttt{global\_settings.py}.
         \item \textbf{The Result:} Pure text similarity struggles with this ambiguity. We must leverage structural execution semantics instead.
     \end{itemize}
+    \vspace{0.3cm}
+    \begin{center}
+    \begin{tikzpicture}[
+        node distance=0.8cm and 1.5cm,
+        doc/.style={draw=DarkNavy, thick, fill=PaleBlue, minimum width=3.5cm, minimum height=1.2cm, align=center, rounded corners=3pt},
+        code/.style={draw=MutedTeal, thick, fill=white, minimum width=3.5cm, minimum height=1.2cm, align=center, rounded corners=3pt},
+        arrow/.style={-Stealth, thick, DarkNavy!70, dashed}
+    ]
+        \node[doc] (prompt) {\textbf{Issue Text}\\ \footnotesize "fix permissions logic"};
+        \node[code, right=2.5cm of prompt] (file) {\textbf{Target File}\\ \footnotesize \texttt{global\_settings.py}};
+        
+        \draw[arrow] (prompt) -- node[above, font=\footnotesize] {Vocabulary Gap} node[below, font=\Large] {$\times$} (file);
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% Slide 3: Code is a Graph, Not Flat Text
+\begin{frame}{Code is a Graph, Not Flat Text}
+    \begin{itemize}
+        \item \textbf{The Paradigm Shift:} Move away from treating code as a flat sequence of text tokens.
+        \item \textbf{The Reality of Code:} Code executes as a deterministic network of dependencies.
+        \item \textbf{The Solution:} We use Personalized PageRank to propagate relevance structurally, completely avoiding stochastic LLM queries inside the retrieval loop.
+    \end{itemize}
+    \vspace{0.3cm}
+    \begin{center}
+    \begin{tikzpicture}[
+        node distance=1.5cm, auto, scale=0.9, transform shape,
+        entity/.style={draw=DarkNavy, thick, fill=white, minimum width=2cm, minimum height=0.6cm, align=center, font=\small, rounded corners=2pt},
+        edge/.style={-Stealth, DarkNavy!70, thick},
+        lbl/.style={font=\scriptsize, text=DarkNavy, fill=white, inner sep=1.5pt}
+    ]
+        \node[entity, fill=PaleBlue] (f1) {File A};
+        \node[entity, fill=PaleBlue, right=3cm of f1] (f2) {File B};
+        \draw[edge] (f1) -- node[lbl] {IMPORTS} (f2);
+        
+        \node[entity, below=1cm of f1] (c1) {Class C};
+        \node[entity, below=1cm of f2] (func) {Function F};
+        \draw[edge] (f1) -- node[lbl, left] {CONTAINS} (c1);
+        \draw[edge] (f2) -- node[lbl, right] {CONTAINS} (func);
+        
+        \node[entity, below=1cm of c1] (m1) {Method M};
+        \draw[edge] (c1) -- node[lbl, left] {CONTAINS} (m1);
+        \draw[edge, dashed, MutedTeal] (m1) -- node[lbl, below] {CALLS} (func);
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% Slide 4a: Indexing Phase
+\begin{frame}{System Architecture - Indexing Phase (Overview)}
+    \textbf{Goal:} Transform raw source code into a persistent property graph before any queries occur.
+    \vspace{0.8cm}
+    \begin{center}
+    \begin{tikzpicture}[node distance=3cm, auto, scale=0.9, transform shape]
+        \node[draw=DarkNavy, thick, rounded corners, fill=PaleBlue, text width=2cm, align=center, minimum height=1cm] (src) {Source Code};
+        \node[draw=DarkNavy, thick, rounded corners, fill=LightNavy, text=White, right of=src, text width=2.5cm, align=center, minimum height=1cm] (ts) {Tree-sitter};
+        \node[draw=DarkNavy, thick, rounded corners, fill=MutedTeal, text=White, right of=ts, text width=2cm, align=center, minimum height=1cm] (ast) {AST};
+        \node[draw=DarkNavy, thick, rounded corners, fill=DarkNavy, text=White, right of=ast, text width=2cm, align=center, minimum height=1cm] (neo) {Neo4j Graph};
+        \draw[->, thick, DarkNavy] (src) -- (ts);
+        \draw[->, thick, DarkNavy] (ts) -- (ast);
+        \draw[->, thick, DarkNavy] (ast) -- (neo);
+    \end{tikzpicture}
+    \end{center}
+    \vspace{0.8cm}
+    \begin{itemize}
+        \item Built once, queried infinitely.
+        \item Replaces fragile text indexes with a deterministic structural map.
+    \end{itemize}
+\end{frame}
+
+% Slide 4b: 4-Entity Model
+\begin{frame}{The 4-Entity Model \& Graph Construction}
+    \begin{itemize}
+        \item \textbf{Methodological Choice:} Deliberately avoid full AST ingestion. Denser representations dilute retrieval mass.
+        \item \textbf{Coarse-Grained Entities:} We extract a strict 4-entity model (Files, Classes, Functions, Methods).
+        \item \textbf{Explicit Edges:} Entities are connected by pure syntactical dependencies (\texttt{CONTAINS}, \texttt{IMPORTS}, \texttt{CALLS}, \texttt{INHERITS\_FROM}).
+        \item \textbf{Graph Execution:} This precise structure is loaded into a graph database (Neo4j/GDS) for fast algorithmic traversal.
+    \end{itemize}
+    \vspace{0.3cm}
+    \begin{center}
+        \textit{(No messy file-proximity heuristics are used---only explicit syntax.)}
+    \end{center}
+\end{frame}
+
+% Slide 5a: Retrieval Phase
+\begin{frame}{System Architecture - Retrieval Phase (Overview)}
+    \textbf{The Breakthrough:} Moving from stochastic LLM generation to a fully deterministic graph operation.
+    \vspace{0.8cm}
+    \begin{center}
+    \begin{tikzpicture}[node distance=3cm, auto, scale=0.9, transform shape]
+        \node[draw=DarkNavy, thick, rounded corners, fill=PaleBlue, text width=2cm, align=center, minimum height=1cm] (query) {Query};
+        \node[draw=DarkNavy, thick, rounded corners, fill=LightNavy, text=White, right of=query, text width=2.5cm, align=center, minimum height=1cm] (seeds) {Seed Selector};
+        \node[draw=DarkNavy, thick, rounded corners, fill=MutedTeal, text=White, right of=seeds, text width=2cm, align=center, minimum height=1cm] (ppr) {PPR Ranker};
+        \node[draw=DarkNavy, thick, rounded corners, fill=DarkNavy, text=White, right of=ppr, text width=2.5cm, align=center, minimum height=1cm] (ctx) {Ranked Context};
+        \draw[->, thick, DarkNavy] (query) -- (seeds);
+        \draw[->, thick, DarkNavy] (seeds) -- (ppr);
+        \draw[->, thick, DarkNavy] (ppr) -- (ctx);
+    \end{tikzpicture}
+    \end{center}
+    \vspace{0.8cm}
+    \begin{itemize}
+        \item LLMs are removed entirely from the retrieval loop.
+        \item Deterministic math routing guarantees reproducibility.
+    \end{itemize}
+\end{frame}
+
+% Slide 5b: Walkthrough
+\begin{frame}{Walkthrough - The Anatomy of a Query}
+    \begin{enumerate}
+        \item \textbf{Query:} "fix SQL compilation"
+        \item \textbf{Seeds:} Keywords extracted and mapped to the \texttt{SQLCompiler} node via BM25.
+        \item \textbf{Propagation:} Personalized PageRank diffuses relevance outward across structural edges.
+        \item \textbf{IDF Penalty:} Generic hubs (like loggers) are mathematically penalized, keeping relevance within the specific execution domain.
+        \item \textbf{Context:} The subgraph collapses into a mathematically rigorous, ranked context payload.
+    \end{enumerate}
     \vspace{0.5cm}
     \begin{center}
-    \begin{tikzpicture}[node distance=2cm, auto, scale=0.8, transform shape]
-        \node[draw, rounded corners, fill=PaleBlue, text width=3cm, align=center] (prompt) {"fix permissions logic"};
-        \node[right of=prompt, node distance=4cm, font=\Large] (arrow) {$\neq$};
-        \node[right of=arrow, node distance=4cm, draw, rounded corners, fill=MutedTeal, text=White, text width=3cm, align=center] (code) {\texttt{global\_settings.py}};
+        \large \textbf{\textcolor{MutedTeal}{Achieved deterministically, in under a second.}}
+    \end{center}
+\end{frame}
+
+% Slide 6: Evaluation
+\begin{frame}{Evaluation Setup (SWE-bench Lite)}
+    \begin{itemize}
+        \item \textbf{The Metric:} Evaluated on 300 real-world GitHub issues.
+        \item \textbf{The Task:} Given the natural language issue, accurately rank the specific files that the human developer ultimately modified in their patched solution.
+        \item \textbf{The Constraints:} Evaluated under a fixed context budget, mirroring exactly how an agent operates in production.
+    \end{itemize}
+    \vspace{0.5cm}
+    \begin{center}
+        \begin{tikzpicture}[
+            scale=0.9, transform shape,
+            box/.style={draw=DarkNavy, thick, fill=white, minimum width=3cm, minimum height=1.5cm, align=center, font=\small},
+            arrow/.style={-Stealth, thick, MutedTeal}
+        ]
+            \node[box] (issue) {\textbf{GitHub Issue}\\ \vspace{0.1cm} \textit{Natural Language}};
+            \node[box, right=1.5cm of issue, fill=PaleBlue] (retriever) {Retriever};
+            \node[box, right=1.5cm of retriever, align=left] (files) {\textbf{Ranked Files}\\ \textcolor{MutedTeal}{\#1 Patched File}\\ \#2 Other File\\ ...};
+            
+            \draw[arrow] (issue) -- (retriever);
+            \draw[arrow] (retriever) -- (files);
+        \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% Slide 7: Quantitative Results
+\begin{frame}{Quantitative Results}
+    \textbf{Graph propagation drives a massive 16-point gain over the strongest text baseline.}
+    \vspace{0.8cm}
+    \begin{center}
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Method} & \textbf{Recall@10} & \textbf{Recall@30} \\
+        \midrule
+        BM25 (Text Baseline) & 58.0\% & 69.3\% \\
+        CodeGraph (Uniform PPR) & \textbf{\textcolor{MutedTeal}{74.0\%}} & \textbf{\textcolor{MutedTeal}{83.0\%}} \\
+        \bottomrule
+    \end{tabular}
+    \end{center}
+\end{frame}
+
+% Slide 8: Reachability
+\begin{frame}{The Reachability Bottleneck}
+    \begin{itemize}
+        \item \textbf{The Core Insight:} If the initial seeds miss the target neighborhood entirely, no ranking mechanism can recover them.
+        \item \textbf{The Ceiling:} "Seed reachability" is the true ceiling for agent retrieval.
+        \item \textbf{The Taxonomy:} This finding distinguishes failures of graph connectivity (structural) from failures of semantic meaning (lexical).
+    \end{itemize}
+    \vspace{0.5cm}
+    \begin{center}
+    \begin{tikzpicture}[scale=0.9, transform shape]
+        \draw[fill=LightNavy, text=White, thick, rounded corners] (0,0) rectangle (4,1.5) node[pos=.5, align=center] {\textbf{Connectivity Gaps}\\ \footnotesize Structural Isolation};
+        \draw[fill=MutedTeal, text=White, thick, rounded corners] (4.5,0) rectangle (8.5,1.5) node[pos=.5, align=center] {\textbf{Semantic Gaps}\\ \footnotesize Vocabulary Mismatch};
     \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% Slide 9a: Ecosystem
+\begin{frame}{The CodeGraph Ecosystem}
+    \textbf{A fully realized toolset, not just an abstract experiment.}
+    \vspace{0.5cm}
+    \begin{itemize}
+        \item \textbf{MCP Server:} Enables autonomous agents via standard tools:
+        \begin{itemize}
+            \item \texttt{get\_relevant\_context}
+            \item \texttt{query\_dependencies}
+        \end{itemize}
+        \vspace{0.2cm}
+        \item \textbf{CLI:} Fast repository querying for developers:
+        \begin{itemize}
+            \item \texttt{codegraph init} \textbar\ \texttt{codegraph query}
+        \end{itemize}
+        \vspace{0.2cm}
+        \item \textbf{Web Visualizer:} A structural debugging interface for observing seed propagation.
+    \end{itemize}
+\end{frame}
+
+% Slide 9b: Visualizer
+\begin{frame}{The Web Visualizer in Action}
+    \begin{itemize}
+        \item \textbf{Observable Graph:} Turns the "black box" of retrieval into an observable structure.
+        \item \textbf{Debugging:} Visually inspect seeds, trace connectivity breaks, and understand the precise flow of Personalized PageRank relevance.
+    \end{itemize}
+    \vspace{1cm}
+    \begin{center}
+        \textit{(Placeholder for Web Visualizer screenshot)}
+    \end{center}
+\end{frame}
+
+% Slide 10: Conclusion
+\begin{frame}{Conclusion \& Future Work}
+    \textbf{To wrap up:}
+    \begin{itemize}
+        \item \textbf{What we showed:} Code structure beats pure text for context retrieval.
+        \item \textbf{Why it matters:} It gives agents the deterministic reliability they desperately need.
+        \item \textbf{The limiting factor:} Seed reachability remains the true ceiling.
+    \end{itemize}
+    \vspace{0.5cm}
+    \textbf{Future Work:}
+    \begin{itemize}
+        \item Actively extending beyond Python to Java, TypeScript, and Spring Boot.
+    \end{itemize}
+    \vspace{0.5cm}
+    \begin{center}
+        \textit{If you want the full breakdown, I highly encourage you to read the paper!}
+    \end{center}
+\end{frame}
+
+% Slide 11: QA
+\begin{frame}[plain]
+    \begin{center}
+        \vspace{1cm}
+        {\Huge \textbf{Thank You}} \\
+        \vspace{1cm}
+        \Large Alexandru Toma \\
+        \large Babeș-Bolyai University \\
+        \vspace{1cm}
+        \textbf{\textcolor{MutedTeal}{Questions?}}
     \end{center}
 \end{frame}
 
