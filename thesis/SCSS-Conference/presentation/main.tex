@@ -1,0 +1,81 @@
+\documentclass[aspectratio=169, xcolor={dvipsnames}]{beamer}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, backgrounds, fit}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+% Colors based on user prompt
+\definecolor{DarkNavy}{RGB}{20, 40, 80}
+\definecolor{LightNavy}{RGB}{35, 60, 110}
+\definecolor{PaleBlue}{RGB}{230, 240, 250}
+\definecolor{MutedTeal}{RGB}{50, 140, 140}
+\definecolor{White}{RGB}{255, 255, 255}
+
+% Beamer Theme Customization
+\usetheme{Madrid}
+
+% Apply the color theme
+\setbeamercolor{structure}{fg=DarkNavy}
+\setbeamercolor{palette primary}{bg=DarkNavy,fg=white}
+\setbeamercolor{palette secondary}{bg=LightNavy,fg=white}
+\setbeamercolor{palette tertiary}{bg=DarkNavy,fg=white}
+\setbeamercolor{palette quaternary}{bg=DarkNavy,fg=white}
+\setbeamercolor{title}{bg=DarkNavy,fg=white}
+\setbeamercolor{item projected}{bg=DarkNavy,fg=white}
+
+% Customize the footline to match the image exactly
+% Image has: [  Author  ] [  Title  ]
+\setbeamertemplate{footline}
+{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.5\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+    \usebeamerfont{author in head/foot}\insertshortauthor
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.5\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+    \usebeamerfont{title in head/foot}\insertshorttitle
+  \end{beamercolorbox}}%
+  \vskip0pt%
+}
+
+% Make itemize bullets spheres as in the original image
+\setbeamertemplate{itemize items}[sphere]
+\setbeamertemplate{itemize subitem}[sphere]
+
+\title[CodeGraph: Repository-Level Structural Retrieval]{CodeGraph: Repository-Level Structural Retrieval\\for AI Coding Agents via Personalized PageRank}
+\author[Alexandru Toma]{Alexandru Toma}
+\institute[]{
+  Babeș - Bolyai University \\ 
+  Faculty of Mathematics and Computer Science \\
+  \vspace{0.3cm}
+  SCSS Conference 2026
+}
+\date{}
+
+\begin{document}
+
+% Slide 1
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% Slide 2
+\begin{frame}{The Ambiguity of Natural Language in Agentic Coding}
+    \begin{itemize}
+        \item \textbf{The Everyday Reality:} Developers increasingly rely on AI agents to navigate large repositories.
+        \item \textbf{The Friction Point:} Natural language queries are often abstract (e.g., "fix the permissions logic").
+        \item \textbf{The Vocabulary Mismatch:} The prompt rarely matches exact identifiers like \texttt{global\_settings.py}.
+        \item \textbf{The Result:} Pure text similarity struggles with this ambiguity. We must leverage structural execution semantics instead.
+    \end{itemize}
+    \vspace{0.5cm}
+    \begin{center}
+    \begin{tikzpicture}[node distance=2cm, auto, scale=0.8, transform shape]
+        \node[draw, rounded corners, fill=PaleBlue, text width=3cm, align=center] (prompt) {"fix permissions logic"};
+        \node[right of=prompt, node distance=4cm, font=\Large] (arrow) {$\neq$};
+        \node[right of=arrow, node distance=4cm, draw, rounded corners, fill=MutedTeal, text=White, text width=3cm, align=center] (code) {\texttt{global\_settings.py}};
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\end{document}
