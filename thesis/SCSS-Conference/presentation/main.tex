@@ -62,9 +62,9 @@
 % Slide 2: Ambiguity of Natural Language
 \begin{frame}{The Ambiguity of Natural Language in Agentic Coding}
     \begin{itemize}
-        \item \textbf{The Mismatch:} Developers describe bugs abstractly (e.g., "fix permissions logic").
-        \item \textbf{The Target:} The relevant file often has a specific identifier (e.g., \texttt{global\_settings.py}).
-        \item \textbf{The Result:} Because of this vocabulary gap, pure text similarity often misses the exact implementation location.
+        \item Natural language issue reports are inherently abstract (e.g., "fix permissions logic").
+        \item Relevant implementations reside in specifically named files (e.g., \texttt{global\_settings.py}).
+        \item Pure text similarity methods frequently struggle to bridge this vocabulary gap.
     \end{itemize}
     \vspace{0.3cm}
     \begin{center}
@@ -116,9 +116,9 @@
 % Slide 4a: Indexing Phase
 \begin{frame}{System Architecture - Indexing Phase (Overview)}
     \begin{itemize}
-        \item Raw source code is transformed into a persistent graph in Neo4j.
-        \item Happens \textbf{once} before any retrieval queries.
-        \item Replaces fragile text indexes and makes the runtime stage fast and stable.
+        \item Source code is parsed and converted into a persistent graph database.
+        \item Indexing occurs strictly prior to the retrieval phase.
+        \item Establishes a deterministic structural map of the repository.
     \end{itemize}
     \vspace{0.8cm}
     \begin{center}
@@ -137,13 +137,32 @@
 % Slide 4b: 4-Entity Model
 \begin{frame}{The 4-Entity Model \& Graph Construction}
     \begin{itemize}
-        \item \textbf{Coarse-Grained Abstraction:} We extract only four entity types (Files, Classes, Functions, Methods).
-        \item \textbf{Explicit Syntactic Edges:} \texttt{IMPORTS}, \texttt{CALLS}, \texttt{CONTAINS}, \texttt{INHERITS\_FROM}.
-        \item \textbf{Crucial Choice:} We avoid full AST-level density and file-proximity heuristics because overly dense representations dilute the relevance signal.
+        \item \textbf{Nodes:} Files, Classes, Functions, and Methods.
+        \item \textbf{Edges:} \texttt{CONTAINS}, \texttt{IMPORTS}, \texttt{CALLS}, and \texttt{INHERITS\_FROM}.
+        \item Avoiding full AST-level density prevents the dilution of the relevance signal.
     \end{itemize}
-    \vspace{0.5cm}
+    \vspace{0.3cm}
     \begin{center}
-        \textit{(A precise structure optimized for algorithmic traversal)}
+    \begin{tikzpicture}[
+        node distance=1.8cm and 2cm, auto, scale=0.85, transform shape,
+        file/.style={draw=DarkNavy, thick, fill=PaleBlue, minimum width=2.5cm, minimum height=0.7cm, align=center, rounded corners=3pt},
+        class/.style={draw=DarkNavy, thick, fill=LightNavy, text=White, minimum width=2.5cm, minimum height=0.7cm, align=center, rounded corners=3pt},
+        func/.style={draw=DarkNavy, thick, fill=MutedTeal, text=White, minimum width=2.5cm, minimum height=0.7cm, align=center, rounded corners=3pt},
+        edge/.style={-Stealth, DarkNavy!80, thick},
+        lbl/.style={font=\scriptsize, text=DarkNavy, fill=white, inner sep=1pt}
+    ]
+        \node[file] (f1) {\texttt{models.py}};
+        \node[file, right=3cm of f1] (f2) {\texttt{views.py}};
+        \node[class, below=1cm of f1] (c1) {\texttt{UserModel}};
+        \node[func, below=1cm of f2] (m1) {\texttt{get\_user()}};
+        \node[func, below=1cm of c1] (m2) {\texttt{save()}};
+
+        \draw[edge] (f2) -- node[lbl, above] {\texttt{IMPORTS}} (f1);
+        \draw[edge] (f1) -- node[lbl, left] {\texttt{CONTAINS}} (c1);
+        \draw[edge] (f2) -- node[lbl, right] {\texttt{CONTAINS}} (m1);
+        \draw[edge] (c1) -- node[lbl, left] {\texttt{CONTAINS}} (m2);
+        \draw[edge, dashed, MutedTeal] (m1) -- node[lbl, above right] {\texttt{CALLS}} (c1);
+    \end{tikzpicture}
     \end{center}
 \end{frame}
 
@@ -172,38 +191,34 @@
 % Slide 5b: Walkthrough
 \begin{frame}{Walkthrough - The Anatomy of a Query}
     \begin{enumerate}
-        \item \textbf{Query:} e.g., "fix SQL compilation"
-        \item \textbf{Seeds:} Map lexical terms to graph entry points (e.g., \texttt{SQLCompiler}).
-        \item \textbf{Propagation:} Personalized PageRank diffuses relevance structurally.
-        \item \textbf{Penalization:} Generic hubs (like loggers) are downgraded.
-        \item \textbf{Context:} Subgraph collapses into a ranked payload.
+        \item \textbf{Issue Parsing:} Extract keywords from the natural language query.
+        \item \textbf{Seed Selection:} Map keywords to initial nodes in the graph (e.g., \texttt{SQLCompiler}).
+        \item \textbf{Structural Propagation:} Use Personalized PageRank to diffuse relevance along the edges.
+        \item \textbf{Hub Penalization:} Mathematically penalize generic utilities to maintain domain focus.
+        \item \textbf{Ranked Output:} Return the structurally most relevant nodes as the final context.
     \end{enumerate}
-    \vspace{0.5cm}
-    \begin{center}
-        \large \textbf{\textcolor{MutedTeal}{A deterministic traversal from lexical match to structural relevance.}}
-    \end{center}
 \end{frame}
 
 % Slide 6: Evaluation
 \begin{frame}{Evaluation Setup (SWE-bench Lite)}
     \begin{itemize}
         \item \textbf{Dataset:} 300 real-world GitHub issues from 12 Python repositories.
-        \item \textbf{The Task:} Given only the natural-language issue, accurately rank the file that the human developer eventually patched.
-        \item \textbf{Constraint:} Evaluated under a fixed context budget, exactly mirroring how agents operate.
+        \item \textbf{Task Definition:} Given only the issue text, the system must retrieve the exact file the human developer modified to fix the bug.
+        \item \textbf{Evaluation Criteria:} Success is measured by whether the patched file appears within a fixed context limit.
     \end{itemize}
-    \vspace{0.5cm}
+    \vspace{0.4cm}
     \begin{center}
         \begin{tikzpicture}[
             scale=0.9, transform shape,
-            box/.style={draw=DarkNavy, thick, fill=white, minimum width=3cm, minimum height=1.5cm, align=center, font=\small},
+            box/.style={draw=DarkNavy, thick, rounded corners=2pt, minimum width=3cm, minimum height=1.2cm, align=center, font=\small},
             arrow/.style={-Stealth, thick, MutedTeal}
         ]
-            \node[box] (issue) {\textbf{GitHub Issue}\\ \vspace{0.1cm} \textit{Natural Language}};
-            \node[box, right=1.5cm of issue, fill=PaleBlue] (retriever) {Retriever};
-            \node[box, right=1.5cm of retriever, align=left] (files) {\textbf{Ranked Files}\\ \textcolor{MutedTeal}{\#1 Patched File}\\ \#2 Other File\\ ...};
+            \node[box, fill=White] (issue) {\textbf{Issue Text}\\ \footnotesize (Input)};
+            \node[box, right=1.5cm of issue, fill=PaleBlue] (system) {\textbf{CodeGraph}\\ \footnotesize Retrieval Pipeline};
+            \node[box, right=1.5cm of system, fill=White, align=left] (output) {\textbf{Ranked Context}\\ \textcolor{MutedTeal}{\footnotesize 1. \texttt{patched\_file.py}}\\ \footnotesize 2. \texttt{other\_file.py}};
             
-            \draw[arrow] (issue) -- (retriever);
-            \draw[arrow] (retriever) -- (files);
+            \draw[arrow] (issue) -- (system);
+            \draw[arrow] (system) -- (output);
         \end{tikzpicture}
     \end{center}
 \end{frame}
@@ -227,23 +242,23 @@
 % Slide 8: Reachability
 \begin{frame}{The Reachability Bottleneck}
     \begin{itemize}
-        \item \textbf{The True Ceiling:} Seed reachability limits retrieval success.
-        \item If seeds hit the right structural neighborhood, the ranking succeeds.
-        \item If seeds completely miss, no ranking method can recover the file.
-        \item \textbf{Result:} Remaining failures split cleanly into structural gaps and lexical gaps.
+        \item \textbf{Reachability Constraint:} The success of structural retrieval is bounded by the initial seed nodes.
+        \item If the seeds reach the relevant structural neighborhood, the ranking succeeds.
+        \item If the target is unreachable from the seeds, the file cannot be retrieved.
+        \item Failures categorize cleanly into two distinct paradigms:
     \end{itemize}
-    \vspace{0.5cm}
+    \vspace{0.4cm}
     \begin{center}
     \begin{tikzpicture}[
         scale=0.9, transform shape,
-        box/.style={text=White, thick, rounded corners, minimum width=4cm, minimum height=1.5cm, align=center},
+        box/.style={text=White, thick, rounded corners, minimum width=4.5cm, minimum height=1.5cm, align=center},
         ex/.style={font=\footnotesize, text=DarkNavy, align=center}
     ]
         \node[box, fill=LightNavy, draw=DarkNavy] (conn) at (0,0) {\textbf{Connectivity Gaps}\\ \footnotesize Structural Isolation};
-        \node[box, fill=MutedTeal, draw=DarkNavy] (sem) at (4.5,0) {\textbf{Semantic Gaps}\\ \footnotesize Vocabulary Mismatch};
+        \node[box, fill=MutedTeal, draw=DarkNavy] (sem) at (6.5,0) {\textbf{Semantic Gaps}\\ \footnotesize Vocabulary Mismatch};
         
-        \node[ex, below=0.2cm of conn] {\textit{e.g., A dynamically loaded plugin}\\\textit{missing explicit imports}};
-        \node[ex, below=0.2cm of sem] {\textit{e.g., Query: "Fix UI rendering"}\\\textit{Target: \texttt{paint\_canvas.py}}};
+        \node[ex, below=0.2cm of conn] {\textit{Dynamically loaded plugins}\\\textit{missing explicit imports}};
+        \node[ex, below=0.2cm of sem] {\textit{Query: "Fix UI rendering"}\\\textit{Target: \texttt{paint\_canvas.py}}};
     \end{tikzpicture}
     \end{center}
 \end{frame}
@@ -270,13 +285,10 @@
 
 % Slide 9b: Visualizer
 \begin{frame}{The Web Visualizer in Action}
-    \begin{itemize}
-        \item \textbf{Observable Graph:} Turns the "black box" of retrieval into an observable structure.
-        \item \textbf{Debugging:} Visually inspect seeds, trace connectivity breaks, and understand the precise flow of Personalized PageRank relevance.
-    \end{itemize}
-    \vspace{0.2cm}
     \begin{center}
-        \includegraphics[width=0.8\textwidth]{../../assets/visualizer_query_results.png}
+        \textit{An interface to visually inspect the graph structure and seed propagation.}
+        \vspace{0.4cm} \\
+        \includegraphics[height=5.5cm]{../../assets/visualizer_query_results.png}
     \end{center}
 \end{frame}
 
