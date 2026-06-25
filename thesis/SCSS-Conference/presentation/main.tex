@@ -183,7 +183,7 @@
     \end{enumerate}
     \vspace{0.5cm}
     \begin{center}
-        \large \textbf{\textcolor{MutedTeal}{Achieved deterministically, in under a second.}}
+        \large \textbf{\textcolor{MutedTeal}{A deterministic traversal from lexical match to structural relevance.}}
     \end{center}
 \end{frame}
 
@@ -236,9 +236,16 @@
     \end{itemize}
     \vspace{0.5cm}
     \begin{center}
-    \begin{tikzpicture}[scale=0.9, transform shape]
-        \draw[fill=LightNavy, text=White, thick, rounded corners] (0,0) rectangle (4,1.5) node[pos=.5, align=center] {\textbf{Connectivity Gaps}\\ \footnotesize Structural Isolation};
-        \draw[fill=MutedTeal, text=White, thick, rounded corners] (4.5,0) rectangle (8.5,1.5) node[pos=.5, align=center] {\textbf{Semantic Gaps}\\ \footnotesize Vocabulary Mismatch};
+    \begin{tikzpicture}[
+        scale=0.9, transform shape,
+        box/.style={text=White, thick, rounded corners, minimum width=4cm, minimum height=1.5cm, align=center},
+        ex/.style={font=\footnotesize, text=DarkNavy, align=center}
+    ]
+        \node[box, fill=LightNavy, draw=DarkNavy] (conn) at (0,0) {\textbf{Connectivity Gaps}\\ \footnotesize Structural Isolation};
+        \node[box, fill=MutedTeal, draw=DarkNavy] (sem) at (4.5,0) {\textbf{Semantic Gaps}\\ \footnotesize Vocabulary Mismatch};
+        
+        \node[ex, below=0.2cm of conn] {\textit{e.g., A dynamically loaded plugin}\\\textit{missing explicit imports}};
+        \node[ex, below=0.2cm of sem] {\textit{e.g., Query: "Fix UI rendering"}\\\textit{Target: \texttt{paint\_canvas.py}}};
     \end{tikzpicture}
     \end{center}
 \end{frame}
@@ -286,12 +293,9 @@
     \vspace{0.5cm}
     \textbf{Future Work:}
     \begin{itemize}
-        \item Actively extending beyond Python to Java, TypeScript, and Spring Boot.
+        \item Extending architectural support to Java, TypeScript, and Spring Boot.
+        \item Improving seed selection methods to address vocabulary mismatch.
     \end{itemize}
-    \vspace{0.5cm}
-    \begin{center}
-        \textit{If you want the full breakdown, I highly encourage you to read the paper!}
-    \end{center}
 \end{frame}
 
 % Slide 11: QA
