@@ -24,7 +24,7 @@
 \setbeamercolor{title}{bg=DarkNavy,fg=white}
 \setbeamercolor{item projected}{bg=DarkNavy,fg=white}
 
-% Customize the footline to match the image exactly
+% Customize the footline
 \setbeamertemplate{footline}
 {
   \leavevmode%
@@ -38,7 +38,7 @@
   \vskip0pt%
 }
 
-% Make itemize bullets spheres as in the original image
+% Make itemize bullets spheres
 \setbeamertemplate{itemize items}[sphere]
 \setbeamertemplate{itemize subitem}[sphere]
 
@@ -62,10 +62,9 @@
 % Slide 2: Ambiguity of Natural Language
 \begin{frame}{The Ambiguity of Natural Language in Agentic Coding}
     \begin{itemize}
-        \item \textbf{The Everyday Reality:} Developers increasingly rely on AI agents to navigate large repositories.
-        \item \textbf{The Friction Point:} Natural language queries are often abstract (e.g., "fix the permissions logic").
-        \item \textbf{The Vocabulary Mismatch:} The prompt rarely matches exact identifiers like \texttt{global\_settings.py}.
-        \item \textbf{The Result:} Pure text similarity struggles with this ambiguity. We must leverage structural execution semantics instead.
+        \item \textbf{The Mismatch:} Developers describe bugs abstractly (e.g., "fix permissions logic").
+        \item \textbf{The Target:} The relevant file often has a specific identifier (e.g., \texttt{global\_settings.py}).
+        \item \textbf{The Result:} Because of this vocabulary gap, pure text similarity often misses the exact implementation location.
     \end{itemize}
     \vspace{0.3cm}
     \begin{center}
@@ -86,9 +85,9 @@
 % Slide 3: Code is a Graph, Not Flat Text
 \begin{frame}{Code is a Graph, Not Flat Text}
     \begin{itemize}
-        \item \textbf{The Paradigm Shift:} Move away from treating code as a flat sequence of text tokens.
-        \item \textbf{The Reality of Code:} Code executes as a deterministic network of dependencies.
-        \item \textbf{The Solution:} We use Personalized PageRank to propagate relevance structurally, completely avoiding stochastic LLM queries inside the retrieval loop.
+        \item \textbf{Code is not just text.} A repository is a structured network of files, classes, and methods.
+        \item \textbf{Explicit Syntax:} Components are connected by explicit relationships (e.g., imports, calls).
+        \item \textbf{The Intuition:} Let relevance travel through these structural relationships, not just through token overlap.
     \end{itemize}
     \vspace{0.3cm}
     \begin{center}
@@ -116,7 +115,11 @@
 
 % Slide 4a: Indexing Phase
 \begin{frame}{System Architecture - Indexing Phase (Overview)}
-    \textbf{Goal:} Transform raw source code into a persistent property graph before any queries occur.
+    \begin{itemize}
+        \item Raw source code is transformed into a persistent graph in Neo4j.
+        \item Happens \textbf{once} before any retrieval queries.
+        \item Replaces fragile text indexes and makes the runtime stage fast and stable.
+    \end{itemize}
     \vspace{0.8cm}
     \begin{center}
     \begin{tikzpicture}[node distance=3cm, auto, scale=0.9, transform shape]
@@ -129,30 +132,29 @@
         \draw[->, thick, DarkNavy] (ast) -- (neo);
     \end{tikzpicture}
     \end{center}
-    \vspace{0.8cm}
-    \begin{itemize}
-        \item Built once, queried infinitely.
-        \item Replaces fragile text indexes with a deterministic structural map.
-    \end{itemize}
 \end{frame}
 
 % Slide 4b: 4-Entity Model
 \begin{frame}{The 4-Entity Model \& Graph Construction}
     \begin{itemize}
-        \item \textbf{Methodological Choice:} Deliberately avoid full AST ingestion. Denser representations dilute retrieval mass.
-        \item \textbf{Coarse-Grained Entities:} We extract a strict 4-entity model (Files, Classes, Functions, Methods).
-        \item \textbf{Explicit Edges:} Entities are connected by pure syntactical dependencies (\texttt{CONTAINS}, \texttt{IMPORTS}, \texttt{CALLS}, \texttt{INHERITS\_FROM}).
-        \item \textbf{Graph Execution:} This precise structure is loaded into a graph database (Neo4j/GDS) for fast algorithmic traversal.
+        \item \textbf{Coarse-Grained Abstraction:} We extract only four entity types (Files, Classes, Functions, Methods).
+        \item \textbf{Explicit Syntactic Edges:} \texttt{IMPORTS}, \texttt{CALLS}, \texttt{CONTAINS}, \texttt{INHERITS\_FROM}.
+        \item \textbf{Crucial Choice:} We avoid full AST-level density and file-proximity heuristics because overly dense representations dilute the relevance signal.
     \end{itemize}
-    \vspace{0.3cm}
+    \vspace{0.5cm}
     \begin{center}
-        \textit{(No messy file-proximity heuristics are used---only explicit syntax.)}
+        \textit{(A precise structure optimized for algorithmic traversal)}
     \end{center}
 \end{frame}
 
 % Slide 5a: Retrieval Phase
 \begin{frame}{System Architecture - Retrieval Phase (Overview)}
-    \textbf{The Breakthrough:} Moving from stochastic LLM generation to a fully deterministic graph operation.
+    \begin{itemize}
+        \item \textbf{No LLMs in the retrieval loop.}
+        \item Lexical matching extracts seed nodes from the issue description.
+        \item Global ranking is computed purely via Personalized PageRank (PPR).
+        \item The retrieval loop remains deterministic, low-latency, and reproducible.
+    \end{itemize}
     \vspace{0.8cm}
     \begin{center}
     \begin{tikzpicture}[node distance=3cm, auto, scale=0.9, transform shape]
@@ -165,21 +167,16 @@
         \draw[->, thick, DarkNavy] (ppr) -- (ctx);
     \end{tikzpicture}
     \end{center}
-    \vspace{0.8cm}
-    \begin{itemize}
-        \item LLMs are removed entirely from the retrieval loop.
-        \item Deterministic math routing guarantees reproducibility.
-    \end{itemize}
 \end{frame}
 
 % Slide 5b: Walkthrough
 \begin{frame}{Walkthrough - The Anatomy of a Query}
     \begin{enumerate}
-        \item \textbf{Query:} "fix SQL compilation"
-        \item \textbf{Seeds:} Keywords extracted and mapped to the \texttt{SQLCompiler} node via BM25.
-        \item \textbf{Propagation:} Personalized PageRank diffuses relevance outward across structural edges.
-        \item \textbf{IDF Penalty:} Generic hubs (like loggers) are mathematically penalized, keeping relevance within the specific execution domain.
-        \item \textbf{Context:} The subgraph collapses into a mathematically rigorous, ranked context payload.
+        \item \textbf{Query:} e.g., "fix SQL compilation"
+        \item \textbf{Seeds:} Map lexical terms to graph entry points (e.g., \texttt{SQLCompiler}).
+        \item \textbf{Propagation:} Personalized PageRank diffuses relevance structurally.
+        \item \textbf{Penalization:} Generic hubs (like loggers) are downgraded.
+        \item \textbf{Context:} Subgraph collapses into a ranked payload.
     \end{enumerate}
     \vspace{0.5cm}
     \begin{center}
@@ -190,9 +187,9 @@
 % Slide 6: Evaluation
 \begin{frame}{Evaluation Setup (SWE-bench Lite)}
     \begin{itemize}
-        \item \textbf{The Metric:} Evaluated on 300 real-world GitHub issues.
-        \item \textbf{The Task:} Given the natural language issue, accurately rank the specific files that the human developer ultimately modified in their patched solution.
-        \item \textbf{The Constraints:} Evaluated under a fixed context budget, mirroring exactly how an agent operates in production.
+        \item \textbf{Dataset:} 300 real-world GitHub issues from 12 Python repositories.
+        \item \textbf{The Task:} Given only the natural-language issue, accurately rank the file that the human developer eventually patched.
+        \item \textbf{Constraint:} Evaluated under a fixed context budget, exactly mirroring how agents operate.
     \end{itemize}
     \vspace{0.5cm}
     \begin{center}
@@ -213,7 +210,7 @@
 
 % Slide 7: Quantitative Results
 \begin{frame}{Quantitative Results}
-    \textbf{Graph propagation drives a massive 16-point gain over the strongest text baseline.}
+    \textbf{Graph propagation provides a substantial improvement over text-only retrieval.}
     \vspace{0.8cm}
     \begin{center}
     \begin{tabular}{lcc}
@@ -230,9 +227,10 @@
 % Slide 8: Reachability
 \begin{frame}{The Reachability Bottleneck}
     \begin{itemize}
-        \item \textbf{The Core Insight:} If the initial seeds miss the target neighborhood entirely, no ranking mechanism can recover them.
-        \item \textbf{The Ceiling:} "Seed reachability" is the true ceiling for agent retrieval.
-        \item \textbf{The Taxonomy:} This finding distinguishes failures of graph connectivity (structural) from failures of semantic meaning (lexical).
+        \item \textbf{The True Ceiling:} Seed reachability limits retrieval success.
+        \item If seeds hit the right structural neighborhood, the ranking succeeds.
+        \item If seeds completely miss, no ranking method can recover the file.
+        \item \textbf{Result:} Remaining failures split cleanly into structural gaps and lexical gaps.
     \end{itemize}
     \vspace{0.5cm}
     \begin{center}
@@ -286,9 +284,9 @@
 \begin{frame}{Conclusion \& Future Work}
     \textbf{To wrap up:}
     \begin{itemize}
-        \item \textbf{What we showed:} Code structure beats pure text for context retrieval.
-        \item \textbf{Why it matters:} It gives agents the deterministic reliability they desperately need.
-        \item \textbf{The limiting factor:} Seed reachability remains the true ceiling.
+        \item \textbf{Result:} Code structure improves context retrieval beyond pure text similarity.
+        \item \textbf{Value:} Deterministic, reproducible retrieval for coding agents.
+        \item \textbf{Ceiling:} Seed reachability is the primary bottleneck.
     \end{itemize}
     \vspace{0.5cm}
     \textbf{Future Work:}
