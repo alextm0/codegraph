@@ -18,13 +18,13 @@ This document outlines the step-by-step narrative and technical script for the C
    - *Talking Point:* Briefly show the suite of tools available to the developer (init, rebuild, analyze, explain, visualize, etc.).
 
 2. **Indexing a Repository**
-   - Command: `codegraph init https://github.com/pallets/flask`
+   - Command: `codegraph init https://github.com/alextm0/codegraph`
    - *Talking Point:* Explain that CodeGraph can seamlessly ingest a remote repository via its Github URL.
    - Command: `codegraph rebuild`
    - *Talking Point:* Point out the logs as it parses ASTs via tree-sitter and creates UNWIND+MERGE Neo4j nodes (Functions, Classes, Methods) and edges (CALLS, IMPORTS, CONTAINS). Highlight the final node/edge count so the audience grasps the scale.
 
 3. **Terminal Retrieval**
-   - Command: `codegraph explain "How does routing work?"`
+   - Command: `codegraph explain "How is the AST converted into nodes and edges?"`
    - *Talking Point:* Show how the CLI surfaces seed nodes (BM25 vs. Entity matches) and runs Personalized PageRank (PPR) to return top-scored files and functions directly in the terminal for developer speed.
 
 ---
@@ -35,7 +35,7 @@ This document outlines the step-by-step narrative and technical script for the C
 
 1. **Triggering the Tool**
    - Open **Claude Desktop** (or Cursor).
-   - Prompt: *"I'm exploring the Flask codebase. Use your CodeGraph tools to find relevant context and explain how routing works and how I would add a custom route."*
+   - Prompt: *"I'm exploring the CodeGraph codebase. Use your CodeGraph tools to find relevant context and explain how the abstract syntax tree is parsed to create graph nodes and edges."*
    
 2. **Observing the Integration**
    - Show Claude automatically invoking the `get_relevant_context` tool.
@@ -43,7 +43,7 @@ This document outlines the step-by-step narrative and technical script for the C
 
 3. **The Result**
    - Review Claude's response.
-   - *Talking Point:* Highlight how the agent successfully pinpointed structural components like `Blueprint` or `dispatch_request` without hallucinating, thanks to the exact structural context provided by the MCP server.
+   - *Talking Point:* Highlight how the agent successfully pinpointed structural components like `PythonParser` or `graph_builder` without hallucinating, thanks to the exact structural context provided by the MCP server.
 
 ---
 
@@ -60,14 +60,14 @@ This document outlines the step-by-step narrative and technical script for the C
    - **File Explorer:** Demonstrate viewing raw repository files directly within the application, providing immediate local context without needing an IDE.
 
 3. **Visual Retrieval Pipeline**
-   - **Querying:** Type the exact same query in the panel: *"How does routing work?"*
+   - **Querying:** Type the exact same query in the panel: *"How is the AST converted into nodes and edges?"*
    - **Seed Nodes:** Point out the list of initial seeds extracted from the query.
    - **PPR Scores & Results:** Show the ranked sidebar. 
    - *Talking Point:* Note that the PPR scores here identically match the CLI and MCP outputs.
    
 4. **Graph Interaction**
    - **Force Graph:** Show the highlighted paths propagating out from the seeds.
-   - **Node Inspection:** Click on a high-ranking node (e.g., `dispatch_request` or `Flask.route`) to show how the UI fetches the source code snippet and file context on the side panel.
+   - **Node Inspection:** Click on a high-ranking node (e.g., `PythonParser.parse` or `GraphBuilder`) to show how the UI fetches the source code snippet and file context on the side panel.
 
 ---
 
