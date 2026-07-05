@@ -1,0 +1,8 @@
+
+--- started 2026-06-23 21:35:59 ---
+/Users/alexandrutoma/dev/codegraph/.venv/bin/python -m evaluation.swe_bench_runner --cache-dir .codegraph_cache/repos --output evaluation/results/ablation_sweep/ppr_weighted --ablation ppr_weighted --grouping repo_commit --file-rank-by first_entity --limit 5 --skip-preflight
+
+
+--- started 2026-06-23 21:39:52 ---
+/Users/alexandrutoma/dev/codegraph/.venv/bin/python -m evaluation.swe_bench_runner --cache-dir .codegraph_cache/repos --output evaluation/results/ablation_sweep/ppr_weighted --ablation ppr_weighted --grouping repo_commit --file-rank-by first_entity --limit 5 --skip-preflight
+

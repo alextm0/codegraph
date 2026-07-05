@@ -1,0 +1,334 @@
+{
+  "preset": "full",
+  "limit": 50,
+  "jobs": [
+    {
+      "label": "baseline",
+      "ablation": "baseline",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/baseline"
+    },
+    {
+      "label": "no_calls",
+      "ablation": "no_calls",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/no_calls"
+    },
+    {
+      "label": "no_imports",
+      "ablation": "no_imports",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/no_imports"
+    },
+    {
+      "label": "no_inherits",
+      "ablation": "no_inherits",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/no_inherits"
+    },
+    {
+      "label": "directed_natural",
+      "ablation": "directed_natural",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/directed_natural"
+    },
+    {
+      "label": "directed_reverse",
+      "ablation": "directed_reverse",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/directed_reverse"
+    },
+    {
+      "label": "no_idf",
+      "ablation": "no_idf",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/no_idf"
+    },
+    {
+      "label": "ppr_uniform",
+      "ablation": "ppr_uniform",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/ppr_uniform"
+    },
+    {
+      "label": "ppr_weighted",
+      "ablation": "ppr_weighted",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/ppr_weighted"
+    },
+    {
+      "label": "alpha_010",
+      "ablation": "alpha_010",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/alpha_010"
+    },
+    {
+      "label": "alpha_015",
+      "ablation": "alpha_015",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/alpha_015"
+    },
+    {
+      "label": "alpha_020",
+      "ablation": "alpha_020",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/alpha_020"
+    },
+    {
+      "label": "alpha_030",
+      "ablation": "alpha_030",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/alpha_030"
+    },
+    {
+      "label": "top_k_5",
+      "ablation": "top_k_5",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/top_k_5"
+    },
+    {
+      "label": "top_k_10",
+      "ablation": "top_k_10",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/top_k_10"
+    },
+    {
+      "label": "top_k_50",
+      "ablation": "top_k_50",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/top_k_50"
+    },
+    {
+      "label": "uniform_alpha_050",
+      "ablation": "uniform_alpha_050",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/uniform_alpha_050"
+    },
+    {
+      "label": "uniform_alpha_070",
+      "ablation": "uniform_alpha_070",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/uniform_alpha_070"
+    },
+    {
+      "label": "uniform_no_idf",
+      "ablation": "uniform_no_idf",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/uniform_no_idf"
+    },
+    {
+      "label": "uniform_top_k_30",
+      "ablation": "uniform_top_k_30",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/macbook_sweep/uniform_top_k_30"
+    }
+  ],
+  "results": [
+    {
+      "label": "baseline",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.4513888888888889,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "baseline",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "no_calls",
+      "mean_recall_at_10": 0.66,
+      "mean_recall_at_5": 0.62,
+      "mean_mrr": 0.4648333333333333,
+      "instances_with_zero_recall": 17,
+      "n_instances": 50,
+      "ablation": "no_calls",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "no_imports",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.4527777777777778,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "no_imports",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "no_inherits",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.62,
+      "mean_mrr": 0.4628174603174603,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "no_inherits",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "directed_natural",
+      "mean_recall_at_10": 0.64,
+      "mean_recall_at_5": 0.52,
+      "mean_mrr": 0.3840021645021645,
+      "instances_with_zero_recall": 18,
+      "n_instances": 50,
+      "ablation": "directed_natural",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "directed_reverse",
+      "mean_recall_at_10": 0.66,
+      "mean_recall_at_5": 0.58,
+      "mean_mrr": 0.44546825396825396,
+      "instances_with_zero_recall": 17,
+      "n_instances": 50,
+      "ablation": "directed_reverse",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "no_idf",
+      "mean_recall_at_10": 0.7,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.45811111111111114,
+      "instances_with_zero_recall": 15,
+      "n_instances": 50,
+      "ablation": "no_idf",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "ppr_uniform",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.4513888888888889,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "ppr_uniform",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "ppr_weighted",
+      "mean_recall_at_10": 0.64,
+      "mean_recall_at_5": 0.58,
+      "mean_mrr": 0.43177777777777776,
+      "instances_with_zero_recall": 18,
+      "n_instances": 50,
+      "ablation": "ppr_weighted",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "alpha_010",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.56,
+      "mean_mrr": 0.42192857142857143,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "alpha_010",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "alpha_015",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.56,
+      "mean_mrr": 0.42192857142857143,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "alpha_015",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "alpha_020",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.56,
+      "mean_mrr": 0.42192857142857143,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "alpha_020",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "alpha_030",
+      "mean_recall_at_10": 0.7,
+      "mean_recall_at_5": 0.58,
+      "mean_mrr": 0.4385952380952381,
+      "instances_with_zero_recall": 15,
+      "n_instances": 50,
+      "ablation": "alpha_030",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "top_k_5",
+      "mean_recall_at_10": 0.6,
+      "mean_recall_at_5": 0.6,
+      "mean_mrr": 0.435,
+      "instances_with_zero_recall": 20,
+      "n_instances": 50,
+      "ablation": "top_k_5",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "top_k_10",
+      "mean_recall_at_10": 0.62,
+      "mean_recall_at_5": 0.62,
+      "mean_mrr": 0.44,
+      "instances_with_zero_recall": 19,
+      "n_instances": 50,
+      "ablation": "top_k_10",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "top_k_50",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.45548202614379085,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "top_k_50",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "uniform_alpha_050",
+      "mean_recall_at_10": 0.72,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.4485793650793651,
+      "instances_with_zero_recall": 14,
+      "n_instances": 50,
+      "ablation": "uniform_alpha_050",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "uniform_alpha_070",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.4513888888888889,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "uniform_alpha_070",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "uniform_no_idf",
+      "mean_recall_at_10": 0.7,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.45811111111111114,
+      "instances_with_zero_recall": 15,
+      "n_instances": 50,
+      "ablation": "uniform_no_idf",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "uniform_top_k_30",
+      "mean_recall_at_10": 0.68,
+      "mean_recall_at_5": 0.64,
+      "mean_mrr": 0.4513888888888889,
+      "instances_with_zero_recall": 16,
+      "n_instances": 50,
+      "ablation": "uniform_top_k_30",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    }
+  ],
+  "best": {
+    "label": "uniform_alpha_050",
+    "mean_recall_at_10": 0.72,
+    "instances_with_zero_recall": 14,
+    "ablation": "uniform_alpha_050"
+  }
+}

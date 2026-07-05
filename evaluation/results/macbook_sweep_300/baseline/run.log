@@ -1,0 +1,4 @@
+
+--- started 2026-06-24 00:25:55 ---
+/Users/alexandrutoma/dev/codegraph/.venv/bin/python -m evaluation.swe_bench_runner --cache-dir .codegraph_cache/repos --output evaluation/results/macbook_sweep_300/baseline --ablation baseline --retriever ppr --grouping repo_commit --file-rank-by first_entity --limit 300
+

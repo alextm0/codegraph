@@ -1,0 +1,32 @@
+{
+  "n_instances": 50,
+  "mean_recall_at_5": 0.52,
+  "median_recall_at_5": 1.0,
+  "mean_recall_at_10": 0.64,
+  "median_recall_at_10": 1.0,
+  "mean_mrr": 0.3840021645021645,
+  "median_mrr": 0.2,
+  "instances_with_zero_recall": 18,
+  "success_only": null,
+  "ablation": "directed_natural",
+  "retriever": "ppr",
+  "grouping": {
+    "strategy": "repo_commit",
+    "n_groups": 50,
+    "mean_group_size": 1.0,
+    "max_group_size": 1
+  },
+  "per_repo": {
+    "astropy": {
+      "n": 6,
+      "mean_recall_at_10": 0.8333333333333334,
+      "zero_recall": 1
+    },
+    "django": {
+      "n": 44,
+      "mean_recall_at_10": 0.6136363636363636,
+      "zero_recall": 17
+    }
+  },
+  "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+}
