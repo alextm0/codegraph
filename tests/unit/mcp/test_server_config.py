@@ -140,7 +140,7 @@ def test_server_state_factory_create(
 
 @patch("codegraph.mcp.server_config.get_database_manager")
 @patch("codegraph.mcp.server_config.load_mcp_runtime_settings")
-def test_server_state_factory_exits_when_neo4j_unreachable(
+def test_server_state_factory_raises_when_neo4j_unreachable(
     mock_settings: MagicMock,
     mock_db_mgr: MagicMock,
     tmp_path: Path,
@@ -163,7 +163,7 @@ def test_server_state_factory_exits_when_neo4j_unreachable(
     mock_db_mgr.return_value = db
 
     factory = ServerStateFactory(config_path)
-    with pytest.raises(SystemExit):
+    with pytest.raises(RuntimeError):
         factory.create()
 
 

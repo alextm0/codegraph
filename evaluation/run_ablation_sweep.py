@@ -32,6 +32,7 @@ class SweepJob:
     label: str
     ablation: str
     file_rank_by: str = "first_entity"
+    retriever: str = "ppr"
 
     @property
     def output_name(self) -> str:
@@ -50,7 +51,10 @@ def build_jobs(
     """Expand ablation list into sweep jobs."""
     jobs: list[SweepJob] = []
     for name in ablation_names:
-        jobs.append(SweepJob(label=name, ablation=name))
+        if name in ["bm25", "one_hop", "random"]:
+            jobs.append(SweepJob(label=name, ablation="baseline", retriever=name))
+        else:
+            jobs.append(SweepJob(label=name, ablation=name))
         if include_file_rank_variants and name == "baseline":
             jobs.append(
                 SweepJob(
@@ -105,6 +109,8 @@ def _run_single(
         str(output_dir),
         "--ablation",
         job.ablation,
+        "--retriever",
+        job.retriever,
         "--grouping",
         "repo_commit",
         "--file-rank-by",
@@ -131,7 +137,7 @@ def _run_single(
     print(f"\n{'=' * 72}", file=sys.stderr, flush=True)
     print(
         f"SWEEP: {job.output_name} (ablation={job.ablation}, "
-        f"file_rank_by={job.file_rank_by})",
+        f"retriever={job.retriever}, file_rank_by={job.file_rank_by})",
         file=sys.stderr,
         flush=True,
     )
@@ -184,6 +190,7 @@ def _write_sweep_summary(
             {
                 "label": j.output_name,
                 "ablation": j.ablation,
+                "retriever": j.retriever,
                 "file_rank_by": j.file_rank_by,
                 "output_dir": str(output_root / j.output_name),
             }

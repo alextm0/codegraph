@@ -1,0 +1,281 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+\usepackage{amsmath,amssymb,amsthm,booktabs,mathtools}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,backgrounds,calc}
+
+% Clean, minimal palette
+\definecolor{DarkNavy}{HTML}{1A2E46}
+\definecolor{MutedTeal}{HTML}{3A7A82}
+\definecolor{LightGray}{HTML}{F8F9FA}
+\definecolor{BorderGray}{HTML}{E5E7EB}
+
+\setbeamercolor{background canvas}{bg=white}
+\setbeamercolor{frametitle}{fg=DarkNavy, bg=white}
+\setbeamercolor{title}{fg=DarkNavy}
+\setbeamercolor{normal text}{fg=black!85}
+\setbeamercolor{itemize item}{fg=MutedTeal}
+\setbeamerfont{frametitle}{series=\bfseries, size=\Large}
+\setbeamertemplate{frametitle}{
+    \vspace{8pt}
+    \insertframetitle
+    \par
+}
+
+\begin{document}
+
+% Slide 1
+\begin{frame}
+  \centering
+  \vspace{1.5cm}
+  {\Huge \textcolor{DarkNavy}{\textbf{CodeGraph: Repository-Level\\Structural Retrieval}}} \\
+  \vspace{0.5cm}
+  {\large Deterministic repository retrieval for coding agents\\under fixed context budgets} \\
+  \vspace{1cm}
+  Toma Alexandru-Mihai \\
+  Babes-Bolyai University \\
+  SCSS Conference 2026
+\end{frame}
+
+% Slide 2
+\begin{frame}{Why repository retrieval matters for coding agents}
+  \vspace{5pt}
+  \centering
+  \includegraphics[width=0.85\textwidth,height=0.6\textheight,keepaspectratio]{assets/image_1.png}
+  
+  \vspace{15pt}
+  \Large
+  A coding agent can only solve a task if the right repository context is retrieved first.
+\end{frame}
+
+% Slide 3
+\begin{frame}{Text alone is not enough for repository retrieval}
+  \vspace{5pt}
+  \centering
+  \includegraphics[width=0.85\textwidth,height=0.6\textheight,keepaspectratio]{assets/image1.png}
+  
+  \vspace{15pt}
+  \Large
+  \textbf{CodeGraph bridges language to structure.}
+\end{frame}
+
+% Slide 4
+\begin{frame}{The query chooses where relevance starts, the graph determines where relevance flows}
+  \centering
+  \vspace{10pt}
+  \begin{tikzpicture}[
+    box/.style={draw=BorderGray, thick, fill=white, rounded corners=2pt, align=center, font=\small},
+    seed/.style={circle, draw=MutedTeal, fill=MutedTeal!20, minimum size=0.4cm},
+    node/.style={circle, draw=DarkNavy, fill=DarkNavy!10, minimum size=0.4cm},
+    arr/.style={-{Stealth}, thick, draw=DarkNavy!50}
+  ]
+    \node[box, minimum width=2cm, minimum height=1.5cm] (query) {\textbf{Query Text}};
+    
+    \node[box, right=1cm of query, minimum width=2cm, minimum height=2.5cm, fill=LightGray!50] (seeds) {};
+    \node[above=0.1cm of seeds.south, font=\scriptsize, text=black!70] {Lexical Seeds};
+    \node[seed] (s1) at ($(seeds.center)+(0,0.5)$) {};
+    \node[seed] (s2) at ($(seeds.center)+(-0.4,-0.3)$) {};
+    \node[seed] (s3) at ($(seeds.center)+(0.4,-0.3)$) {};
+    
+    \node[box, right=1cm of seeds, minimum width=3cm, minimum height=3cm, fill=LightGray!50] (graph) {};
+    \node[above=0.1cm of graph.south, font=\scriptsize, text=black!70] {Dependency Graph};
+    \node[seed] (n1) at ($(graph.center)+(-0.8,0.5)$) {};
+    \node[node] (n2) at ($(graph.center)+(0,0.8)$) {};
+    \node[node] (n3) at ($(graph.center)+(0.8,0.5)$) {};
+    \node[seed] (n4) at ($(graph.center)+(-0.4,-0.5)$) {};
+    \node[node] (n5) at ($(graph.center)+(0.4,-0.5)$) {};
+    \draw[arr] (n1) -- (n2); \draw[arr] (n2) -- (n3); \draw[arr] (n1) -- (n4); \draw[arr] (n4) -- (n5); \draw[arr] (n2) -- (n5);
+    
+    \node[box, right=1cm of graph, minimum width=2cm, minimum height=2.5cm] (ranked) {};
+    \node[above=0.1cm of ranked.south, font=\scriptsize, text=black!70] {Ranked Snippets};
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.3,-0.5)$) -- ($(ranked.north east)+(-0.3,-0.5)$);
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.3,-0.9)$) -- ($(ranked.north east)+(-0.3,-0.9)$);
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.3,-1.3)$) -- ($(ranked.north east)+(-0.3,-1.3)$);
+
+    \draw[arr] (query) -- (seeds);
+    \draw[arr] (seeds) -- (graph);
+    \draw[arr] (graph) -- (ranked);
+  \end{tikzpicture}
+  
+  \vspace{25pt}
+  \large Lexical signals choose entry points; graph propagation ranks structurally related code.
+\end{frame}
+
+% Slide 5
+\begin{frame}{Indexing Phase: graph representation and construction}
+  \begin{columns}[c]
+    \column{0.5\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/ast_to_graph.png}
+    \column{0.48\textwidth}
+      \large
+      \begin{itemize}
+        \item Tree-sitter parsing
+        \vspace{10pt}
+        \item Four-entity model: files, classes, functions, methods
+        \vspace{10pt}
+        \item Structural links: \texttt{CONTAINS}, \texttt{IMPORTS}, \texttt{CALLS}, \texttt{INHERITS\_FROM}
+        \vspace{10pt}
+        \item Persistent repository graph
+      \end{itemize}
+  \end{columns}
+\end{frame}
+
+% Slide 6
+\begin{frame}{Retrieval Phase: seed selection, graph propagation, and context delivery}
+  \begin{columns}[c]
+    \column{0.48\textwidth}
+      \large
+      \begin{itemize}
+        \item Entity match, BM25 keyword search, issue path hint
+        \vspace{10pt}
+        \item Global PPR ranking over reachable entities
+        \vspace{10pt}
+        \item Deterministic ranking
+        \vspace{10pt}
+        \item Deduplicated context delivery under a fixed budget
+      \end{itemize}
+  \end{columns}
+  
+  \vspace{20pt}
+  \centering
+  \begin{tikzpicture}[
+    box/.style={draw=BorderGray, thick, fill=white, rounded corners=2pt, align=center, font=\scriptsize},
+    seed/.style={circle, draw=MutedTeal, fill=MutedTeal!20, minimum size=0.3cm},
+    node/.style={circle, draw=DarkNavy, fill=DarkNavy!10, minimum size=0.3cm},
+    arr/.style={-{Stealth}, thick, draw=DarkNavy!50}
+  ]
+    \node[box, minimum width=1.5cm, minimum height=1cm] (query) {Task\\Description};
+    
+    \node[box, right=0.5cm of query, minimum width=1.5cm, minimum height=1.5cm, fill=LightGray!50] (seeds) {};
+    \node[above=0.05cm of seeds.south, font=\tiny, text=black!70] {3 Lexical Seeds};
+    \node[seed] (s1) at ($(seeds.center)+(0,0.3)$) {};
+    \node[seed] (s2) at ($(seeds.center)+(-0.25,-0.15)$) {};
+    \node[seed] (s3) at ($(seeds.center)+(0.25,-0.15)$) {};
+    
+    \node[box, right=0.5cm of seeds, minimum width=2.5cm, minimum height=1.8cm, fill=LightGray!50] (graph) {};
+    \node[above=0.05cm of graph.south, font=\tiny, text=black!70] {Repository Graph};
+    \node[seed] (n1) at ($(graph.center)+(-0.6,0.3)$) {};
+    \node[node] (n2) at ($(graph.center)+(0,0.5)$) {};
+    \node[node] (n3) at ($(graph.center)+(0.6,0.3)$) {};
+    \node[seed] (n4) at ($(graph.center)+(-0.3,-0.3)$) {};
+    \node[node] (n5) at ($(graph.center)+(0.3,-0.3)$) {};
+    \draw[arr] (n1) -- (n2); \draw[arr] (n2) -- (n3); \draw[arr] (n1) -- (n4); \draw[arr] (n4) -- (n5); \draw[arr] (n2) -- (n5);
+    
+    \node[box, right=0.5cm of graph, minimum width=1.5cm, minimum height=1.5cm] (ranked) {};
+    \node[above=0.05cm of ranked.south, font=\tiny, text=black!70] {Top 3 Snippets};
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.2,-0.3)$) -- ($(ranked.north east)+(-0.2,-0.3)$);
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.2,-0.6)$) -- ($(ranked.north east)+(-0.2,-0.6)$);
+    \draw[thick, MutedTeal] ($(ranked.north west)+(0.2,-0.9)$) -- ($(ranked.north east)+(-0.2,-0.9)$);
+
+    \node[box, right=0.5cm of ranked, minimum width=1.5cm, minimum height=1cm] (agent) {AI Coding\\Agent};
+
+    \draw[arr] (query) -- (seeds);
+    \draw[arr] (seeds) -- (graph);
+    \draw[arr] (graph) -- (ranked);
+    \draw[arr] (ranked) -- (agent);
+  \end{tikzpicture}
+\end{frame}
+
+% Slide 7
+\begin{frame}{Evaluation on SWE-bench Lite}
+  \begin{columns}[c]
+    \column{0.5\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/assets/eval_pipeline.png}
+    \column{0.48\textwidth}
+      \large
+      \begin{itemize}
+        \item 300 real GitHub issues
+        \vspace{10pt}
+        \item 12 open-source Python repositories
+        \vspace{10pt}
+        \item Repository-level file retrieval task
+        \vspace{10pt}
+        \item Metrics: Recall@10, MRR, zero-recall count
+      \end{itemize}
+  \end{columns}
+\end{frame}
+
+% Slide 8
+\begin{frame}{Global structural ranking drives the empirical gain}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \foreach \y/\val/\label/\col in {
+          0/75.7/Uniform PPR (k=50)/MutedTeal,
+          1/74.0/Uniform PPR (k=30)/MutedTeal,
+          2/68.0/Weighted PPR/DarkNavy!70,
+          3/51.0/One-hop Ego Graph/BorderGray!80!black,
+          4/58.0/BM25-only (Lexical)/BorderGray!80!black%
+        } {
+          \fill[\col] (0,\y) rectangle (\val/10,\y+0.6);
+          \node[right, font=\small\bfseries] at (\val/10, \y+0.3) {\val\%};
+          \node[left, font=\small] at (-0.2, \y+0.3) {\label};
+        }
+        % Axis line
+        \draw[thick, draw=BorderGray] (0,-0.2) -- (0,5);
+      \end{tikzpicture}
+    \column{0.45\textwidth}
+      \large
+      \begin{itemize}
+        \item \textbf{+16.0 percentage points} over the strongest lexical baseline.
+        \vspace{15pt}
+        \item One-hop expansion underperforms because local structural expansion is not enough.
+      \end{itemize}
+  \end{columns}
+\end{frame}
+
+% Slide 9
+\begin{frame}{The real retrieval ceiling is seed reachability}
+  \begin{columns}[c]
+    \column{0.5\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{/Users/alexandrutoma/dev/codegraph/thesis/SCSS-Conference/paper/assets/bimodal_rank_distribution.png}
+    \column{0.48\textwidth}
+      \large
+      \begin{itemize}
+        \item 78 zero-recall cases
+        \vspace{10pt}
+        \item Connectivity Gaps: 40
+        \vspace{10pt}
+        \item Semantic Gaps: 38
+        \vspace{15pt}
+        \item \normalsize If lexical signals miss the correct structural neighborhood, ranking alone cannot recover the target.
+      \end{itemize}
+  \end{columns}
+\end{frame}
+
+% Slide 10
+\begin{frame}{What this project shows}
+  \vspace{10pt}
+  \Large
+  \begin{itemize}
+    \item Structure-aware retrieval works better than text-only retrieval for coding agents
+    \vspace{15pt}
+    \item A deterministic lexical-to-graph pipeline achieves strong retrieval quality with low latency
+    \vspace{15pt}
+    \item The next bottleneck is seed reachability, not more reranking
+  \end{itemize}
+  
+  \vspace{40pt}
+  \centering
+  \normalsize\textcolor{black!60}{Current boundaries: static-analysis dependence, Python-only scope, file-level evaluation}
+\end{frame}
+
+% Slide 11
+\begin{frame}
+  \centering
+  \vspace{2cm}
+  {\Huge \textcolor{DarkNavy}{\textbf{Thank you}}}\\
+  \vspace{1cm}
+  {\Large Questions?}
+\end{frame}
+
+\end{document}

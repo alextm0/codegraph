@@ -116,7 +116,7 @@ class ServerStateFactory:
 
         if not db_manager.is_connected():
             logger.error("Cannot reach Neo4j. Shutting down.")
-            sys.exit(1)
+            raise RuntimeError("Cannot reach Neo4j. Shutting down.")
 
         driver = db_manager.get_driver()
         gds = create_gds_client(driver)

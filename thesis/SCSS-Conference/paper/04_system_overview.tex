@@ -1,12 +1,12 @@
 \section{System Overview}
 \label{sec:system}
 
-CodeGraph formulates repository retrieval as a staged transformation from raw source code to ranked context. The pipeline comprises parsing, graph construction, seed selection, PPR-based ranking, and context delivery. \Cref{fig:pipeline-architecture} illustrates this workflow. By separating graph construction (offline) from retrieval (online), the system provides deterministic, low-latency responses suitable for agent integration.
+CodeGraph formulates repository retrieval as a staged transformation from raw source code to ranked context. The pipeline comprises parsing, graph construction, seed selection, PPR-based ranking, and context delivery. \Cref{fig:pipeline-architecture} illustrates this workflow. By separating the Indexing Phase from the Retrieval Phase, the system provides deterministic, low-latency responses suitable for agent integration.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{assets/pipeline_architecture.png}
-    \caption{CodeGraph indexing and retrieval pipeline. The indexing phase builds the repository graph offline; the retrieval phase ranks context per query for the AI agent.}
+    \caption{CodeGraph indexing and retrieval pipeline. The Indexing Phase builds the repository graph once; the Retrieval Phase ranks context per query for the AI agent.}
     \label{fig:pipeline-architecture}
 \end{figure}
 
@@ -28,8 +28,8 @@ To handle forward references during construction, we build the graph in a two-pa
 
 Once Personalized PageRank computes the structural scores, CodeGraph aggregates and packages the ranked nodes into a source-code context package for the agent.
 
-\textbf{Deduplication and Filtering:} We roll up entity-level ranks to file-level ranks. If multiple sub-entities (such as separate functions) from the same file are highly ranked, we omit the parent file node and deliver only the relevant sub-entity snippets to conserve the token budget.
+\textbf{Deduplication and Filtering:} We roll up entity-level ranks to file-level ranks. If multiple sub-entities (such as separate functions) from the same file are highly ranked, we omit the parent file node and deliver only the relevant sub-entity snippets to conserve the context budget.
 
-\textbf{Dynamic Budgeting:} We enforce a configured context budget (defaulting to 6,000 tokens) using a local tokenizer to estimate the token footprint of each code snippet. Snippets are appended in rank order until the budget is exhausted.
+\textbf{Dynamic Budgeting:} We enforce a configurable context budget, using 6,000 tokens as the default operating setting, and apply a local tokenizer to estimate the token footprint of each code snippet. Snippets are appended in rank order until the budget is exhausted. This design aligns retrieval with the fixed context constraints under which coding agents operate.
 
-CodeGraph exposes this pipeline through a Model Context Protocol (MCP) server that provides a standard JSON-RPC tool interface for autonomous agents. The server exposes a retrieval tool (\texttt{get\_relevant\_context}) and a structural query tool (\texttt{query\_dependencies}). We also provide a browser-based visualization interface to inspect seed propagation subgraphs and debug retrieval failures.
+CodeGraph exposes this retrieval pipeline through a Model Context Protocol (MCP) server that provides a standard JSON-RPC tool interface for autonomous agents. The server exposes a retrieval tool (\texttt{get\_relevant\_context}) and a structural query tool (\texttt{query\_dependencies}). We also provide a browser-based visualization interface to inspect seed propagation subgraphs and debug retrieval failures.

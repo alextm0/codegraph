@@ -476,7 +476,7 @@ def run_instance_query(
     searchable_nodes: Any = None,
 ) -> dict:
     """Module-level wrapper around BenchmarkRunner.run_instance_query."""
-    runner = BenchmarkRunner(driver, gds, None, "", ablation, retriever)
+    runner = BenchmarkRunner(driver, gds, "", ablation, retriever)
     runner.driver = driver
     runner.gds = gds
     return runner.run_instance_query(

@@ -1,11 +1,11 @@
 \section{Related Work}
 \label{sec:related_work}
 
-Code retrieval methods for large language models generally fall into three categories: sparse lexical search, dense vector retrieval, and graph-based traversal.
+Repository retrieval for coding agents can be organized into three broad families: sparse lexical search, dense semantic retrieval, and graph-based structural retrieval. CodeGraph does not propose a fundamentally new ranking primitive; rather, it combines lexical seed selection with global Personalized PageRank to provide a deterministic repository-wide ranking layer for agent context retrieval. This distinction matters because the central design question is not only whether code can be matched semantically, but whether relevance can be propagated across repository structure in a way that remains reproducible, low-latency, and compatible with fixed context budgets.
 
 \textbf{Sparse Retrieval:} Sparse methods like BM25 \cite{bm25} rank files based on term frequency overlap. Although highly scalable and deterministic, sparse methods are sensitive to exact lexical matches. They struggle when natural-language descriptions use abstract terminology that does not match specific code identifiers.
 
-\textbf{Dense Retrieval:} Dense retrieval models like CodeBERT \cite{codebert} and UniXcoder \cite{unixcoder} embed queries and code snippets into a continuous vector space to capture semantic similarity. While this helps bridge vocabulary differences, dense models ignore the explicit structural dependencies that govern program execution. Dense models do not encode inheritance or call relationships directly, and their vector similarity scores provide no interpretable trace for debugging context selection. CodeGraph is designed as a hybrid system: lexical and dense methods can identify starting points, while graph propagation performs structural ranking.
+\textbf{Dense Retrieval:} Dense retrieval models like CodeBERT \cite{codebert} and UniXcoder \cite{unixcoder} embed queries and code snippets into a continuous vector space to capture semantic similarity. While this helps bridge vocabulary differences, dense models ignore the explicit structural dependencies that govern program execution. Dense models do not encode inheritance or call relationships directly, and their vector similarity scores provide no interpretable trace for debugging context selection. CodeGraph is designed around a lexical-to-graph retrieval pattern: lexical seed selection identifies starting points, while graph propagation performs structural ranking. Dense seed selection is compatible with this architecture, but is left as a future extension.
 
 \textbf{Graph-Based Retrieval:} Graph-based systems represent source repositories as networks of program entities and dependencies. Table~\ref{tab:retrieval-comparison} compares CodeGraph with representative systems on graph granularity, retrieval method, ranking scope, and computational cost.
 
@@ -32,11 +32,8 @@ Code retrieval methods for large language models generally fall into three categ
     \end{adjustbox}
 \end{table}
 
-Existing graph systems face distinct design trade-offs:
-\begin{itemize}
-    \item \textbf{RepoGraph} \cite{ouyang2025repograph} models code at the line level and extracts unranked $k$-hop ego-graphs. Because it lacks a ranking function, expanding the traversal radius returns large, unfiltered code blocks that consume the agent's context budget.
-    \item \textbf{LocAgent} \cite{chen2025locagent} and \textbf{LARGER} \cite{hu2026larger} combine lexical search with local graph traversal. However, they limit expansion to local neighborhoods and do not compute a global repository-wide ranking.
-    \item \textbf{CodexGraph} \cite{liu2024codexgraph} uses a language model to generate graph-database queries. Placing an LLM inside the retrieval loop increases query latency, monetary cost, and non-deterministic behavior.
-\end{itemize}
+Graph-based retrieval systems expose the most relevant comparison class, because they attempt to exploit repository structure rather than treating code as flat text. However, they make different design commitments. RepoGraph \cite{ouyang2025repograph} models repositories at line granularity and returns $k$-hop ego-graphs without a global ranking stage, which can produce large unfiltered context blocks as expansion grows. LocAgent \cite{chen2025locagent} and LARGER \cite{hu2026larger} combine lexical signals with graph exploration, but their traversal remains local rather than producing a repository-wide ranking over candidate files or entities. CodexGraph \cite{liu2024codexgraph} moves further toward agentic interaction by using a language model to generate graph-database queries, but this places an LLM inside the retrieval loop and therefore trades away determinism and low-cost execution.
 
-CodeGraph differs from these approaches by combining multi-signal lexical matching for seed selection with Personalized PageRank (PPR) for global repository ranking. This design yields a deterministic, low-cost retrieval method that evaluates execution-level structures to deliver a ranked context package under a fixed budget.
+CodeGraph is positioned differently. It uses lexical signals only to identify seed nodes, then applies Personalized PageRank (PPR) to compute a single global ranking over the repository graph. This choice aligns directly with the evaluation target used in this paper: repository-level file retrieval under a fixed context budget. Accordingly, CodeGraph is analyzed in terms of recall, latency, and reachability rather than interactive search behavior.
+
+In this sense, CodeGraph is not introduced as a replacement for agentic repository exploration, but as a complementary retrieval layer: it provides a deterministic, repository-wide ranking that can be benchmarked, cached, and analyzed independently, while making explicit the structural conditions under which retrieval succeeds or fails.

@@ -20,6 +20,11 @@ We evaluate CodeGraph against four baseline configurations to isolate the contri
 \begin{enumerate}
     \item \textbf{BM25-only (Basic):} A sparse lexical retriever executing over the entity signatures and docstrings. This baseline omits the dependency graph entirely, serving as a measure of standard text search.
     \item \textbf{One-hop ego graph:} A structural baseline that retrieves all nodes within a single hop of the BM25 seed nodes without ranking. This tests whether graph structure alone is sufficient without PageRank propagation.
-    \item \textbf{CodeGraph (Initial):} An early system configuration that applied confidence-weighted PPR restart, representing the performance of graph-based ranking prior to our seed engineering interventions.
-    \item \textbf{BM25-only (Seed-Engineered):} A lexical baseline that uses our optimized seed corpus (including compound tokenization and path hints) but omits PPR propagation, isolating the value of structural routing.
+    \item \textbf{Weighted PPR:} An early CodeGraph configuration that applied confidence-weighted PPR restart, representing the performance of graph-based ranking prior to the uniform-restart and seed-engineering interventions.
+    \item \textbf{BM25-only (Seed-Engineered Lexical Baseline):} A lexical baseline that uses the optimized seed corpus, including compound tokenization and path hints, but omits PPR propagation, isolating the value of structural routing.
 \end{enumerate}
+
+We do not reimplement RepoGraph or LocAgent end-to-end, as both systems are coupled to their own agent and retrieval interfaces. Instead, we use the one-hop ego-graph baseline to isolate the design contrast most central to this paper: unranked local structural expansion versus globally ranked structural propagation.
+
+Because we do not use an independent held-out validation split, the parameter sweeps reported below should be interpreted as sensitivity analyses on SWE-bench Lite rather than as externally validated hyperparameter selection. Accordingly, we emphasize stability across nearby settings, particularly in the damping-factor sweep, rather than treating any single configuration as universally optimal.
+

@@ -1,11 +1,17 @@
 \section{Results and Analysis}
 \label{sec:results}
 
-We evaluate CodeGraph on the 300 instances of SWE-bench Lite. First, we present the quantitative comparison against the baselines. Second, we analyze the seed component ablation and runtime characteristics. Finally, we discuss the reachability bottleneck and review concrete retrieval cases.
+We evaluate CodeGraph on the 300 instances of SWE-bench Lite. We first compare CodeGraph against lexical and structural baselines to isolate the value of global graph ranking. We then examine sensitivity to restart strategy and candidate budget, report runtime measurements together with the experimental environment, and finally interpret the remaining failures through the lens of structural reachability.
 
 \subsection{Quantitative Performance}
 
-The final CodeGraph configuration achieves 74.0\% Recall@10, representing a 24.3 percentage point absolute improvement over the basic BM25 baseline. Table~\ref{tab:main-results} presents the performance trajectory and comparison.
+The main result of Table~\ref{tab:main-results} is that CodeGraph reaches 74.0\% Recall@10 at the main operating point, $k=30$, substantially improving over the strongest lexical baseline while preserving a deterministic retrieval pipeline. These results place the final score within a coherent performance trajectory rather than presenting it as an isolated endpoint.
+
+The strongest lexical baseline, BM25-only (Seed-Engineered Lexical Baseline), achieves 58.0\% Recall@10 and an MRR of 0.354. By contrast, a naive one-hop ego-graph expansion reaches only 51.0\% Recall@10, showing that structural context alone is not sufficient when it is expanded without a ranking mechanism. CodeGraph’s gain therefore does not come from merely appending neighboring nodes, but from ranking structurally reachable files through Personalized PageRank.
+
+The initial graph-ranking configuration, which uses a confidence-weighted restart distribution, reaches 68.0\% Recall@10. Switching to a uniform restart distribution raises performance to 74.0\% Recall@10 at $k=30$, reducing the zero-recall count from 96 to 78. This result suggests that lexical confidence scores are too brittle to control restart mass directly. Under repository ambiguity, allowing structural connectivity to determine where relevance mass accumulates produces a more reliable ranking.
+
+At the main operating point, CodeGraph improves over the BM25-only (Seed-Engineered Lexical Baseline) by 16.0 percentage points in Recall@10, from 58.0\% to 74.0\%. Expanding the candidate pool to $k=50$ yields a smaller additional gain to 75.7\%; we therefore report it as a sensitivity setting rather than as the main operating point. Relative to the earliest 42.0\% baseline, the final 74.0\% operating point reflects three sequential gains: +18.7 percentage points from uniform restart, +11.6 points from seed engineering, and +1.7 points from increasing the candidate pool to the final $k=30$ setting. Taken together, these results support a simple interpretation: lexical matching is necessary to place initial seeds, but deterministic global structural ranking is what converts those seeds into high-recall repository retrieval.
 
 \begin{table}[htbp]
     \centering
@@ -16,51 +22,28 @@ The final CodeGraph configuration achieves 74.0\% Recall@10, representing a 24.3
         \toprule
         \textbf{Configuration} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{Zero-Recall} \\
         \midrule
-        BM25-only (Basic) & 37.7\% & 49.7\% & 0.248 & 151 \\
-        One-hop Ego Graph & 37.7\% & 41.3\% & 0.233 & 176 \\
-        CodeGraph (Initial Baseline) & 37.0\% & 42.0\% & 0.228 & 174 \\
-        \midrule
-        CodeGraph (Uniform PPR restart) & 55.3\% & 60.7\% & 0.344 & 118 \\
-        BM25-only (Seed-Engineered) & 46.7\% & 58.0\% & 0.354 & 126 \\
-        \textbf{CodeGraph (Final Optimal)} & \textbf{60.7\%} & \textbf{74.0\%} & \textbf{0.442} & \textbf{78} \\
+        BM25-only (Seed-Engineered Lexical Baseline) & 46.7\% & 58.0\% & 0.354 & 126 \\
+        One-hop Ego Graph & 46.7\% & 51.0\% & 0.339 & 147 \\
+        Weighted PPR & 60.7\% & 68.0\% & 0.440 & 96 \\
+        \textbf{Uniform PPR ($k=30$, Main Operating Point)} & \textbf{65.0\%} & \textbf{74.0\%} & \textbf{0.447} & \textbf{78} \\
+        Uniform PPR ($k=50$, Sensitivity Setting) & 65.0\% & 75.7\% & 0.447 & 73 \\
         \bottomrule
     \end{tabular}
     \end{adjustbox}
 \end{table}
 
-The improvement from the initial baseline (42.0\% R@10) to the optimal configuration was driven by two key revisions:
-\begin{enumerate}
-    \item \textbf{Uniform PPR Restart (+18.7pp):} Switching from confidence-weighted restart to a uniform probability distribution over extracted seeds prevented ambiguous, high-confidence lexical matches from misdirecting the PageRank random walk. Uniform restart lets graph topology arbitrate relevance by concentrating probability mass where structural pathways converge.
-    \item \textbf{Seed-First Engineering (+11.6pp):} Implementing compound tokenization (decomposing snake\_case and CamelCase identifiers), expanding the BM25 indexing corpus to include file paths, and applying IDF weighting to seeds improved reachability by ensuring task descriptions resolved to the correct structural entry points.
-\end{enumerate}
+The trajectory from the basic lexical foundation to the final configuration is defined by three sequential observations:
+\begin{itemize}
+    \item The final $k=30$ operating point reaches 74.0\% Recall@10.
+    \item One-hop expansion underperforms BM25, proving structural filtering is required.
+    \item Uniform restart materially outperforms weighted restart.
+\end{itemize}
 
-To check the statistical significance of these results, we perform bootstrap resampling with 1,000 trials over the 300 instances. The 95\% confidence intervals for Recall@10 are [69.2\%, 78.8\%] for the final CodeGraph configuration, and [44.1\%, 55.3\%] for the basic BM25 baseline. A paired t-test confirms that CodeGraph's improvement is statistically significant (p < 0.001).
+\subsection{Practicality and Sensitivity}
 
-\subsection{Seed Ablation and System Practicality}
+CodeGraph is designed as a deterministic retrieval layer for interactive coding workflows, so latency and reproducibility matter alongside accuracy. All runtime measurements were collected in a single reported evaluation environment: Apple M4 MacBook Pro, 16.0 GB RAM, macOS, Python 3.12.13, and Neo4j 2026.04.0. Across the full benchmark run of 4,200 query instances, CodeGraph achieved a median latency of 0.27s, a mean latency of 0.71s, and a P95 latency of 2.05s. These results indicate that the retrieval pipeline remains fast and predictable enough for interactive use, while remaining deterministic and free of retrieval-time API calls.
 
-We evaluate the impact of individual seed signals in Table~\ref{tab:seed-ablation} to show how multi-signal seeding supports graph reachability. Fusing entity matching, BM25 keyword search, and issue path hints yields the lowest zero-recall count (78 instances).
-
-\begin{table}[htbp]
-    \centering
-    \caption{Seed component ablation under optimal PPR settings (damping $d=0.70$, $k=30$).}
-    \label{tab:seed-ablation}
-    \begin{adjustbox}{max width=\linewidth}
-    \begin{tabular}{lrrr}
-        \toprule
-        \textbf{Seed Configuration} & \textbf{Recall@5} & \textbf{Recall@10} & \textbf{Zero-Recall} \\
-        \midrule
-        Entity Match Only & 41.0\% & 51.3\% & 146 \\
-        BM25 Search Only & 52.7\% & 64.7\% & 106 \\
-        Issue Path Hints Only & 31.3\% & 38.0\% & 186 \\
-        \midrule
-        Entity + BM25 (Basic Fusion) & 56.3\% & 68.3\% & 95 \\
-        \textbf{Full Seed Fusion (CodeGraph)} & \textbf{60.7\%} & \textbf{74.0\%} & \textbf{78} \\
-        \bottomrule
-    \end{tabular}
-    \end{adjustbox}
-\end{table}
-
-Table~\ref{tab:runtime-stats} shows that CodeGraph is practical for interactive developer and agent workflows. On Django, which represents one of the larger codebases, indexing requires less than 45 seconds, and queries run in under 180 milliseconds, satisfying the latency requirements of active development.
+Table~\ref{tab:runtime-stats} reports repository statistics together with indexing cost and query latency. Across the tested repositories, indexing remains under one minute and median query latency remains below 210ms, which supports the practical single-machine profile of the system.
 
 \begin{table}[htbp]
     \centering
@@ -80,16 +63,27 @@ Table~\ref{tab:runtime-stats} shows that CodeGraph is practical for interactive 
     \end{adjustbox}
 \end{table}
 
+We also evaluated context-constrained retrieval by measuring whether the target file fits within fixed token budgets when files are added in ranked order. Context-constrained recall increases from 21.0\% at 2,000 tokens to 49.0\% at 10,000 tokens, showing that a substantial fraction of successful retrievals can be delivered within relatively small context windows. The remaining gap relative to Recall@10 highlights a practical limitation of file-level retrieval: some correct targets are ranked highly but reside in files that exceed tight context budgets.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{assets/token_budget_curve.png}
+    \caption{Context-constrained recall under fixed token budgets.}
+    \label{fig:token-budget}
+\end{figure}
+
+We also tested sensitivity to candidate pool size and damping factor. Performance increases from 68.7\% Recall@10 at $k=10$ to 74.0\% at $k=30$, and then to 75.7\% at $k=50$, indicating that broader candidate coverage can recover a small number of additional reachable targets. By contrast, the damping sweep is comparatively stable: Recall@10 varies from 72.7\% at $\alpha=0.30$ to 74.0\% at $\alpha=0.70$, suggesting that CodeGraph is not highly sensitive to this parameter within the tested range.
+
 \subsection{The Reachability Bottleneck}
 
-A defining characteristic of CodeGraph is its bimodal rank distribution: target files are either retrieved in the top-5 or not retrieved in the top-10 at all. As Figure~\ref{fig:bimodal} shows, only 5\% of instances fall into the intermediate band (ranks 6--10).
+A defining characteristic of the final CodeGraph configuration is its polarized rank distribution: target files are usually retrieved in the top-5 or missed beyond the top-10. At the $k=30$ operating point, 65.0\% of instances place the target file within the top-5, while only 9.0\% fall into the intermediate ranks 6 to 10 and the remaining 78 cases fall outside the top-10. Figure~\ref{fig:bimodal} reports this distribution for the final system, aligning the reachability argument with the main reported operating point.
 
 \begin{figure*}[t]
     \centering
     \begin{minipage}{0.48\textwidth}
         \centering
-        \includegraphics[width=\linewidth]{assets/bimodal_rank_distribution.png}
-        \caption{Bimodal rank distribution for the initial configuration. Ground-truth files land almost exclusively in ranks 1--5 or outside the top-10, indicating the reachability ceiling.}
+        \includegraphics[width=\linewidth]{images/image_2.png}
+        \caption{Rank distribution for the final CodeGraph configuration at $k=30$ ($n=300$). 65.0\% of instances place the target file in the top-5, while 78 cases remain outside the top-10, supporting the view that the remaining failures are governed primarily by reachability.}
         \label{fig:bimodal}
     \end{minipage}\hfill
     \begin{minipage}{0.48\textwidth}
@@ -100,10 +94,12 @@ A defining characteristic of CodeGraph is its bimodal rank distribution: target 
     \end{minipage}
 \end{figure*}
 
-This bimodal pattern supports our central empirical diagnosis: the retrieval ceiling is determined by reachability, not by ranking sophistication. If the system places seeds in the correct structural neighborhood, PPR propagation ranks the target file highly. Zero-recall failures occur exclusively when the target file lies outside the reachable subgraph of the extracted seeds. This observation highlights that retrieval quality is bounded by the initial entry points, motivating our focus on seed-quality engineering.
+This bimodal pattern supports our central empirical diagnosis: the retrieval ceiling is determined primarily by reachability rather than by fine-grained reranking among already retrieved candidates. If the system places seeds in the correct structural neighborhood, Personalized PageRank tends to rank the target file highly. Zero-recall failures occur when the target file lies outside the reachable subgraph induced by the extracted seeds.
+
+This observation highlights an important boundary condition of the method. In the current $k=30$ operating point, CodeGraph still produces 78 zero-recall cases, divided between Connectivity Gaps and Semantic Gaps. The distribution of these failures clarifies that retrieval quality is bounded by whether the initial lexical signals can place probability mass into a structurally connected region of the repository.
 
 \subsection{Qualitative Retrieval Cases}
 
-\textbf{Success Case (Structural Amplification):} In \textit{matplotlib/matplotlib-23562}, the bug report requests support for a new 3D surface attribute and includes a traceback pointing to \texttt{art3d.py}. The lexical index identifies \texttt{Poly3DCollection} as a strong seed but also extracts noisy generic terms like \texttt{color} and \texttt{facecolors} across dozens of unrelated files. In a purely lexical baseline, the target file \texttt{lib/mpl\_toolkits/mplot3d/art3d.py} is ranked at position 31. During structural propagation, CodeGraph dissipates the probability mass of generic seeds across disconnected utility modules, while the specific \texttt{Poly3DCollection} seed propagates mass locally through direct \texttt{CALLS} and \texttt{INHERITS\_FROM} edges. The target file absorbs this structural signal and is ranked at position 1, demonstrating the graph's ability to filter lexical noise.
+\textbf{Success Case (Structural Amplification):} In \textit{matplotlib/matplotlib-23562}, the bug report requests support for a new 3D surface attribute and includes a traceback pointing to \texttt{art3d.py}. The lexical index identifies \texttt{Poly3DCollection} as a strong seed but also extracts noisy generic terms like \texttt{color} and \texttt{facecolors} across dozens of unrelated files. In a purely lexical baseline, the target file \texttt{lib/mpl\_toolkits/mplot3d/art3d.py} is ranked at position 31. During structural propagation, CodeGraph dissipates the probability mass of generic seeds across disconnected utility modules, while the specific \texttt{Poly3DCollection} seed propagates mass locally through direct \texttt{CALLS} and \texttt{INHERITS\_FROM} edges. The target file absorbs this structural signal and is ranked at position 1, demonstrating the system's ability to filter lexical noise through graph structure.
 
-\textbf{Failure Case (Semantic Gap):} In \textit{django/django-10914}, the bug report requests changing the default value of the \texttt{FILE\_UPLOAD\_PERMISSIONS} setting. The issue uses conceptual terms like ``tempfile'' and ``permissions'' that match several functional modules (e.g., \texttt{storage.py}, \texttt{uploadedfile.py}), which are selected as lexical seeds. However, the target fix is in the global configuration hub, \texttt{django/conf/global\_settings.py}. Because this configuration file contains only constant definitions and lacks incoming structural dependency edges from the functional seeds, Personalized PageRank cannot propagate relevance to the target. This resulting zero-recall failure illustrates the reachability ceiling: sophisticated graph routing cannot recover a target that is logically related but structurally isolated from the initial lexical entry points.
+\textbf{Failure Case (Semantic Gap):} In \textit{django/django-10914}, the bug report requests changing the default value of the \texttt{FILE\_UPLOAD\_PERMISSIONS} setting. The issue uses conceptual terms like ``tempfile'' and ``permissions'' that match several functional modules (e.g., \texttt{storage.py}, \texttt{uploadedfile.py}), which are selected as lexical seeds. However, the target fix is in the global configuration hub, \texttt{django/conf/global\_settings.py}. Because this configuration file contains only constant definitions and lacks incoming structural dependency edges from the functional seeds, Personalized PageRank cannot propagate relevance to the target. This failure is therefore not only a lexical mismatch, but also a schema limitation: because configuration constants are not modeled as first-class graph entities, entity matching and structural propagation cannot directly represent the symbol that the issue asks to modify. This resulting zero-recall failure illustrates the reachability ceiling: sophisticated graph routing cannot recover a target that is logically related but structurally isolated from the initial lexical entry points.

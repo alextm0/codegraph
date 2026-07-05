@@ -1,0 +1,84 @@
+{
+  "status": "complete",
+  "elapsed_seconds": 1828.8,
+  "n_instances": 300,
+  "mean_recall_at_5": 0.65,
+  "median_recall_at_5": 1.0,
+  "mean_recall_at_10": 0.7566666666666667,
+  "median_recall_at_10": 1.0,
+  "mean_mrr": 0.447226812899464,
+  "median_mrr": 0.3333333333333333,
+  "instances_with_zero_recall": 73,
+  "success_only": null,
+  "ablation": "top_k_50",
+  "retriever": "ppr",
+  "grouping": {
+    "strategy": "repo_commit",
+    "n_groups": 297,
+    "mean_group_size": 1.01,
+    "max_group_size": 2
+  },
+  "per_repo": {
+    "astropy": {
+      "n": 6,
+      "mean_recall_at_10": 0.8333333333333334,
+      "zero_recall": 1
+    },
+    "django": {
+      "n": 114,
+      "mean_recall_at_10": 0.7280701754385965,
+      "zero_recall": 31
+    },
+    "matplotlib": {
+      "n": 23,
+      "mean_recall_at_10": 0.9130434782608695,
+      "zero_recall": 2
+    },
+    "mwaskom": {
+      "n": 4,
+      "mean_recall_at_10": 1.0,
+      "zero_recall": 0
+    },
+    "pallets": {
+      "n": 3,
+      "mean_recall_at_10": 1.0,
+      "zero_recall": 0
+    },
+    "psf": {
+      "n": 6,
+      "mean_recall_at_10": 1.0,
+      "zero_recall": 0
+    },
+    "pydata": {
+      "n": 5,
+      "mean_recall_at_10": 0.6,
+      "zero_recall": 2
+    },
+    "pylint-dev": {
+      "n": 6,
+      "mean_recall_at_10": 0.3333333333333333,
+      "zero_recall": 4
+    },
+    "pytest-dev": {
+      "n": 17,
+      "mean_recall_at_10": 0.6470588235294118,
+      "zero_recall": 6
+    },
+    "scikit-learn": {
+      "n": 23,
+      "mean_recall_at_10": 0.9130434782608695,
+      "zero_recall": 2
+    },
+    "sphinx-doc": {
+      "n": 16,
+      "mean_recall_at_10": 0.75,
+      "zero_recall": 4
+    },
+    "sympy": {
+      "n": 77,
+      "mean_recall_at_10": 0.7272727272727273,
+      "zero_recall": 21
+    }
+  },
+  "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+}

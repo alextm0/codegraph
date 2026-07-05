@@ -59,3 +59,7 @@ javascript.py.bak
 temporaryFiles
 codegraph_viz.html
 Temp
+
+# Agentic tooling
+.gemini/
+.agents/

@@ -7,7 +7,7 @@ The deterministic nature of CodeGraph ensures that retrieval failures can be tra
 
 Autonomous agents require stable, low-latency tools. Systems that place large language models inside the retrieval loop to generate queries or re-rank snippets introduce non-deterministic variance and high latency. Under identical query conditions, an agent may observe different contexts on successive runs.
 
-CodeGraph addresses this by separating graph construction (offline) from ranking propagation (online). Because Personalized PageRank relies on exact matrix multiplication, the same set of seeds always yields the same file-level ranking. This determinism allows agent designers to cache retrieval outcomes, build reproducible evaluation harnesses, and treat codebase retrieval as a stable API rather than a stochastic oracle.
+CodeGraph addresses this by separating the Indexing Phase, where the repository graph is constructed once, from the Retrieval Phase, where seed selection and ranking propagation are performed per query. Because Personalized PageRank relies on exact matrix multiplication, the same set of seeds always yields the same file-level ranking. This determinism allows agent designers to cache retrieval outcomes, build reproducible evaluation harnesses, and treat codebase retrieval as a stable API rather than a stochastic oracle.
 
 \subsection{Scope and Validity Boundaries}
 
@@ -16,7 +16,7 @@ We define several boundaries that affect the interpretation and generalization o
     \item \textbf{Static Analysis Dependence:} CodeGraph relies on syntax-derived relationships. Collaborations that occur through dynamic imports, configuration files, or database queries are not captured, creating Connectivity Gaps.
     \item \textbf{Python-Only Scope:} We implement the parsing and edge-resolution modules specifically for Python. Extending the system to compiled or multi-language projects requires implementing type-resolving parsers.
     \item \textbf{File-Level Proxy:} We conduct the evaluation at the file level. This does not capture multi-file patch complexities or cases where fine-grained class or function snippets are required.
-    \item \textbf{Benchmark Generalization:} We tuned the damping factor, top-$k$, and seed weights on the SWE-bench Lite dataset. Lacking an independent held-out validation set, these parameters may reflect characteristics specific to these repositories.
+    \item \textbf{Benchmark Generalization:} We tuned the damping factor, top-$k$, and seed-selection configuration on the SWE-bench Lite dataset. Lacking an independent held-out validation set, these choices may reflect characteristics specific to these repositories.
 \end{itemize}
 
 \subsection{Analysis of Retrieval Failures}

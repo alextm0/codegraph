@@ -1,0 +1,46 @@
+{
+  "preset": "quick",
+  "limit": 5,
+  "jobs": [
+    {
+      "label": "baseline",
+      "ablation": "baseline",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/ablation_sweep/baseline"
+    },
+    {
+      "label": "ppr_weighted",
+      "ablation": "ppr_weighted",
+      "file_rank_by": "first_entity",
+      "output_dir": "evaluation/results/ablation_sweep/ppr_weighted"
+    }
+  ],
+  "results": [
+    {
+      "label": "baseline",
+      "mean_recall_at_10": 0.8,
+      "mean_recall_at_5": 0.8,
+      "mean_mrr": 0.5666666666666667,
+      "instances_with_zero_recall": 1,
+      "n_instances": 5,
+      "ablation": "baseline",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    },
+    {
+      "label": "ppr_weighted",
+      "mean_recall_at_10": 0.8,
+      "mean_recall_at_5": 0.8,
+      "mean_mrr": 0.5666666666666667,
+      "instances_with_zero_recall": 1,
+      "n_instances": 5,
+      "ablation": "ppr_weighted",
+      "git_commit": "607baca9d6a9ad81b98d3819b68be77a6c163e04"
+    }
+  ],
+  "best": {
+    "label": "baseline",
+    "mean_recall_at_10": 0.8,
+    "instances_with_zero_recall": 1,
+    "ablation": "baseline"
+  }
+}
